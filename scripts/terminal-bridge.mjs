@@ -239,13 +239,26 @@ async function openWindowsFolderDialog(defaultPath) {
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::UTF8
-$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.ShowNewFolderButton = $true
-if ($args[0] -and (Test-Path -LiteralPath $args[0])) {
-  $dialog.SelectedPath = $args[0]
+$sentinel = "Select Folder"
+$initialPath = $args[0]
+$dialog = New-Object System.Windows.Forms.OpenFileDialog
+$dialog.Title = "Open folder"
+$dialog.ValidateNames = $false
+$dialog.CheckFileExists = $false
+$dialog.CheckPathExists = $true
+$dialog.DereferenceLinks = $true
+$dialog.FileName = $sentinel
+if ($initialPath -and (Test-Path -LiteralPath $initialPath -PathType Container)) {
+  $dialog.InitialDirectory = $initialPath
 }
 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-  Write-Output $dialog.SelectedPath
+  $selectedPath = $dialog.FileName
+  if ((Split-Path -Leaf $selectedPath) -eq $sentinel) {
+    $selectedPath = Split-Path -Parent $selectedPath
+  }
+  if ($selectedPath -and (Test-Path -LiteralPath $selectedPath -PathType Container)) {
+    Write-Output (Resolve-Path -LiteralPath $selectedPath).Path
+  }
 }
 `;
   try {

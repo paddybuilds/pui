@@ -80,7 +80,7 @@ const browserPreviewApi: PuiApi = {
     openFolder: async (defaultPath) =>
       bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })
         .then((result) => result.path)
-        .catch(() => window.prompt("Folder path", defaultPath || workspace) || undefined)
+        .catch(() => window.prompt("Folder path", defaultPath || workspace)?.trim() || undefined)
   },
   settings: {
     load: async () => settings,

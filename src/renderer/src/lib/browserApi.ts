@@ -197,7 +197,32 @@ const browserPreviewApi: PuiApi = {
         size: contents.length,
         modifiedAt: new Date().toISOString()
       };
-    }
+    },
+    createFile: async (workspacePath, directory, name) => ({
+      entry: {
+        name,
+        path: `${directory}${pathSeparator()}${name}`,
+        relativePath: relativePreviewPath(workspacePath, `${directory}${pathSeparator()}${name}`),
+        kind: "file" as const
+      }
+    }),
+    createDirectory: async (workspacePath, directory, name) => ({
+      entry: {
+        name,
+        path: `${directory}${pathSeparator()}${name}`,
+        relativePath: relativePreviewPath(workspacePath, `${directory}${pathSeparator()}${name}`),
+        kind: "directory" as const
+      }
+    }),
+    rename: async (workspacePath, target, name) => ({
+      entry: {
+        name,
+        path: target.replace(/[^\\/]+$/, name),
+        relativePath: relativePreviewPath(workspacePath, target.replace(/[^\\/]+$/, name)),
+        kind: "file" as const
+      }
+    }),
+    delete: async (_workspacePath, target) => ({ deletedPath: target })
   },
   terminal: {
     create: (payload) =>

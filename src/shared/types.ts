@@ -83,6 +83,11 @@ export type FileSystemEntry = {
   kind: "file" | "directory";
 };
 
+export type FileSystemMutationResult = {
+  entry?: FileSystemEntry;
+  deletedPath?: string;
+};
+
 export type FileReadResult = {
   kind: "text" | "image" | "pdf";
   path: string;

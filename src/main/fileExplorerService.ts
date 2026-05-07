@@ -1,6 +1,12 @@
-import { readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { FilePathListResult, FileReadResult, FileSystemEntry, FileWriteResult } from "../shared/types";
+import type {
+  FilePathListResult,
+  FileReadResult,
+  FileSystemEntry,
+  FileSystemMutationResult,
+  FileWriteResult
+} from "../shared/types";
 
 const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "out", "dist", "release"]);
 const MAX_TEXT_FILE_BYTES = 1024 * 1024;
@@ -135,6 +141,49 @@ export class FileExplorerService {
     };
   }
 
+  async createFile(workspace: string, directory: string, name: string): Promise<FileSystemMutationResult> {
+    const workspaceRoot = path.resolve(workspace);
+    const targetDirectory = this.resolveInsideWorkspace(workspaceRoot, directory);
+    await this.assertDirectory(targetDirectory);
+    const targetPath = this.resolveNewChildPath(workspaceRoot, targetDirectory, name);
+    const handle = await open(targetPath, "wx");
+    await handle.close();
+    return { entry: await this.entryForPath(workspaceRoot, targetPath) };
+  }
+
+  async createDirectory(workspace: string, directory: string, name: string): Promise<FileSystemMutationResult> {
+    const workspaceRoot = path.resolve(workspace);
+    const targetDirectory = this.resolveInsideWorkspace(workspaceRoot, directory);
+    await this.assertDirectory(targetDirectory);
+    const targetPath = this.resolveNewChildPath(workspaceRoot, targetDirectory, name);
+    await mkdir(targetPath);
+    return { entry: await this.entryForPath(workspaceRoot, targetPath) };
+  }
+
+  async renamePath(workspace: string, target: string, name: string): Promise<FileSystemMutationResult> {
+    const workspaceRoot = path.resolve(workspace);
+    const targetPath = this.resolveInsideWorkspace(workspaceRoot, target);
+    const targetStat = await stat(targetPath);
+    const nextPath = this.resolveNewChildPath(workspaceRoot, path.dirname(targetPath), name);
+    await rename(targetPath, nextPath);
+    return {
+      entry: {
+        ...(await this.entryForPath(workspaceRoot, nextPath)),
+        kind: targetStat.isDirectory() ? "directory" : "file"
+      }
+    };
+  }
+
+  async deletePath(workspace: string, target: string): Promise<FileSystemMutationResult> {
+    const workspaceRoot = path.resolve(workspace);
+    const targetPath = this.resolveInsideWorkspace(workspaceRoot, target);
+    if (targetPath === workspaceRoot) {
+      throw new Error("The workspace root cannot be deleted from the explorer.");
+    }
+    await rm(targetPath, { recursive: true, force: false });
+    return { deletedPath: targetPath };
+  }
+
   private resolveInsideWorkspace(workspaceRoot: string, requestedPath: string): string {
     const resolvedPath = path.resolve(requestedPath);
     const relativePath = path.relative(workspaceRoot, resolvedPath);
@@ -142,6 +191,34 @@ export class FileExplorerService {
       return resolvedPath;
     }
     throw new Error("Directory is outside the active workspace.");
+  }
+
+  private resolveNewChildPath(workspaceRoot: string, directory: string, name: string): string {
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName === "." || trimmedName === "..") {
+      throw new Error("Name is required.");
+    }
+    if (/[\\/]/.test(trimmedName)) {
+      throw new Error("Name cannot contain path separators.");
+    }
+    return this.resolveInsideWorkspace(workspaceRoot, path.join(directory, trimmedName));
+  }
+
+  private async assertDirectory(directory: string): Promise<void> {
+    const directoryStat = await stat(directory);
+    if (!directoryStat.isDirectory()) {
+      throw new Error("Target must be a directory.");
+    }
+  }
+
+  private async entryForPath(workspaceRoot: string, targetPath: string): Promise<FileSystemEntry> {
+    const targetStat = await stat(targetPath);
+    return {
+      name: path.basename(targetPath),
+      path: targetPath,
+      relativePath: path.relative(workspaceRoot, targetPath),
+      kind: targetStat.isDirectory() ? "directory" : "file"
+    };
   }
 
   private async collectFilePaths(workspaceRoot: string, directory: string, paths: string[]): Promise<void> {

@@ -123,6 +123,50 @@ describe("FileExplorerService", () => {
     await expect(readFile(filePath, "utf8")).resolves.toBe("after");
   });
 
+  it("creates, renames, and deletes explorer entries", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
+    const service = new FileExplorerService();
+
+    await expect(service.createDirectory(workspace, workspace, "src")).resolves.toMatchObject({
+      entry: {
+        name: "src",
+        path: path.join(workspace, "src"),
+        relativePath: "src",
+        kind: "directory"
+      }
+    });
+    await expect(service.createFile(workspace, path.join(workspace, "src"), "index.ts")).resolves.toMatchObject({
+      entry: {
+        name: "index.ts",
+        path: path.join(workspace, "src", "index.ts"),
+        relativePath: path.join("src", "index.ts"),
+        kind: "file"
+      }
+    });
+    await expect(
+      service.renamePath(workspace, path.join(workspace, "src", "index.ts"), "main.ts")
+    ).resolves.toMatchObject({
+      entry: {
+        name: "main.ts",
+        path: path.join(workspace, "src", "main.ts"),
+        kind: "file"
+      }
+    });
+    await expect(service.deletePath(workspace, path.join(workspace, "src"))).resolves.toEqual({
+      deletedPath: path.join(workspace, "src")
+    });
+  });
+
+  it("rejects unsafe explorer mutations", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "pui-outside-"));
+    const service = new FileExplorerService();
+
+    await expect(service.createFile(workspace, workspace, "nested/file.ts")).rejects.toThrow("path separators");
+    await expect(service.createDirectory(workspace, outside, "src")).rejects.toThrow("outside the active workspace");
+    await expect(service.deletePath(workspace, workspace)).rejects.toThrow("workspace root cannot be deleted");
+  });
+
   it("rejects files outside the workspace", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
     const outside = path.join(await mkdtemp(path.join(tmpdir(), "pui-outside-")), "secret.txt");

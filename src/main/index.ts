@@ -131,6 +131,24 @@ function registerIpc(): void {
       return fileExplorerService.writeFile(payload.workspace, payload.filePath, payload.contents);
     }
   );
+  ipcMain.handle(
+    ipc.fileSystem.createFile,
+    (_event, payload: { workspace: string; directory: string; name: string }) => {
+      return fileExplorerService.createFile(payload.workspace, payload.directory, payload.name);
+    }
+  );
+  ipcMain.handle(
+    ipc.fileSystem.createDirectory,
+    (_event, payload: { workspace: string; directory: string; name: string }) => {
+      return fileExplorerService.createDirectory(payload.workspace, payload.directory, payload.name);
+    }
+  );
+  ipcMain.handle(ipc.fileSystem.rename, (_event, payload: { workspace: string; target: string; name: string }) => {
+    return fileExplorerService.renamePath(payload.workspace, payload.target, payload.name);
+  });
+  ipcMain.handle(ipc.fileSystem.delete, (_event, payload: { workspace: string; target: string }) => {
+    return fileExplorerService.deletePath(payload.workspace, payload.target);
+  });
 
   ipcMain.handle(
     ipc.terminal.create,

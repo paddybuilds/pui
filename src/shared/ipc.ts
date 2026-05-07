@@ -22,7 +22,11 @@ export const ipc = {
     readDirectory: "file-system:read-directory",
     listFilePaths: "file-system:list-file-paths",
     readFile: "file-system:read-file",
-    writeFile: "file-system:write-file"
+    writeFile: "file-system:write-file",
+    createFile: "file-system:create-file",
+    createDirectory: "file-system:create-directory",
+    rename: "file-system:rename",
+    delete: "file-system:delete"
   },
   terminal: {
     create: "terminal:create",

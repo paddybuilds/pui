@@ -27,6 +27,7 @@ mac:
   gatekeeperAssess: false
   identity: null
 win:
+  artifactName: ${productName}-Setup-${version}.${ext}
   target:
     - target: nsis
       arch:

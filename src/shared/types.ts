@@ -84,6 +84,30 @@ export type AppDensity = "comfortable" | "compact";
 
 export type GitPanelDefault = "open" | "closed";
 
+export type AppThemeToken =
+  | "surfaceRoot"
+  | "surfaceSidebar"
+  | "surfacePanel"
+  | "surfaceRaised"
+  | "surfaceHover"
+  | "surfaceActive"
+  | "lineSoft"
+  | "lineStrong"
+  | "textStrong"
+  | "text"
+  | "textMuted"
+  | "textFaint"
+  | "accent"
+  | "success"
+  | "warning"
+  | "danger"
+  | "terminalBackground"
+  | "terminalForeground"
+  | "terminalCursor"
+  | "terminalSelection";
+
+export type AppThemeTokens = Partial<Record<AppThemeToken, string>>;
+
 export type TerminalProfileTemplate = {
   id?: string;
   name: string;
@@ -97,6 +121,7 @@ export type AppPreferences = {
   themePreset: ThemePreset;
   density: AppDensity;
   terminalFontSize: number;
+  customTheme?: AppThemeTokens;
   defaultTerminalProfileId?: string;
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
   gitPanelDefault: GitPanelDefault;

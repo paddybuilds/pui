@@ -47,6 +47,7 @@ import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
 import { getDevToolsFlagState } from "./lib/devFlags";
 import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
+import { applyThemePreferences, themeKey } from "./lib/theme";
 import {
   appendWorkbenchNode,
   buildSplitTracks,
@@ -63,7 +64,7 @@ import {
   updateSplitSizes,
   updateWorkspaceLayoutInSettings
 } from "./lib/workbenchLayout";
-import { basename, createShellProfile, normalizeSettings } from "./lib/workspaceSettings";
+import { basename, createShellProfile, normalizeAppPreferences, normalizeSettings } from "./lib/workspaceSettings";
 
 const newId = () => crypto.randomUUID();
 const pui = getPuiApi();
@@ -113,6 +114,11 @@ export function App() {
   const activeWorkspaceSessions = activeWorkspace ? (sessionsByWorkspace[activeWorkspace.id] ?? {}) : {};
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
   const gitSidebarVisible = Boolean(activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && gitSidebarOpen);
+  const appPreferences = useMemo(
+    () => normalizeAppPreferences(settings?.appPreferences, { defaultTerminalProfileId: settings?.profiles[0]?.id }),
+    [settings?.appPreferences, settings?.profiles]
+  );
+  const terminalThemeKey = useMemo(() => themeKey(appPreferences), [appPreferences]);
 
   const refreshGit = useCallback(async (workspacePath: string) => {
     const status = await pui.git.status(workspacePath);
@@ -180,6 +186,10 @@ export function App() {
       offGit();
     };
   }, [hydrateWorkspace, refreshGit, refreshWorkspaceGit]);
+
+  useEffect(() => {
+    applyThemePreferences(appPreferences);
+  }, [appPreferences]);
 
   const completeOnboarding = async (nextSettings: AppSettings) => {
     const normalized = normalizeSettings(nextSettings, pui.platform, newId);
@@ -989,6 +999,7 @@ export function App() {
                 fallbackProfile={profiles[0]}
                 workspaceName={activeFolderTitle}
                 terminalFontSize={activeWorkspace.terminalFontSize}
+                terminalThemeKey={terminalThemeKey}
                 activePaneId={activePaneId}
                 workspaceId={activeWorkspace.id}
                 showHeaders={panes.length > 1}
@@ -1152,6 +1163,7 @@ function PaneTree({
   fallbackProfile,
   workspaceName,
   terminalFontSize,
+  terminalThemeKey,
   workspaceId,
   activePaneId,
   showHeaders,
@@ -1169,6 +1181,7 @@ function PaneTree({
   fallbackProfile?: ConsoleProfile;
   workspaceName: string;
   terminalFontSize?: number;
+  terminalThemeKey: string;
   workspaceId: string;
   activePaneId: string;
   showHeaders: boolean;
@@ -1221,6 +1234,7 @@ function PaneTree({
               fallbackProfile={fallbackProfile}
               workspaceName={workspaceName}
               terminalFontSize={terminalFontSize}
+              terminalThemeKey={terminalThemeKey}
               workspaceId={workspaceId}
               activePaneId={activePaneId}
               showHeaders={showHeaders}
@@ -1261,6 +1275,7 @@ function PaneTree({
       profile={profile}
       workspaceName={workspaceName}
       terminalFontSize={terminalFontSize}
+      terminalThemeKey={terminalThemeKey}
       active={node.id === activePaneId}
       showHeader={showHeaders}
       canClose={canClosePanes}

@@ -16,6 +16,8 @@ import type {
   AppDensity,
   AppPreferences,
   AppSettings,
+  AppThemeToken,
+  AppThemeTokens,
   AppUpdateCheckResult,
   AppVersionInfo,
   ConsoleProfile,
@@ -26,6 +28,7 @@ import type {
 } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { shortcutLabel } from "../lib/shortcuts";
+import { compactThemeTokens, isPlainColorValue, resolveThemeTokens, THEME_TOKEN_FIELDS } from "../lib/theme";
 import {
   createTerminalProfileTemplateFromProfile,
   normalizeAppPreferences,
@@ -35,15 +38,7 @@ import {
 
 const pui = getPuiApi();
 
-type SettingsSection =
-  | "about"
-  | "appearance"
-  | "profiles"
-  | "defaults"
-  | "git"
-  | "updates"
-  | "workflow"
-  | "shortcuts";
+type SettingsSection = "about" | "appearance" | "profiles" | "defaults" | "git" | "updates" | "workflow" | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
@@ -234,19 +229,39 @@ function AppearanceSettings({
 }) {
   const [themePreset, setThemePreset] = useState<ThemePreset>(preferences.themePreset);
   const [density, setDensity] = useState<AppDensity>(preferences.density);
+  const [customTheme, setCustomTheme] = useState<AppThemeTokens>(preferences.customTheme ?? {});
   const [status, setStatus] = useState("idle");
+  const resolvedTokens = resolveThemeTokens({ themePreset, customTheme });
 
   useEffect(() => {
     setThemePreset(preferences.themePreset);
     setDensity(preferences.density);
-  }, [preferences.density, preferences.themePreset]);
+    setCustomTheme(preferences.customTheme ?? {});
+  }, [preferences.customTheme, preferences.density, preferences.themePreset]);
+
+  const setToken = (token: AppThemeToken, value: string) => {
+    setCustomTheme((current) => ({ ...current, [token]: value }));
+  };
+
+  const resetToken = (token: AppThemeToken) => {
+    setCustomTheme((current) => {
+      const next = { ...current };
+      delete next[token];
+      return next;
+    });
+  };
 
   return (
     <div className="settings-page">
       <form
         className="settings-form"
-        onSubmit={(event) => void saveForm(event, setStatus, () => onSave({ themePreset, density }))}
+        onSubmit={(event) =>
+          void saveForm(event, setStatus, () =>
+            onSave({ themePreset, density, customTheme: compactThemeTokens(customTheme) })
+          )
+        }
       >
+        <strong>Base appearance</strong>
         <label htmlFor="theme-preset">Theme</label>
         <select
           id="theme-preset"
@@ -262,6 +277,45 @@ function AppearanceSettings({
           <option value="comfortable">Comfortable</option>
           <option value="compact">Compact</option>
         </select>
+        <div className="theme-preview" aria-label="Theme preview">
+          <div style={{ background: resolvedTokens.surfaceSidebar }} />
+          <div style={{ background: resolvedTokens.surfacePanel }} />
+          <div style={{ background: resolvedTokens.accent }} />
+          <div style={{ background: resolvedTokens.terminalBackground }} />
+        </div>
+        <strong>Theme tokens</strong>
+        <p>Override any token with a hex, rgb, hsl, or rgba value. Empty values inherit from the selected theme.</p>
+        <div className="theme-token-grid">
+          {THEME_TOKEN_FIELDS.map((field) => {
+            const value = customTheme[field.token] ?? "";
+            const previewValue = value || resolvedTokens[field.token];
+            return (
+              <label key={field.token} className="theme-token-row" htmlFor={`theme-token-${field.token}`}>
+                <span>{field.label}</span>
+                <span className="theme-token-control">
+                  <span className="theme-token-swatch" style={{ background: previewValue }} aria-hidden="true" />
+                  <input
+                    id={`theme-token-${field.token}`}
+                    value={value}
+                    onChange={(event) => setToken(field.token, event.target.value)}
+                    placeholder={resolvedTokens[field.token]}
+                  />
+                  {isPlainColorValue(previewValue) ? (
+                    <input
+                      type="color"
+                      value={previewValue}
+                      aria-label={`${field.label} color`}
+                      onChange={(event) => setToken(field.token, event.target.value)}
+                    />
+                  ) : null}
+                  <button type="button" title={`Reset ${field.label}`} onClick={() => resetToken(field.token)}>
+                    Reset
+                  </button>
+                </span>
+              </label>
+            );
+          })}
+        </div>
         <SaveButton status={status} />
       </form>
     </div>

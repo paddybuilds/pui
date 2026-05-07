@@ -4,7 +4,14 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { BrowserWindow } from "electron";
 import { parseGitStatus } from "../shared/gitStatus";
 import { ipc } from "../shared/ipc";
-import type { GitCommit, GitDiff, GitOperationResult, GitStatus } from "../shared/types";
+import type {
+  GitCommit,
+  GitCommitDetails,
+  GitCommitFileDiff,
+  GitDiff,
+  GitOperationResult,
+  GitStatus
+} from "../shared/types";
 import { gitCommand } from "./gitExecutable";
 
 const execFileAsync = promisify(execFile);
@@ -78,6 +85,45 @@ export class GitWorkspaceService {
       });
   }
 
+  async getCommitDetails(workspace: string, hash: string): Promise<GitCommitDetails> {
+    const [metadata, numstat] = await Promise.all([
+      this.git(workspace, [
+        "show",
+        "-s",
+        "--date=iso-strict",
+        "--format=%H%x1f%h%x1f%an%x1f%ae%x1f%ad%x1f%s%x1f%b",
+        hash
+      ]),
+      this.git(workspace, ["show", "--format=", "--numstat", "--no-renames", hash])
+    ]);
+    const [fullHash, shortHash, author, authorEmail, date, subject, ...bodyParts] = metadata.stdout.split("\x1f");
+
+    return {
+      hash: fullHash,
+      shortHash,
+      author,
+      authorEmail,
+      date,
+      subject,
+      body: bodyParts.join("\x1f").trim(),
+      files: parseCommitFiles(numstat.stdout)
+    };
+  }
+
+  async getCommitFileDiff(workspace: string, hash: string, file: string): Promise<GitCommitFileDiff> {
+    const result = await this.git(workspace, [
+      "show",
+      "--first-parent",
+      "--format=",
+      "--no-ext-diff",
+      "--color=never",
+      hash,
+      "--",
+      file
+    ]);
+    return { workspace, hash, file, text: result.stdout };
+  }
+
   async stage(workspace: string, paths: string[]): Promise<GitStatus> {
     await this.git(workspace, ["add", "--", ...paths]);
     return this.getStatus(workspace);
@@ -91,9 +137,7 @@ export class GitWorkspaceService {
   async discard(workspace: string, paths: string[]): Promise<GitStatus> {
     const status = await this.getStatus(workspace);
     const untracked = new Set(
-      status.files
-        .filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?")
-        .map((file) => file.path)
+      status.files.filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?").map((file) => file.path)
     );
     const untrackedPaths = paths.filter((path) => untracked.has(path));
     const trackedPaths = paths.filter((path) => !untracked.has(path));
@@ -166,6 +210,21 @@ export class GitWorkspaceService {
       };
     }
   }
+}
+
+function parseCommitFiles(output: string): GitCommitDetails["files"] {
+  return output
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => {
+      const [additions, deletions, ...pathParts] = line.split("\t");
+      return {
+        path: pathParts.join("\t"),
+        additions: additions === "-" ? null : Number(additions),
+        deletions: deletions === "-" ? null : Number(deletions)
+      };
+    });
 }
 
 function debounce(callback: () => void, delay: number): () => void {

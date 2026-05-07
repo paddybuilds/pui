@@ -1,8 +1,9 @@
 import { type MouseEvent, useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { X } from "lucide-react";
 import type { ConsoleProfile } from "../../../shared/types";
+import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
 
 type Pane = {
@@ -17,6 +18,8 @@ type TerminalPaneProps = {
   profile: ConsoleProfile;
   workspaceName: string;
   terminalFontSize?: number;
+  terminalTheme: ITheme;
+  terminalThemeKey: string;
   active: boolean;
   showHeader: boolean;
   canClose: boolean;
@@ -45,6 +48,7 @@ const terminalRecords = new Map<string, TerminalRecord>();
 const terminalRecordsBySession = new Map<string, TerminalRecord>();
 let offTerminalData: (() => void) | undefined;
 let offTerminalExit: (() => void) | undefined;
+const pui = getPuiApi();
 
 export function terminalRecordKey(workspaceId: string, paneId: string): string {
   return `${workspaceId}:${paneId}`;
@@ -61,7 +65,7 @@ export function disposeTerminalPane(workspaceId: string, paneId: string): void {
   unregisterTerminalSession(record);
   cancelPendingTerminalWork(record);
   if (record.sessionId && !record.exited) {
-    void window.pui.terminal.kill(record.sessionId);
+    void pui.terminal.kill(record.sessionId);
   }
   record.terminal.dispose();
   terminalRecords.delete(key);
@@ -90,6 +94,8 @@ export function TerminalPane({
   profile,
   workspaceName,
   terminalFontSize = 13,
+  terminalTheme,
+  terminalThemeKey,
   active,
   showHeader,
   canClose,
@@ -118,9 +124,17 @@ export function TerminalPane({
       return;
     }
 
-    const record = getOrCreateTerminalRecord(workspaceId, pane.id, pane.sessionId, profile, active, (sessionId) => {
-      onSessionRef.current(sessionId);
-    });
+    const record = getOrCreateTerminalRecord(
+      workspaceId,
+      pane.id,
+      pane.sessionId,
+      profile,
+      active,
+      terminalTheme,
+      (sessionId) => {
+        onSessionRef.current(sessionId);
+      }
+    );
     recordRef.current = record;
     record.shortcutHandler.current = (event) => {
       const actions = shortcutActionsRef.current;
@@ -147,9 +161,7 @@ export function TerminalPane({
     const mount = xtermMountRef.current;
     attachTerminalElement(record.terminal, mount);
     record.terminal.options.cursorBlink = active;
-    if (record.terminal.options.fontSize !== terminalFontSize) {
-      record.terminal.options.fontSize = terminalFontSize;
-    }
+    applyTerminalAppearance(record.terminal, terminalTheme, terminalFontSize);
     scheduleFitAndResize(record);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
@@ -168,7 +180,7 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
+  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, terminalTheme, terminalThemeKey, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {
@@ -227,6 +239,7 @@ function getOrCreateTerminalRecord(
   existingSessionId: string | undefined,
   profile: ConsoleProfile,
   active: boolean,
+  terminalTheme: ITheme,
   onSession: (sessionId: string) => void
 ): TerminalRecord {
   const key = terminalRecordKey(workspaceId, paneId);
@@ -245,12 +258,7 @@ function getOrCreateTerminalRecord(
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,
     lineHeight: 1.25,
-    theme: {
-      background: "#111318",
-      foreground: "#e8edf2",
-      cursor: "#e5e7eb",
-      selectionBackground: "#334155"
-    }
+    theme: terminalTheme
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
@@ -264,7 +272,7 @@ function getOrCreateTerminalRecord(
     shortcutHandler,
     inputDisposable: terminal.onData((data) => {
       if (record.sessionId) {
-        void window.pui.terminal.write(record.sessionId, data);
+        void pui.terminal.write(record.sessionId, data);
       }
     }),
     outputBuffer: "",
@@ -277,7 +285,7 @@ function getOrCreateTerminalRecord(
   }
 
   if (!record.sessionId) {
-    void window.pui.terminal
+    void pui.terminal
       .create({
         profile,
         paneId,
@@ -286,7 +294,7 @@ function getOrCreateTerminalRecord(
       })
       .then((session) => {
         if (!terminalRecords.has(key)) {
-          void window.pui.terminal.kill(session.id);
+          void pui.terminal.kill(session.id);
           return;
         }
         assignTerminalSession(record, session.id);
@@ -326,13 +334,13 @@ function ensureTerminalEventRouter(): void {
     return;
   }
 
-  offTerminalData = window.pui.terminal.onData(({ sessionId, data }) => {
+  offTerminalData = pui.terminal.onData(({ sessionId, data }) => {
     const record = terminalRecordsBySession.get(sessionId);
     if (record) {
       queueTerminalOutput(record, data);
     }
   });
-  offTerminalExit = window.pui.terminal.onExit(({ sessionId, exitCode }) => {
+  offTerminalExit = pui.terminal.onExit(({ sessionId, exitCode }) => {
     const record = terminalRecordsBySession.get(sessionId);
     if (record && !record.exited) {
       record.exited = true;
@@ -420,5 +428,15 @@ function resizeTerminalIfNeeded(record: TerminalRecord): void {
   }
 
   record.lastResize = { cols, rows };
-  void window.pui.terminal.resize(record.sessionId, cols, rows);
+  void pui.terminal.resize(record.sessionId, cols, rows);
+}
+
+function applyTerminalAppearance(terminal: Terminal, theme: ITheme, fontSize: number): void {
+  terminal.options.theme = theme;
+  if (terminal.options.fontSize !== fontSize) {
+    terminal.options.fontSize = fontSize;
+  }
+  window.requestAnimationFrame(() => {
+    terminal.refresh(0, Math.max(0, terminal.rows - 1));
+  });
 }

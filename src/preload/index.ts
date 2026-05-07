@@ -1,25 +1,47 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { CodexRunCommandOptions } from "../shared/codexCommand";
 import { ipc } from "../shared/ipc";
 import type {
   AppSettings,
-  CodexRun,
-  CodexStatus,
+  AppUpdateCheckResult,
+  AppVersionInfo,
   GitCommit,
+  GitCommitDetails,
+  GitCommitFileDiff,
   GitDiff,
   GitOperationResult,
   GitStatus,
-  TerminalSession
+  SettingsLoadState,
+  TerminalSession,
+  TitleBarTheme
 } from "../shared/types";
+
+export type ShellCandidate = {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  source: "environment" | "system" | "wsl" | "custom";
+  available: boolean;
+};
 
 const api = {
   platform: process.platform,
+  app: {
+    getVersionInfo: () => ipcRenderer.invoke(ipc.app.versionInfo) as Promise<AppVersionInfo>,
+    checkForUpdates: () => ipcRenderer.invoke(ipc.app.checkForUpdates) as Promise<AppUpdateCheckResult>,
+    setTitleBarTheme: (theme: TitleBarTheme) => ipcRenderer.invoke(ipc.app.setTitleBarTheme, theme)
+  },
   dialog: {
-    openFolder: (defaultPath?: string) => ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
+    openFolder: (defaultPath?: string) =>
+      ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
   },
   settings: {
+    loadState: () => ipcRenderer.invoke(ipc.settings.loadState) as Promise<SettingsLoadState>,
     load: () => ipcRenderer.invoke(ipc.settings.load) as Promise<AppSettings>,
     save: (settings: AppSettings) => ipcRenderer.invoke(ipc.settings.save, settings) as Promise<AppSettings>
+  },
+  system: {
+    listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
   },
   terminal: {
     create: (payload: unknown) => ipcRenderer.invoke(ipc.terminal.create, payload) as Promise<TerminalSession>,
@@ -51,32 +73,16 @@ const api = {
       };
     }
   },
-  codex: {
-    run: (prompt: string, workspace: string, options?: CodexRunCommandOptions) =>
-      ipcRenderer.invoke(ipc.codex.run, { prompt, workspace, options }) as Promise<CodexRun>,
-    cancel: (runId: string) => ipcRenderer.invoke(ipc.codex.cancel, runId),
-    status: () => ipcRenderer.invoke(ipc.codex.status) as Promise<CodexStatus>,
-    onEvent: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
-      ipcRenderer.on(ipc.codex.event, listener);
-      return () => {
-        ipcRenderer.removeListener(ipc.codex.event, listener);
-      };
-    },
-    onUpdate: (callback: (run: CodexRun) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, run: CodexRun) => callback(run);
-      ipcRenderer.on(ipc.codex.update, listener);
-      return () => {
-        ipcRenderer.removeListener(ipc.codex.update, listener);
-      };
-    }
-  },
   git: {
     status: (workspace: string) => ipcRenderer.invoke(ipc.git.status, workspace) as Promise<GitStatus>,
     diff: (workspace: string, file?: string, cached = false) =>
       ipcRenderer.invoke(ipc.git.diff, { workspace, file, cached }) as Promise<GitDiff>,
     commits: (workspace: string, limit = 16) =>
       ipcRenderer.invoke(ipc.git.commits, { workspace, limit }) as Promise<GitCommit[]>,
+    commitDetails: (workspace: string, hash: string) =>
+      ipcRenderer.invoke(ipc.git.commitDetails, { workspace, hash }) as Promise<GitCommitDetails>,
+    commitFileDiff: (workspace: string, hash: string, file: string) =>
+      ipcRenderer.invoke(ipc.git.commitFileDiff, { workspace, hash, file }) as Promise<GitCommitFileDiff>,
     stage: (workspace: string, paths: string[]) =>
       ipcRenderer.invoke(ipc.git.stage, { workspace, paths }) as Promise<GitStatus>,
     unstage: (workspace: string, paths: string[]) =>

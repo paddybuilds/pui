@@ -1,21 +1,27 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import type { CodexRunCommandOptions } from "../shared/codexCommand";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, CodexStatus, ConsoleProfile } from "../shared/types";
-import { CodexCliAdapter } from "./codexAdapter";
+import type { AppSettings, ConsoleProfile, TitleBarTheme } from "../shared/types";
 import { GitWorkspaceService } from "./gitService";
+import { listShells } from "./shell";
 import { StoreService } from "./store";
 import { TerminalService } from "./terminalService";
+import { AppUpdateService } from "./updateService";
 
 let mainWindow: BrowserWindow | undefined;
 let terminalService: TerminalService | undefined;
-let codexAdapter: CodexCliAdapter | undefined;
 let gitService: GitWorkspaceService | undefined;
 
+const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
+  color: "#090b0f",
+  symbolColor: "#8b95a5"
+};
+
 const storeService = new StoreService();
+const appUpdateService = new AppUpdateService({
+  getVersion: () => app.getVersion()
+});
 
 function createWindow(): void {
   const isMac = process.platform === "darwin";
@@ -25,16 +31,15 @@ function createWindow(): void {
     minWidth: 1080,
     minHeight: 720,
     title: "Pui",
-    backgroundColor: "#111318",
+    backgroundColor: DEFAULT_TITLE_BAR_THEME.color,
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     trafficLightPosition: isMac ? { x: 20, y: 20 } : undefined,
     titleBarOverlay: isMac
       ? undefined
       : {
-          color: "#0b0f14",
-          symbolColor: "#9ca3af",
+          ...DEFAULT_TITLE_BAR_THEME,
           height: 44
-    },
+        },
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       nodeIntegration: false,
@@ -43,7 +48,6 @@ function createWindow(): void {
   });
 
   terminalService = new TerminalService(mainWindow);
-  codexAdapter = new CodexCliAdapter(mainWindow);
   gitService = new GitWorkspaceService(mainWindow);
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -76,6 +80,12 @@ app.on("window-all-closed", () => {
 });
 
 function registerIpc(): void {
+  ipcMain.handle(ipc.app.versionInfo, () => appUpdateService.getVersionInfo());
+  ipcMain.handle(ipc.app.checkForUpdates, () => appUpdateService.checkForUpdates());
+  ipcMain.handle(ipc.app.setTitleBarTheme, (_event, theme: TitleBarTheme) => {
+    applyTitleBarTheme(theme);
+  });
+
   ipcMain.handle(ipc.dialog.openFolder, async (_event, defaultPath?: string) => {
     if (!mainWindow) {
       return undefined;
@@ -90,8 +100,11 @@ function registerIpc(): void {
     return result.canceled ? undefined : result.filePaths[0];
   });
 
+  ipcMain.handle(ipc.settings.loadState, () => storeService.loadSettingsState());
   ipcMain.handle(ipc.settings.load, () => storeService.loadSettings());
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
+
+  ipcMain.handle(ipc.system.listShells, () => listShells());
 
   ipcMain.handle(
     ipc.terminal.create,
@@ -117,18 +130,18 @@ function registerIpc(): void {
   );
   ipcMain.handle(ipc.terminal.kill, (_event, sessionId: string) => terminalService?.kill(sessionId));
 
-  ipcMain.handle(ipc.codex.run, (_event, payload: { prompt: string; workspace: string; options?: CodexRunCommandOptions }) => {
-    return codexAdapter?.run(payload.prompt, payload.workspace, payload.options);
-  });
-  ipcMain.handle(ipc.codex.cancel, (_event, runId: string) => codexAdapter?.cancel(runId));
-  ipcMain.handle(ipc.codex.status, () => getCodexStatus());
-
   ipcMain.handle(ipc.git.status, (_event, workspace: string) => gitService?.getStatus(workspace));
   ipcMain.handle(ipc.git.diff, (_event, payload: { workspace: string; file?: string; cached?: boolean }) => {
     return gitService?.getDiff(payload.workspace, payload.file, payload.cached);
   });
   ipcMain.handle(ipc.git.commits, (_event, payload: { workspace: string; limit?: number }) => {
     return gitService?.getRecentCommits(payload.workspace, payload.limit);
+  });
+  ipcMain.handle(ipc.git.commitDetails, (_event, payload: { workspace: string; hash: string }) => {
+    return gitService?.getCommitDetails(payload.workspace, payload.hash);
+  });
+  ipcMain.handle(ipc.git.commitFileDiff, (_event, payload: { workspace: string; hash: string; file: string }) => {
+    return gitService?.getCommitFileDiff(payload.workspace, payload.hash, payload.file);
   });
   ipcMain.handle(ipc.git.stage, (_event, payload: { workspace: string; paths: string[] }) => {
     return gitService?.stage(payload.workspace, payload.paths);
@@ -146,19 +159,15 @@ function registerIpc(): void {
   ipcMain.handle(ipc.git.watch, (_event, workspace: string) => gitService?.watch(workspace));
 }
 
-async function getCodexStatus(): Promise<CodexStatus> {
-  const command = "codex";
-  const lookupCommand = process.platform === "win32" ? "where.exe" : "sh";
-  const args = process.platform === "win32" ? [command] : ["-lc", `command -v ${command}`];
-  return new Promise((resolve) => {
-    execFile(lookupCommand, args, { windowsHide: true }, (error, stdout, stderr) => {
-      const resolvedPath = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0];
-      resolve({
-        available: !error && Boolean(resolvedPath),
-        command,
-        resolvedPath,
-        error: error ? stderr.trim() || error.message : undefined
-      });
-    });
+function applyTitleBarTheme(theme: TitleBarTheme): void {
+  if (process.platform === "darwin" || !mainWindow) {
+    return;
+  }
+
+  mainWindow.setBackgroundColor(theme.color);
+  mainWindow.setTitleBarOverlay({
+    color: theme.color,
+    symbolColor: theme.symbolColor,
+    height: 44
   });
 }

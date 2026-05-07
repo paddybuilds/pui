@@ -1,13 +1,17 @@
-import type { PuiApi } from "../../../preload";
-import { defaultCodexAddonPreferences } from "../../../shared/codexAddon";
+import type { PuiApi, ShellCandidate } from "../../../preload";
+import { DEFAULT_APP_PREFERENCES } from "../../../shared/types";
 import type {
   AppSettings,
-  CodexRun,
+  AppUpdateCheckResult,
+  AppVersionInfo,
   ConsoleProfile,
   GitCommit,
+  GitCommitDetails,
+  GitCommitFileDiff,
   GitDiff,
   GitOperationResult,
   GitStatus,
+  SettingsLoadState,
   TerminalSession
 } from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
@@ -28,16 +32,6 @@ const defaultProfiles: ConsoleProfile[] = [
     env: {},
     shortcut: "CmdOrCtrl+1",
     appearance: { color: "#9ca3af", icon: "terminal" }
-  },
-  {
-    id: "preview-codex",
-    name: "Codex",
-    cwd: workspace,
-    command: "codex",
-    args: [],
-    env: {},
-    shortcut: "CmdOrCtrl+2",
-    appearance: { color: "#9ca3af", icon: "sparkles" }
   }
 ];
 
@@ -46,8 +40,7 @@ let settings: AppSettings = {
   profiles: defaultProfiles,
   recentWorkspaces: [workspace],
   appPreferences: {
-    codexProfileEnabled: true,
-    codexAddon: defaultCodexAddonPreferences()
+    ...DEFAULT_APP_PREFERENCES
   },
   activeWorkspaceId: "preview-workspace",
   workspaces: [
@@ -64,14 +57,14 @@ let settings: AppSettings = {
         root: { type: "pane", id: "preview-pane", profileId: defaultProfiles[0]?.id }
       },
       layoutPresets: [],
-      quickCommands: [],
-      codexAddon: {}
+      quickCommands: []
     }
   ]
 };
 
 const noopUnsubscribe = () => undefined;
 const bridgeBaseUrl = "http://127.0.0.1:4317";
+const previewVersion = "0.1.0";
 
 export function getPuiApi(): PuiApi {
   if (!window.pui) {
@@ -85,6 +78,22 @@ export function getPuiApi(): PuiApi {
 
 const browserPreviewApi: PuiApi = {
   platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : isPreviewWindows ? "win32" : "linux",
+  app: {
+    getVersionInfo: async (): Promise<AppVersionInfo> => ({
+      name: "pui",
+      version: previewVersion,
+      commitSha: "preview",
+      commitShortSha: "preview",
+      updateCheckConfigured: false
+    }),
+    checkForUpdates: async (): Promise<AppUpdateCheckResult> => ({
+      status: "unavailable",
+      currentVersion: previewVersion,
+      checkedAt: new Date().toISOString(),
+      message: "Update checks are unavailable in browser preview."
+    }),
+    setTitleBarTheme: async () => undefined
+  },
   dialog: {
     openFolder: async (defaultPath) =>
       bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })
@@ -92,54 +101,36 @@ const browserPreviewApi: PuiApi = {
         .catch(() => window.prompt("Folder path", defaultPath || workspace)?.trim() || undefined)
   },
   settings: {
+    loadState: async (): Promise<SettingsLoadState> => ({ settings, isFirstLaunch: false }),
     load: async () => settings,
     save: async (next) => {
       settings = next;
       return settings;
     }
   },
+  system: {
+    listShells: async () => previewShellCandidates(browserPreviewApi.platform)
+  },
   terminal: {
     create: (payload) =>
-      terminalBridge.create(payload as { profile: ConsoleProfile; paneId: string; cols: number; rows: number }).catch(() => {
-        const { profile, paneId } = payload as { profile: ConsoleProfile; paneId: string };
-        return {
-          id: crypto.randomUUID(),
-          profileId: profile.id,
-          cwd: profile.cwd,
-          paneId,
-          ptyProcessId: 0,
-          status: "running"
-        } satisfies TerminalSession;
-      }),
+      terminalBridge
+        .create(payload as { profile: ConsoleProfile; paneId: string; cols: number; rows: number })
+        .catch(() => {
+          const { profile, paneId } = payload as { profile: ConsoleProfile; paneId: string };
+          return {
+            id: crypto.randomUUID(),
+            profileId: profile.id,
+            cwd: profile.cwd,
+            paneId,
+            ptyProcessId: 0,
+            status: "running"
+          } satisfies TerminalSession;
+        }),
     write: (sessionId, data) => terminalBridge.write(sessionId, data),
     resize: (sessionId, cols, rows) => terminalBridge.resize(sessionId, cols, rows),
     kill: (sessionId) => terminalBridge.kill(sessionId),
     onData: (callback) => terminalBridge.onData(callback),
     onExit: (callback) => terminalBridge.onExit(callback)
-  },
-  codex: {
-    run: async (prompt, runWorkspace) =>
-      ({
-        id: crypto.randomUUID(),
-        workspace: runWorkspace,
-        prompt,
-        status: "completed",
-        startedAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
-        events: [
-          {
-            timestamp: new Date().toISOString(),
-            type: "preview",
-            message: "Codex runs are available in the Electron app window.",
-            raw: null
-          }
-        ],
-        exitCode: 0
-      }) satisfies CodexRun,
-    cancel: async () => undefined,
-    status: async () => ({ available: false, command: "codex", error: "Preview mode" }),
-    onEvent: () => noopUnsubscribe,
-    onUpdate: () => noopUnsubscribe
   },
   git: {
     status: (gitWorkspace) => bridgeGet<GitStatus>("/git/status", { workspace: gitWorkspace }),
@@ -147,6 +138,10 @@ const browserPreviewApi: PuiApi = {
       bridgeGet<GitDiff>("/git/diff", { workspace: gitWorkspace, file: file || "", cached: String(cached) }),
     commits: (gitWorkspace, limit = 16) =>
       bridgeGet<GitCommit[]>("/git/commits", { workspace: gitWorkspace, limit: String(limit) }),
+    commitDetails: (gitWorkspace, hash) =>
+      bridgeGet<GitCommitDetails>("/git/commit-details", { workspace: gitWorkspace, hash }),
+    commitFileDiff: (gitWorkspace, hash, file) =>
+      bridgeGet<GitCommitFileDiff>("/git/commit-file-diff", { workspace: gitWorkspace, hash, file }),
     stage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/stage", { workspace: gitWorkspace, paths }),
     unstage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/unstage", { workspace: gitWorkspace, paths }),
     discard: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/discard", { workspace: gitWorkspace, paths }),
@@ -195,4 +190,92 @@ async function parseBridgeResponse<T>(response: Response): Promise<T> {
     throw new Error(payload?.error || `Bridge request failed: ${response.status}`);
   }
   return payload as T;
+}
+
+function previewShellCandidates(platform: NodeJS.Platform): ShellCandidate[] {
+  if (platform === "win32") {
+    return [
+      {
+        id: "powershell",
+        name: "Windows PowerShell",
+        command: "powershell.exe",
+        args: ["-NoLogo"],
+        source: "system",
+        available: true
+      },
+      {
+        id: "pwsh",
+        name: "PowerShell",
+        command: "pwsh.exe",
+        args: ["-NoLogo"],
+        source: "system",
+        available: false
+      },
+      {
+        id: "cmd",
+        name: "Command Prompt",
+        command: "cmd.exe",
+        args: [],
+        source: "system",
+        available: true
+      },
+      {
+        id: "wsl",
+        name: "WSL",
+        command: "wsl.exe",
+        args: [],
+        source: "wsl",
+        available: false
+      },
+      customShellCandidate()
+    ];
+  }
+
+  const shell = platform === "darwin" ? "/bin/zsh" : "/bin/bash";
+  return [
+    {
+      id: `env-${platform === "darwin" ? "zsh" : "bash"}`,
+      name: platform === "darwin" ? "zsh" : "bash",
+      command: shell,
+      args: [],
+      source: "environment",
+      available: true
+    },
+    {
+      id: "zsh",
+      name: "zsh",
+      command: "/bin/zsh",
+      args: [],
+      source: "system",
+      available: platform === "darwin"
+    },
+    {
+      id: "bash",
+      name: "bash",
+      command: "/bin/bash",
+      args: [],
+      source: "system",
+      available: true
+    },
+    {
+      id: "sh",
+      name: "sh",
+      command: "/bin/sh",
+      args: [],
+      source: "system",
+      available: true
+    },
+    customShellCandidate()
+  ];
+}
+
+function customShellCandidate(): ShellCandidate {
+  return {
+    id: "custom",
+    name: "Custom",
+    command: "",
+    args: [],
+    source: "custom",
+    available: true
+  };
 }

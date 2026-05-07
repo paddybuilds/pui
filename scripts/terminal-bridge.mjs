@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { promisify } from "node:util";
 import { WebSocketServer } from "ws";
 import pty from "node-pty";
+import { parseGitStatus } from "../src/shared/gitStatusParser.js";
 
 const port = Number(process.env.PUI_TERMINAL_BRIDGE_PORT || 4317);
 const sessions = new Map();
@@ -226,6 +227,19 @@ async function handleHttpRequest(request, response) {
       sendJson(response, await getGitCommits(workspace, limit));
       return;
     }
+    if (url.pathname === "/git/commit-details" && request.method === "GET") {
+      const workspace = requiredWorkspace(url);
+      const hash = url.searchParams.get("hash") || "";
+      sendJson(response, await getGitCommitDetails(workspace, hash));
+      return;
+    }
+    if (url.pathname === "/git/commit-file-diff" && request.method === "GET") {
+      const workspace = requiredWorkspace(url);
+      const hash = url.searchParams.get("hash") || "";
+      const file = url.searchParams.get("file") || "";
+      sendJson(response, await getGitCommitFileDiff(workspace, hash, file));
+      return;
+    }
     if (url.pathname === "/git/stage" && request.method === "POST") {
       const { workspace, paths } = await readJsonBody(request);
       await git(workspace, ["add", "--", ...paths]);
@@ -351,7 +365,7 @@ async function getGitStatus(workspace) {
       workspace,
       isRepo: true,
       branch: branchResult.stdout.trim() || "HEAD",
-      files: parseGitStatus(statusResult.stdout)
+      files: parseGitStatus(statusResult.stdout, { trimPaths: true })
     };
   } catch (error) {
     return {
@@ -396,12 +410,58 @@ async function getGitCommits(workspace, limit = 16) {
   }
 }
 
+async function getGitCommitDetails(workspace, hash) {
+  const [metadata, numstat] = await Promise.all([
+    git(workspace, ["show", "-s", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ae%x1f%ad%x1f%s%x1f%b", hash]),
+    git(workspace, ["show", "--format=", "--numstat", "--no-renames", hash])
+  ]);
+  const [fullHash, shortHash, author, authorEmail, date, subject, ...bodyParts] = metadata.stdout.split("\x1f");
+
+  return {
+    hash: fullHash,
+    shortHash,
+    author,
+    authorEmail,
+    date,
+    subject,
+    body: bodyParts.join("\x1f").trim(),
+    files: parseCommitFiles(numstat.stdout)
+  };
+}
+
+function parseCommitFiles(output) {
+  return output
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => {
+      const [additions, deletions, ...pathParts] = line.split("\t");
+      return {
+        path: pathParts.join("\t"),
+        additions: additions === "-" ? null : Number(additions),
+        deletions: deletions === "-" ? null : Number(deletions)
+      };
+    });
+}
+
+async function getGitCommitFileDiff(workspace, hash, file) {
+  const result = await git(workspace, [
+    "show",
+    "--first-parent",
+    "--format=",
+    "--no-ext-diff",
+    "--color=never",
+    hash,
+    "--",
+    file
+  ]);
+  return { workspace, hash, file, text: result.stdout };
+}
+
 async function discardGitPaths(workspace, paths) {
   const status = await getGitStatus(workspace);
   const untracked = new Set(
-    status.files
-      .filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?")
-      .map((file) => file.path)
+    status.files.filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?").map((file) => file.path)
   );
   const untrackedPaths = paths.filter((targetPath) => untracked.has(targetPath));
   const trackedPaths = paths.filter((targetPath) => !untracked.has(targetPath));
@@ -477,21 +537,4 @@ async function gitOperation(workspace, args) {
       error: error?.stderr || error?.message || String(error)
     };
   }
-}
-
-function parseGitStatus(output) {
-  return output
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const indexStatus = line[0] ?? " ";
-      const workingTreeStatus = line[1] ?? " ";
-      const rawPath = line.slice(3);
-      const renamedPath = rawPath.includes(" -> ") ? rawPath.split(" -> ").at(-1) || rawPath : rawPath;
-      return {
-        path: renamedPath.trim(),
-        indexStatus,
-        workingTreeStatus
-      };
-    });
 }

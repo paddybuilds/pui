@@ -1,6 +1,16 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { CodexRunCommandOptions } from "../shared/codexCommand";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, CodexRun, GitCommit, GitDiff, GitOperationResult, GitStatus, TerminalSession } from "../shared/types";
+import type {
+  AppSettings,
+  CodexRun,
+  CodexStatus,
+  GitCommit,
+  GitDiff,
+  GitOperationResult,
+  GitStatus,
+  TerminalSession
+} from "../shared/types";
 
 const api = {
   platform: process.platform,
@@ -37,8 +47,10 @@ const api = {
     }
   },
   codex: {
-    run: (prompt: string, workspace: string) => ipcRenderer.invoke(ipc.codex.run, { prompt, workspace }) as Promise<CodexRun>,
+    run: (prompt: string, workspace: string, options?: CodexRunCommandOptions) =>
+      ipcRenderer.invoke(ipc.codex.run, { prompt, workspace, options }) as Promise<CodexRun>,
     cancel: (runId: string) => ipcRenderer.invoke(ipc.codex.cancel, runId),
+    status: () => ipcRenderer.invoke(ipc.codex.status) as Promise<CodexStatus>,
     onEvent: (callback: (payload: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
       ipcRenderer.on(ipc.codex.event, listener);

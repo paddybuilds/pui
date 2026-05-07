@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { defaultCodexAddonPreferences } from "../shared/codexAddon";
 import type { AppSettings, ConsoleProfile, TerminalWorkspace } from "../shared/types";
 import { defaultShell } from "./shell";
 
@@ -50,13 +51,18 @@ export function defaultSettings(): AppSettings {
       root: { type: "pane", id: "main-pane", profileId: profiles[0]?.id }
     },
     layoutPresets: [],
-    quickCommands: []
+    quickCommands: [],
+    codexAddon: {}
   };
 
   return {
     workspace,
     profiles,
     recentWorkspaces: [workspace],
+    appPreferences: {
+      codexProfileEnabled: true,
+      codexAddon: defaultCodexAddonPreferences()
+    },
     activeWorkspaceId: defaultWorkspace.id,
     workspaces: [defaultWorkspace],
     layout: undefined

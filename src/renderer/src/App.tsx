@@ -8,9 +8,10 @@ import {
   useRef,
   useState
 } from "react";
-import { Edit3, GitCompare, PanelRight, PanelTop, Play, Plus, Settings, TerminalSquare, Trash2, X } from "lucide-react";
+import { Edit3, GitCompare, PanelRight, PanelTop, Play, Plus, Settings, Sparkles, TerminalSquare, Trash2, X } from "lucide-react";
 import type {
   AppSettings,
+  CodexRun,
   ConsoleProfile,
   GitStatus,
   LayoutPreset,
@@ -19,7 +20,9 @@ import type {
   WorkbenchNode,
   WorkbenchPane
 } from "../../shared/types";
+import { normalizeSettingsCodexPreferences } from "../../shared/codexAddon";
 import { createQuickCommandProfile, normalizeWorkspaceWorkflow } from "../../shared/workflow";
+import { CodexAddonPanel } from "./components/CodexAddonPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { GitPanel } from "./components/DiffPanel";
@@ -48,8 +51,11 @@ export function App() {
   const [activePaneId, setActivePaneId] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<"general" | "workspaces" | "terminal" | "workflow" | "codex" | "shortcuts">("general");
   const [gitSidebarOpen, setGitSidebarOpen] = useState(true);
+  const [sidePanel, setSidePanel] = useState<"git" | "codex" | null>(null);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  const [codexRuns, setCodexRuns] = useState<CodexRun[]>([]);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber(SIDEBAR_WIDTH_KEY, 224));
@@ -72,7 +78,11 @@ export function App() {
   const panes = useMemo(() => (layoutRoot ? collectPanes(layoutRoot) : []), [layoutRoot]);
   const activeWorkspaceSessions = activeWorkspace ? sessionsByWorkspace[activeWorkspace.id] ?? {} : {};
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
-  const gitSidebarVisible = Boolean(activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && gitSidebarOpen);
+  const activeCodexRun = codexRuns.find((run) => run.workspace === activeWorkspace?.path && run.status === "running") ?? null;
+  const recentCodexRuns = codexRuns.filter((run) => run.workspace === activeWorkspace?.path && run.status !== "running");
+  const gitSidebarVisible = Boolean(activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && gitSidebarOpen && sidePanel === "git");
+  const codexAddonVisible = Boolean(activeWorkspace?.kind !== "quick" && sidePanel === "codex");
+  const workspaceSidePanelVisible = gitSidebarVisible || codexAddonVisible;
 
   useEffect(() => {
     void pui.settings.load().then(async (loaded) => {
@@ -94,8 +104,12 @@ export function App() {
     const offGit = pui.git.onChanged(({ workspace }) => {
       void refreshGit(workspace);
     });
+    const offCodexUpdate = pui.codex.onUpdate((run) => {
+      setCodexRuns((current) => upsertCodexRun(current, run));
+    });
     return () => {
       offGit();
+      offCodexUpdate();
     };
   }, []);
 
@@ -149,6 +163,7 @@ export function App() {
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
       setGitStatus(null);
+      setSidePanel(null);
     } else {
       await refreshWorkspaceGit(workspace.path);
     }
@@ -340,6 +355,7 @@ export function App() {
     setActiveWorkspaceId(quickTerminal.id);
     hydrateWorkspace(quickTerminal);
     setGitStatus(null);
+    setSidePanel(null);
   };
 
   const createWorkspace = async ({ name, path }: { name?: string; path: string }) => {
@@ -349,6 +365,9 @@ export function App() {
 
     const defaultCwd = path.trim();
     const profile = createShellProfile(defaultCwd, "CmdOrCtrl+1");
+    const codexPreferences = normalizeSettingsCodexPreferences(settings).appPreferences?.codexAddon;
+    const workspaceProfiles =
+      codexPreferences?.interactiveProfileEnabled ? [profile, createCodexProfile(defaultCwd)] : [profile];
     const paneId = newId();
     const workspace: TerminalWorkspace = {
       id: newId(),
@@ -357,13 +376,14 @@ export function App() {
       path: defaultCwd,
       defaultCwd,
       terminalFontSize: 13,
-      profiles: [profile],
+      profiles: workspaceProfiles,
       layout: {
         activePaneId: paneId,
         root: { type: "pane", id: paneId, profileId: profile.id }
       },
       layoutPresets: [],
-      quickCommands: []
+      quickCommands: [],
+      codexAddon: {}
     };
 
     const nextSettings = {
@@ -450,6 +470,48 @@ export function App() {
     splitPaneWithProfile(activePaneId, command.splitDirection, profile);
   }, [activePaneId, activeWorkspace, splitPaneWithProfile]);
 
+  const openCodexAddon = useCallback(() => {
+    if (!activeWorkspace || activeWorkspace.kind === "quick") {
+      return;
+    }
+    setGitSidebarOpen(false);
+    setSidePanel("codex");
+  }, [activeWorkspace]);
+
+  const openCodexSettings = useCallback(() => {
+    setSettingsInitialSection("codex");
+    setSettingsOpen(true);
+  }, []);
+
+  const openInteractiveCodexTerminal = useCallback(() => {
+    if (!activeWorkspace) {
+      return;
+    }
+    const existing = activeWorkspace.profiles.find((profile) => isCodexProfile(profile.command));
+    const profile = existing ?? createCodexProfile(activeWorkspace.defaultCwd || activeWorkspace.path);
+    splitPaneWithProfile(activePaneId, "right", profile);
+  }, [activePaneId, activeWorkspace, splitPaneWithProfile]);
+
+  const runCodexTaskFromPalette = useCallback(() => {
+    if (!activeWorkspace || activeWorkspace.kind === "quick") {
+      return;
+    }
+    openCodexAddon();
+    const prompt = window.prompt("Codex task prompt")?.trim();
+    if (!prompt) {
+      return;
+    }
+    void pui.codex.run(prompt, activeWorkspace.path).then((run) => {
+      setCodexRuns((current) => upsertCodexRun(current, run));
+    });
+  }, [activeWorkspace, openCodexAddon]);
+
+  const cancelActiveCodexRun = useCallback(() => {
+    if (activeCodexRun) {
+      void pui.codex.cancel(activeCodexRun.id);
+    }
+  }, [activeCodexRun]);
+
   const deleteWorkspace = async (workspaceId: string) => {
     if (!settings) {
       return;
@@ -481,6 +543,7 @@ export function App() {
       hydrateWorkspace(nextActiveWorkspace);
       if (nextActiveWorkspace.kind === "quick") {
         setGitStatus(null);
+        setSidePanel(null);
       } else {
         await refreshWorkspaceGit(nextActiveWorkspace.path);
       }
@@ -490,6 +553,7 @@ export function App() {
       setActivePaneId("");
       setGitStatus(null);
       setGitSidebarOpen(true);
+      setSidePanel(null);
     }
     closeContextMenu();
   };
@@ -562,9 +626,15 @@ export function App() {
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
       setGitStatus(null);
+      setSidePanel(null);
     } else {
       await refreshWorkspaceGit(workspace.path);
     }
+  };
+
+  const updateSettings = async (nextSettings: AppSettings) => {
+    const saved = await pui.settings.save(nextSettings);
+    setSettings(normalizeSettings(saved));
   };
 
   const openWorkspaceContextMenu = (event: MouseEvent, workspace: TerminalWorkspace) => {
@@ -736,11 +806,25 @@ export function App() {
             <Plus size={14} />
             <span>Open folder</span>
           </button>
+          {activeWorkspace?.kind !== "quick" ? (
+            <button
+              className={codexAddonVisible ? "active" : ""}
+              type="button"
+              title="Codex Addon"
+              onClick={openCodexAddon}
+            >
+              <Sparkles size={14} />
+              <span>Codex</span>
+            </button>
+          ) : null}
           <button
             className={settingsOpen ? "active" : ""}
             type="button"
             title="Settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => {
+              setSettingsInitialSection("general");
+              setSettingsOpen(true);
+            }}
           >
             <Settings size={14} />
             <span>Settings</span>
@@ -777,11 +861,22 @@ export function App() {
                     type="button"
                     className={gitSidebarVisible ? "active" : ""}
                     title="Git"
-                    onClick={() => setGitSidebarOpen((current) => !current)}
+                    onClick={() => {
+                      const nextOpen = !gitSidebarVisible;
+                      setGitSidebarOpen(nextOpen);
+                      setSidePanel(nextOpen ? "git" : null);
+                    }}
                   >
                     <GitCompare size={14} />
                     <span>Git</span>
                     {gitStatus.files.length ? <small>{gitStatus.files.length}</small> : null}
+                  </button>
+                ) : null}
+                {activeWorkspace.kind !== "quick" ? (
+                  <button type="button" className={codexAddonVisible ? "active" : ""} title="Codex Addon" onClick={openCodexAddon}>
+                    <Sparkles size={14} />
+                    <span>Codex</span>
+                    {activeCodexRun ? <small>run</small> : null}
                   </button>
                 ) : null}
                 {activeWorkspace.kind !== "quick"
@@ -800,7 +895,7 @@ export function App() {
           className="content-row"
           style={{
             gridTemplateColumns:
-              activeWorkspace && gitSidebarVisible
+              activeWorkspace && workspaceSidePanelVisible
                 ? `minmax(0, 1fr) ${RESIZER_SIZE}px ${gitPanelWidth}px`
                 : "minmax(0, 1fr)"
           }}
@@ -852,18 +947,33 @@ export function App() {
             </section>
           )}
 
-          {activeWorkspace && gitSidebarVisible ? (
+          {activeWorkspace && workspaceSidePanelVisible ? (
             <>
             <div
               className="app-resizer side-panel-resizer"
               role="separator"
               aria-orientation="vertical"
-              title="Resize Git panel"
+              title="Resize side panel"
               onPointerDown={startGitPanelResize}
             />
-            <aside className="workspace-side-panel">
-              <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
-            </aside>
+            {gitSidebarVisible ? (
+              <aside className="workspace-side-panel">
+                <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
+              </aside>
+            ) : null}
+            {codexAddonVisible ? (
+              <CodexAddonPanel
+                settings={settings}
+                activeWorkspace={activeWorkspace}
+                activeRun={activeCodexRun}
+                recentRuns={recentCodexRuns}
+                onOpenTerminal={openInteractiveCodexTerminal}
+                onRunStarted={(run) => setCodexRuns((current) => upsertCodexRun(current, run))}
+                onCancelRun={(runId) => void pui.codex.cancel(runId)}
+                onOpenSettings={openCodexSettings}
+                onWorkspaceChange={updateActiveWorkspace}
+              />
+            ) : null}
             </>
           ) : null}
         </div>
@@ -883,7 +993,16 @@ export function App() {
           onApplyLayoutPreset={(preset) => void applyLayoutPreset(preset)}
           onRunQuickCommand={runQuickCommand}
           showGit={Boolean(activeWorkspace && gitStatus?.isRepo)}
-          onShowGit={() => setGitSidebarOpen(true)}
+          onShowGit={() => {
+            setGitSidebarOpen(true);
+            setSidePanel("git");
+          }}
+          showCodex={Boolean(activeWorkspace && activeWorkspace.kind !== "quick")}
+          hasActiveCodexRun={Boolean(activeCodexRun)}
+          onOpenCodex={openCodexAddon}
+          onOpenCodexTerminal={openInteractiveCodexTerminal}
+          onRunCodexTask={runCodexTaskFromPalette}
+          onCancelCodexRun={cancelActiveCodexRun}
         />
       ) : null}
 
@@ -891,8 +1010,10 @@ export function App() {
         <SettingsModal
           settings={settings}
           activeWorkspace={activeWorkspace}
+          onSettingsChange={updateSettings}
           onWorkspaceChange={updateActiveWorkspace}
           platform={pui.platform}
+          initialSection={settingsInitialSection}
           onClose={() => setSettingsOpen(false)}
         />
       ) : null}
@@ -1090,8 +1211,9 @@ function cloneWorkbenchNodeWithNewIds(root: WorkbenchNode, activePaneId: string)
 }
 
 function normalizeSettings(settings: AppSettings): AppSettings {
+  const normalizedCodexSettings = normalizeSettingsCodexPreferences(settings);
   if (settings.workspaces) {
-    const workspaces = settings.workspaces.map((workspace) => normalizeWorkspaceWorkflow({
+    const workspaces = (normalizedCodexSettings.workspaces ?? []).map((workspace) => normalizeWorkspaceWorkflow({
       ...workspace,
       kind: workspace.kind ?? ("folder" as const),
       defaultCwd: workspace.defaultCwd || workspace.path,
@@ -1104,11 +1226,11 @@ function normalizeSettings(settings: AppSettings): AppSettings {
     const activeWorkspaceId = workspaces.some((workspace) => workspace.id === settings.activeWorkspaceId)
       ? settings.activeWorkspaceId
       : workspaces[0]?.id;
-    return { ...settings, activeWorkspaceId, workspaces };
+    return { ...normalizedCodexSettings, activeWorkspaceId, workspaces };
   }
 
-  const path = settings.workspace;
-  const profiles = settings.profiles.length > 0 ? settings.profiles : [createShellProfile(path, "CmdOrCtrl+1")];
+  const path = normalizedCodexSettings.workspace;
+  const profiles = normalizedCodexSettings.profiles.length > 0 ? normalizedCodexSettings.profiles : [createShellProfile(path, "CmdOrCtrl+1")];
   const paneId = newId();
   const workspace: TerminalWorkspace = {
     id: "main-workspace",
@@ -1123,11 +1245,12 @@ function normalizeSettings(settings: AppSettings): AppSettings {
       root: { type: "pane", id: paneId, profileId: profiles[0]?.id }
     },
     layoutPresets: [],
-    quickCommands: []
+    quickCommands: [],
+    codexAddon: {}
   };
 
   return {
-    ...settings,
+    ...normalizedCodexSettings,
     activeWorkspaceId: workspace.id,
     workspaces: [workspace]
   };
@@ -1366,6 +1489,31 @@ function createShellProfile(path: string, shortcut: string): ConsoleProfile {
       icon: "terminal"
     }
   };
+}
+
+function createCodexProfile(path: string): ConsoleProfile {
+  return {
+    id: "codex-interactive",
+    name: "Codex",
+    cwd: path,
+    command: "codex",
+    args: [],
+    env: {},
+    shortcut: "CmdOrCtrl+2",
+    appearance: {
+      color: "#9ca3af",
+      icon: "sparkles"
+    }
+  };
+}
+
+function isCodexProfile(command: string): boolean {
+  const normalized = command.toLowerCase();
+  return normalized === "codex" || normalized.endsWith("\\codex.exe") || normalized.endsWith("/codex");
+}
+
+function upsertCodexRun(runs: CodexRun[], run: CodexRun): CodexRun[] {
+  return [run, ...runs.filter((item) => item.id !== run.id)].slice(0, 20);
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {

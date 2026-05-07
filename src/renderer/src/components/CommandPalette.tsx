@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react";
-import { ArrowDownToLine, GitCompare, PanelRightOpen, Play, Save } from "lucide-react";
+import { ArrowDownToLine, GitCompare, PanelRightOpen, Play, Save, Sparkles, Square, TerminalSquare } from "lucide-react";
 import type { LayoutPreset, QuickCommand, TerminalWorkspace } from "../../../shared/types";
 import { shortcutLabel } from "../lib/shortcuts";
 
@@ -25,6 +25,12 @@ type CommandPaletteProps = {
   onRunQuickCommand: (command: QuickCommand) => void;
   showGit: boolean;
   onShowGit: () => void;
+  showCodex: boolean;
+  hasActiveCodexRun: boolean;
+  onOpenCodex: () => void;
+  onOpenCodexTerminal: () => void;
+  onRunCodexTask: () => void;
+  onCancelCodexRun: () => void;
 };
 
 export function CommandPalette({
@@ -40,7 +46,13 @@ export function CommandPalette({
   onApplyLayoutPreset,
   onRunQuickCommand,
   showGit,
-  onShowGit
+  onShowGit,
+  showCodex,
+  hasActiveCodexRun,
+  onOpenCodex,
+  onOpenCodexTerminal,
+  onRunCodexTask,
+  onCancelCodexRun
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const commands = useMemo<PaletteCommand[]>(
@@ -82,9 +94,26 @@ export function CommandPalette({
           icon: <Play size={16} />
         }))
       ];
-      return showGit
-        ? [...baseCommands, { id: "git", label: "Open Git sidebar", shortcut: "", action: onShowGit, icon: <GitCompare size={16} /> }]
-        : baseCommands;
+      const gitCommands = showGit
+        ? [{ id: "git", label: "Open Git sidebar", shortcut: "", action: onShowGit, icon: <GitCompare size={16} /> }]
+        : [];
+      const codexCommands = showCodex
+        ? [
+            { id: "codex-open", label: "Open Codex Addon", shortcut: "", action: onOpenCodex, icon: <Sparkles size={16} /> },
+            {
+              id: "codex-terminal",
+              label: "Open interactive Codex terminal",
+              shortcut: "",
+              action: onOpenCodexTerminal,
+              icon: <TerminalSquare size={16} />
+            },
+            { id: "codex-run", label: "Run Codex task", shortcut: "", action: onRunCodexTask, icon: <Play size={16} /> },
+            ...(hasActiveCodexRun
+              ? [{ id: "codex-cancel", label: "Cancel active Codex run", shortcut: "", action: onCancelCodexRun, icon: <Square size={16} /> }]
+              : [])
+          ]
+        : [];
+      return [...baseCommands, ...gitCommands, ...codexCommands];
     },
     [
       layoutPresets,
@@ -93,10 +122,16 @@ export function CommandPalette({
       onRunQuickCommand,
       onSaveLayoutPreset,
       onShowGit,
+      onOpenCodex,
+      onOpenCodexTerminal,
+      onRunCodexTask,
+      onCancelCodexRun,
       onSplitDown,
       onSplitRight,
       platform,
       quickCommands,
+      hasActiveCodexRun,
+      showCodex,
       showGit,
       workspaces
     ]

@@ -17,6 +17,7 @@ export const ipc = {
   codex: {
     run: "codex:run",
     cancel: "codex:cancel",
+    status: "codex:status",
     event: "codex:event",
     update: "codex:update"
   },

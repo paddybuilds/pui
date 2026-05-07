@@ -1427,3 +1427,194 @@ kbd {
 .settings-list-row.active {
   background: var(--surface-active);
 }
+
+.settings-toggle-row {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+}
+
+.settings-toggle-row input {
+  width: auto;
+}
+
+.codex-addon-panel {
+  display: grid;
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  overflow: auto;
+  background: #0d1117;
+}
+
+.codex-addon-header {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.codex-addon-header div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.codex-addon-header strong,
+.codex-run-list > strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.codex-addon-header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.codex-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.045);
+}
+
+.codex-status.available svg {
+  color: #8ce8b4;
+}
+
+.codex-status.unavailable svg,
+.codex-error {
+  color: #f8a6a6;
+}
+
+.codex-status div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.codex-status strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.codex-status span,
+.codex-run-list > p {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.codex-actions,
+.codex-template-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.codex-actions button,
+.codex-composer > button {
+  min-height: 32px;
+}
+
+.codex-composer,
+.codex-preferences,
+.codex-run-list {
+  display: grid;
+  gap: 8px;
+}
+
+.codex-composer label,
+.codex-preferences label {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.codex-composer textarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.codex-template-list button {
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.codex-preferences {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.codex-preferences label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 0.9fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.codex-preferences input[type="checkbox"] {
+  width: auto;
+  justify-self: end;
+}
+
+.codex-run-card {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.045);
+}
+
+.codex-run-card.running {
+  border-color: rgba(140, 232, 180, 0.26);
+}
+
+.codex-run-card.failed {
+  border-color: rgba(248, 166, 166, 0.26);
+}
+
+.codex-run-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.codex-run-card p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.codex-run-card pre {
+  max-height: 90px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}

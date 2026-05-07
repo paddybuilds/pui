@@ -1,15 +1,18 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { Keyboard, Monitor, Play, Settings, TerminalSquare, X } from "lucide-react";
-import type { AppSettings, QuickCommand, TerminalWorkspace } from "../../../shared/types";
+import { Keyboard, Monitor, Play, Settings, Sparkles, TerminalSquare, X } from "lucide-react";
+import { normalizeCodexAddonPreferences, resolveCodexAddonPreferences } from "../../../shared/codexAddon";
+import type { AppSettings, CodexAddonPreferences, QuickCommand, TerminalWorkspace } from "../../../shared/types";
 import { shortcutLabel } from "../lib/shortcuts";
 
-type SettingsSection = "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
+type SettingsSection = "general" | "workspaces" | "terminal" | "workflow" | "codex" | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
+  onSettingsChange: (settings: AppSettings) => Promise<void>;
   onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
   platform: string;
+  initialSection?: SettingsSection;
   onClose: () => void;
 };
 
@@ -18,11 +21,20 @@ const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }>
   { id: "workspaces", label: "Folders", icon: <Monitor size={15} /> },
   { id: "terminal", label: "Terminal", icon: <TerminalSquare size={15} /> },
   { id: "workflow", label: "Workflow", icon: <Play size={15} /> },
+  { id: "codex", label: "Codex Addon", icon: <Sparkles size={15} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={15} /> }
 ];
 
-export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, platform, onClose }: SettingsModalProps) {
-  const [section, setSection] = useState<SettingsSection>("general");
+export function SettingsModal({
+  settings,
+  activeWorkspace,
+  onSettingsChange,
+  onWorkspaceChange,
+  platform,
+  initialSection = "general",
+  onClose
+}: SettingsModalProps) {
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const activeSection = sections.find((item) => item.id === section) ?? sections[0];
 
   return (
@@ -63,6 +75,14 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
           ) : null}
           {section === "workflow" ? (
             <WorkflowSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
+          ) : null}
+          {section === "codex" ? (
+            <CodexSettings
+              settings={settings}
+              activeWorkspace={activeWorkspace}
+              onSettingsChange={onSettingsChange}
+              onWorkspaceChange={onWorkspaceChange}
+            />
           ) : null}
           {section === "shortcuts" ? <ShortcutSettings platform={platform} /> : null}
         </main>
@@ -380,6 +400,108 @@ function WorkflowSettings({
           </div>
         ))}
         {(activeWorkspace.layoutPresets ?? []).length === 0 ? <p>No saved layouts yet.</p> : null}
+      </SettingGroup>
+    </div>
+  );
+}
+
+function CodexSettings({
+  settings,
+  activeWorkspace,
+  onSettingsChange,
+  onWorkspaceChange
+}: {
+  settings: AppSettings;
+  activeWorkspace: TerminalWorkspace;
+  onSettingsChange: (settings: AppSettings) => Promise<void>;
+  onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+}) {
+  const globalPreferences = normalizeCodexAddonPreferences(settings.appPreferences?.codexAddon);
+  const workspacePreferences = resolveCodexAddonPreferences(settings, activeWorkspace);
+  const codexProfile = activeWorkspace.profiles.find((profile) => profile.command.toLowerCase() === "codex");
+
+  const updateGlobal = async (next: Partial<CodexAddonPreferences>) => {
+    await onSettingsChange({
+      ...settings,
+      appPreferences: {
+        ...settings.appPreferences,
+        codexProfileEnabled: next.interactiveProfileEnabled ?? settings.appPreferences?.codexProfileEnabled,
+        codexAddon: {
+          ...globalPreferences,
+          ...next
+        }
+      }
+    });
+  };
+
+  const updateWorkspace = async (next: Partial<CodexAddonPreferences>) => {
+    await onWorkspaceChange({
+      ...activeWorkspace,
+      codexAddon: {
+        ...(activeWorkspace.codexAddon ?? {}),
+        ...next
+      }
+    });
+  };
+
+  return (
+    <div className="settings-page">
+      <SettingGroup title="Global defaults">
+        <label className="settings-toggle-row">
+          <span>Enable Codex Addon for new folders</span>
+          <input type="checkbox" checked={globalPreferences.enabled} onChange={(event) => void updateGlobal({ enabled: event.target.checked })} />
+        </label>
+        <label className="settings-toggle-row">
+          <span>Add interactive Codex terminal profile</span>
+          <input
+            type="checkbox"
+            checked={globalPreferences.interactiveProfileEnabled}
+            onChange={(event) => void updateGlobal({ interactiveProfileEnabled: event.target.checked })}
+          />
+        </label>
+        <div className="settings-inline-control">
+          <input
+            value={globalPreferences.defaultModel}
+            onChange={(event) => void updateGlobal({ defaultModel: event.target.value })}
+            placeholder="Default model, or leave blank for CLI default"
+          />
+          <select
+            value={globalPreferences.defaultSandbox}
+            onChange={(event) => void updateGlobal({ defaultSandbox: event.target.value as CodexAddonPreferences["defaultSandbox"] })}
+          >
+            <option value="read-only">Read only</option>
+            <option value="workspace-write">Workspace write</option>
+            <option value="danger-full-access">Danger full access</option>
+          </select>
+        </div>
+      </SettingGroup>
+
+      <SettingGroup title="Current workspace">
+        <label className="settings-toggle-row">
+          <span>Enabled in {activeWorkspace.name}</span>
+          <input
+            type="checkbox"
+            checked={workspacePreferences.enabled}
+            onChange={(event) => void updateWorkspace({ enabled: event.target.checked })}
+          />
+        </label>
+        <div className="settings-inline-control">
+          <input
+            value={workspacePreferences.defaultModel}
+            onChange={(event) => void updateWorkspace({ defaultModel: event.target.value })}
+            placeholder="Inherit model"
+          />
+          <select
+            value={workspacePreferences.defaultSandbox}
+            onChange={(event) => void updateWorkspace({ defaultSandbox: event.target.value as CodexAddonPreferences["defaultSandbox"] })}
+          >
+            <option value="read-only">Read only</option>
+            <option value="workspace-write">Workspace write</option>
+            <option value="danger-full-access">Danger full access</option>
+          </select>
+        </div>
+        <SettingRow label="Interactive profile" value={codexProfile ? "Present" : "Not added yet"} />
+        <SettingRow label="Prompt templates" value={String(workspacePreferences.defaultPromptTemplates.length)} />
       </SettingGroup>
     </div>
   );

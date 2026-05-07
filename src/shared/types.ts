@@ -62,6 +62,14 @@ export type GitDiff = {
   cached: boolean;
 };
 
+export type GitCommit = {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: string;
+  subject: string;
+};
+
 export type AppSettings = {
   workspace: string;
   profiles: ConsoleProfile[];
@@ -94,6 +102,7 @@ export type WorkbenchNode =
       id: string;
       direction: "right" | "down";
       children: WorkbenchNode[];
+      sizes?: number[];
     };
 
 export type TerminalWorkspace = {

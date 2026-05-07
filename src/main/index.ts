@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { join } from "node:path";
 import { ipc } from "../shared/ipc";
 import type { AppSettings, ConsoleProfile } from "../shared/types";
@@ -65,6 +65,17 @@ app.on("window-all-closed", () => {
 });
 
 function registerIpc(): void {
+  ipcMain.handle(ipc.dialog.openFolder, async (_event, defaultPath?: string) => {
+    if (!mainWindow) {
+      return undefined;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      defaultPath,
+      properties: ["openDirectory", "createDirectory"]
+    });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+
   ipcMain.handle(ipc.settings.load, () => storeService.loadSettings());
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
 
@@ -90,6 +101,9 @@ function registerIpc(): void {
   ipcMain.handle(ipc.git.status, (_event, workspace: string) => gitService?.getStatus(workspace));
   ipcMain.handle(ipc.git.diff, (_event, payload: { workspace: string; file?: string; cached?: boolean }) => {
     return gitService?.getDiff(payload.workspace, payload.file, payload.cached);
+  });
+  ipcMain.handle(ipc.git.commits, (_event, payload: { workspace: string; limit?: number }) => {
+    return gitService?.getRecentCommits(payload.workspace, payload.limit);
   });
   ipcMain.handle(ipc.git.stage, (_event, payload: { workspace: string; paths: string[] }) => {
     return gitService?.stage(payload.workspace, payload.paths);

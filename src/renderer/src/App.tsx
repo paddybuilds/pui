@@ -1,22 +1,28 @@
-import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitCompare, PanelRight, PanelTop, Plus, Search, Settings, Sparkles, TerminalSquare, Trash2, X } from "lucide-react";
+import {
+  Fragment,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+import { Edit3, GitCompare, PanelRight, PanelTop, Plus, Search, Settings, TerminalSquare, Trash2, X } from "lucide-react";
 import type {
   AppSettings,
-  CodexRun,
   ConsoleProfile,
   GitStatus,
   TerminalWorkspace,
   WorkbenchNode,
   WorkbenchPane
 } from "../../shared/types";
-import { CodexPanel } from "./components/CodexPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
-import { DiffPanel } from "./components/DiffPanel";
+import { GitPanel } from "./components/DiffPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { disposeTerminalPane, disposeTerminalPanes, TerminalPane } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
-import { WorkspaceModal } from "./components/WorkspaceModal";
 import { getPuiApi } from "./lib/browserApi";
 
 type Pane = WorkbenchPane & {
@@ -25,6 +31,9 @@ type Pane = WorkbenchPane & {
 
 const newId = () => crypto.randomUUID();
 const pui = getPuiApi();
+const RESIZER_SIZE = 5;
+const SIDEBAR_WIDTH_KEY = "pui.sidebarWidth";
+const GIT_PANEL_WIDTH_KEY = "pui.gitPanelWidth";
 
 export function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -33,12 +42,13 @@ export function App() {
   const [sessionsByWorkspace, setSessionsByWorkspace] = useState<Record<string, Record<string, string>>>({});
   const [activePaneId, setActivePaneId] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [panelOpen, setPanelOpen] = useState<"codex" | "diff" | null>(null);
-  const [rightPanel, setRightPanel] = useState<"codex" | "diff">("codex");
+  const [gitSidebarOpen, setGitSidebarOpen] = useState(true);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
-  const [codexRuns, setCodexRuns] = useState<CodexRun[]>([]);
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
+  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber(SIDEBAR_WIDTH_KEY, 224));
+  const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 460));
   const didHydrateRef = useRef(false);
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
 
@@ -51,21 +61,23 @@ export function App() {
       : activeWorkspace?.path ?? "";
   const profiles = activeWorkspace?.profiles ?? [];
   const panes = useMemo(() => (layoutRoot ? collectPanes(layoutRoot) : []), [layoutRoot]);
-  const activePane = panes.find((pane) => pane.id === activePaneId);
   const activeWorkspaceSessions = activeWorkspace ? sessionsByWorkspace[activeWorkspace.id] ?? {} : {};
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
+  const gitSidebarVisible = Boolean(gitStatus?.isRepo && gitSidebarOpen);
 
   useEffect(() => {
     void pui.settings.load().then(async (loaded) => {
       const normalized = normalizeSettings(loaded);
       const initialWorkspace =
-        normalized.workspaces!.find((workspace) => workspace.id === normalized.activeWorkspaceId) ?? normalized.workspaces![0];
+        normalized.workspaces?.find((workspace) => workspace.id === normalized.activeWorkspaceId) ?? normalized.workspaces?.[0];
       setSettings(normalized);
-      hydrateWorkspace(initialWorkspace);
-      setActiveWorkspaceId(initialWorkspace.id);
+      if (initialWorkspace) {
+        hydrateWorkspace(initialWorkspace);
+        setActiveWorkspaceId(initialWorkspace.id);
+        await refreshGit(initialWorkspace.path);
+        await pui.git.watch(initialWorkspace.path);
+      }
       didHydrateRef.current = true;
-      await refreshGit(initialWorkspace.path);
-      await pui.git.watch(initialWorkspace.path);
       if (!loaded.workspaces) {
         await pui.settings.save(normalized);
       }
@@ -74,15 +86,8 @@ export function App() {
     const offGit = pui.git.onChanged(({ workspace }) => {
       void refreshGit(workspace);
     });
-    const offCodex = pui.codex.onUpdate((run) => {
-      setCodexRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 20));
-      if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
-        void refreshGit(run.workspace);
-      }
-    });
     return () => {
       offGit();
-      offCodex();
     };
   }, []);
 
@@ -121,7 +126,7 @@ export function App() {
     hydrateWorkspace(workspace);
     await refreshGit(workspace.path);
     await pui.git.watch(workspace.path);
-    setPanelOpen(null);
+    setGitSidebarOpen(true);
     setPaletteOpen(false);
     closeContextMenu();
   };
@@ -173,6 +178,39 @@ export function App() {
     }
   }, [activePaneId, activeWorkspace, applyWorkspaceLayout, layoutRoot, panes.length]);
 
+  const resizeSplit = useCallback((splitId: string, sizes: number[]) => {
+    if (!layoutRoot) {
+      return;
+    }
+    applyWorkspaceLayout(updateSplitSizes(layoutRoot, splitId, sizes), activePaneId);
+  }, [activePaneId, applyWorkspaceLayout, layoutRoot]);
+
+  const startSidebarResize = (event: ReactPointerEvent<HTMLElement>) => {
+    startPanelResize(event, {
+      initialValue: sidebarWidth,
+      min: 176,
+      max: 360,
+      calculate: (initialValue, deltaX) => initialValue + deltaX,
+      onChange: (width) => {
+        setSidebarWidth(width);
+        writeStoredNumber(SIDEBAR_WIDTH_KEY, width);
+      }
+    });
+  };
+
+  const startGitPanelResize = (event: ReactPointerEvent<HTMLElement>) => {
+    startPanelResize(event, {
+      initialValue: gitPanelWidth,
+      min: 340,
+      max: Math.min(760, Math.max(360, window.innerWidth - sidebarWidth - 280)),
+      calculate: (initialValue, deltaX) => initialValue - deltaX,
+      onChange: (width) => {
+        setGitPanelWidth(width);
+        writeStoredNumber(GIT_PANEL_WIDTH_KEY, width);
+      }
+    });
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -190,22 +228,22 @@ export function App() {
         splitActivePane("down");
         return;
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
-        event.preventDefault();
-        openPanel("codex");
-        return;
-      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [splitActivePane]);
 
-  const openPanel = (panel: "codex" | "diff") => {
-    setRightPanel(panel);
-    setPanelOpen((current) => (current === panel ? null : panel));
+  const openFolder = async () => {
+    if (!settings) {
+      return;
+    }
+    const path = await pui.dialog.openFolder(activeWorkspace?.defaultCwd || activeWorkspace?.path || settings.workspace);
+    if (path) {
+      await createWorkspace({ path });
+    }
   };
 
-  const createWorkspace = async ({ name, path }: { name: string; path: string }) => {
+  const createWorkspace = async ({ name, path }: { name?: string; path: string }) => {
     if (!settings) {
       return;
     }
@@ -215,7 +253,7 @@ export function App() {
     const paneId = newId();
     const workspace: TerminalWorkspace = {
       id: newId(),
-      name: name.trim() || basename(defaultCwd),
+      name: name?.trim() || basename(defaultCwd),
       path: defaultCwd,
       defaultCwd,
       terminalFontSize: 13,
@@ -240,11 +278,35 @@ export function App() {
     hydrateWorkspace(workspace);
     await refreshGit(defaultCwd);
     await pui.git.watch(defaultCwd);
-    setWorkspaceModalOpen(false);
+  };
+
+  const startRenameWorkspace = (workspace: TerminalWorkspace) => {
+    setEditingWorkspaceId(workspace.id);
+    setEditingWorkspaceName(workspace.name);
+    closeContextMenu();
+  };
+
+  const renameWorkspace = async (workspace: TerminalWorkspace, nextName: string) => {
+    if (!settings) {
+      return;
+    }
+    const trimmedName = nextName.trim();
+    setEditingWorkspaceId(null);
+    if (!trimmedName || trimmedName === workspace.name) {
+      return;
+    }
+    const renamedWorkspace = { ...workspace, name: trimmedName };
+    const nextSettings = {
+      ...settings,
+      workspaces: (settings.workspaces ?? []).map((item) => (item.id === workspace.id ? renamedWorkspace : item))
+    };
+    const saved = await pui.settings.save(nextSettings);
+    setSettings(normalizeSettings(saved));
+    closeContextMenu();
   };
 
   const deleteWorkspace = async (workspaceId: string) => {
-    if (!settings || workspaces.length <= 1) {
+    if (!settings) {
       return;
     }
     const workspace = workspaces.find((item) => item.id === workspaceId);
@@ -258,7 +320,7 @@ export function App() {
     const nextSettings = {
       ...settings,
       activeWorkspaceId: nextActiveWorkspace?.id,
-      workspace: nextActiveWorkspace?.path ?? remainingWorkspaces[0].path,
+      workspace: nextActiveWorkspace?.path ?? settings.workspace,
       workspaces: remainingWorkspaces
     };
     const saved = await pui.settings.save(nextSettings);
@@ -273,6 +335,12 @@ export function App() {
       hydrateWorkspace(nextActiveWorkspace);
       await refreshGit(nextActiveWorkspace.path);
       await pui.git.watch(nextActiveWorkspace.path);
+    } else {
+      setActiveWorkspaceId("");
+      setLayoutRoot(null);
+      setActivePaneId("");
+      setGitStatus(null);
+      setGitSidebarOpen(true);
     }
     closeContextMenu();
   };
@@ -304,11 +372,16 @@ export function App() {
         onSelect: () => void switchWorkspace(workspace)
       },
       {
+        id: "rename-workspace",
+        label: "Rename label",
+        icon: <Edit3 size={14} />,
+        onSelect: () => startRenameWorkspace(workspace)
+      },
+      {
         id: "delete-workspace",
-        label: workspaces.length <= 1 ? "Cannot remove last folder" : "Remove folder",
+        label: "Close folder",
         icon: <Trash2 size={14} />,
         destructive: true,
-        disabled: workspaces.length <= 1,
         onSelect: () => void deleteWorkspace(workspace.id)
       }
     ]);
@@ -343,12 +416,12 @@ export function App() {
     ]);
   };
 
-  if (!settings || !activeWorkspace || !layoutRoot) {
+  if (!settings) {
     return <div className="boot">loading shell</div>;
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ gridTemplateColumns: `${sidebarWidth}px ${RESIZER_SIZE}px minmax(0, 1fr)` }}>
       <aside className="sidebar">
         <div className="brand">
           <TerminalSquare size={18} />
@@ -359,24 +432,6 @@ export function App() {
           <button className="rail-button" type="button" title="Command palette" onClick={() => setPaletteOpen(true)}>
             <Search size={16} />
             <span>Search</span>
-          </button>
-          <button
-            className={panelOpen === "codex" ? "rail-button active" : "rail-button"}
-            type="button"
-            title="Codex"
-            onClick={() => openPanel("codex")}
-          >
-            <Sparkles size={16} />
-            <span>Codex</span>
-          </button>
-          <button
-            className={panelOpen === "diff" ? "rail-button active" : "rail-button"}
-            type="button"
-            title="Diffs"
-            onClick={() => openPanel("diff")}
-          >
-            <GitCompare size={16} />
-            <span>Diffs</span>
           </button>
           <button
             className={settingsOpen ? "rail-button active" : "rail-button"}
@@ -391,70 +446,105 @@ export function App() {
 
         <div className="sidebar-label">Folders</div>
         <section className="workspace-list">
-          {workspaces.map((workspace) => (
-            <button
-              key={workspace.id}
-              type="button"
-              className={workspace.id === activeWorkspace.id ? "workspace-button active" : "workspace-button"}
-              title={workspace.path}
-              onClick={() => switchWorkspace(workspace)}
-              onContextMenu={(event) => openWorkspaceContextMenu(event, workspace)}
-            >
-              <span>{workspace.name.slice(0, 2).toUpperCase()}</span>
-              <strong>{workspace.name}</strong>
-            </button>
-          ))}
+          {workspaces.map((workspace) =>
+            workspace.id === editingWorkspaceId ? (
+              <div key={workspace.id} className="workspace-button active editing" title={workspace.path}>
+                <span>{editingWorkspaceName.slice(0, 2).toUpperCase() || "FO"}</span>
+                <input
+                  className="workspace-rename-input"
+                  autoFocus
+                  value={editingWorkspaceName}
+                  onChange={(event) => setEditingWorkspaceName(event.target.value)}
+                  onBlur={() => void renameWorkspace(workspace, editingWorkspaceName)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur();
+                    }
+                    if (event.key === "Escape") {
+                      setEditingWorkspaceId(null);
+                      setEditingWorkspaceName("");
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                key={workspace.id}
+                type="button"
+                className={workspace.id === activeWorkspace.id ? "workspace-button active" : "workspace-button"}
+                title={workspace.path}
+                onClick={() => switchWorkspace(workspace)}
+                onContextMenu={(event) => openWorkspaceContextMenu(event, workspace)}
+              >
+                <span>{workspace.name.slice(0, 2).toUpperCase()}</span>
+                <strong>{workspace.name}</strong>
+              </button>
+            )
+          )}
         </section>
 
         <div className="new-profile">
-          <button type="button" onClick={() => setWorkspaceModalOpen(true)}>
+          <button type="button" onClick={() => void openFolder()}>
             <Plus size={14} />
             <span>Open folder</span>
           </button>
         </div>
       </aside>
+      <div
+        className="app-resizer app-sidebar-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        title="Resize sidebar"
+        onPointerDown={startSidebarResize}
+      />
 
       <main className="workbench">
         <header className="workspace-topbar">
           <div className="workspace-topbar-title">
-            <strong>{activeFolderTitle}</strong>
-            <span>{activeFolderSubtitle}</span>
+            <strong>{activeWorkspace ? activeFolderTitle : "No folder open"}</strong>
+            <span>{activeWorkspace ? activeFolderSubtitle : "Open a folder to start a terminal session"}</span>
           </div>
           <div className="workspace-topbar-actions">
-            <button type="button" title="Open folder" onClick={() => setWorkspaceModalOpen(true)}>
+            <button type="button" title="Open folder" onClick={() => void openFolder()}>
               <Plus size={14} />
               <span>Folder</span>
             </button>
-            <button type="button" title="Split right" onClick={() => splitActivePane("right")}>
-              <PanelRight size={14} />
-              <span>Split</span>
-            </button>
-            <button
-              type="button"
-              className={panelOpen === "codex" ? "active" : ""}
-              title="Codex"
-              onClick={() => openPanel("codex")}
-            >
-              <Sparkles size={14} />
-              <span>Codex</span>
-            </button>
-            <button
-              type="button"
-              className={panelOpen === "diff" ? "active" : ""}
-              title="Diffs"
-              onClick={() => openPanel("diff")}
-            >
-              <GitCompare size={14} />
-              <span>Diffs</span>
-              {gitStatus?.files.length ? <small>{gitStatus.files.length}</small> : null}
-            </button>
+            {activeWorkspace ? (
+              <>
+                <button type="button" title="Split right" onClick={() => splitActivePane("right")}>
+                  <PanelRight size={14} />
+                  <span>Split</span>
+                </button>
+                {gitStatus?.isRepo ? (
+                  <button
+                    type="button"
+                    className={gitSidebarVisible ? "active" : ""}
+                    title="Git"
+                    onClick={() => setGitSidebarOpen((current) => !current)}
+                  >
+                    <GitCompare size={14} />
+                    <span>Git</span>
+                    {gitStatus.files.length ? <small>{gitStatus.files.length}</small> : null}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
             <button type="button" className={settingsOpen ? "active" : ""} title="Settings" onClick={() => setSettingsOpen(true)}>
               <Settings size={14} />
             </button>
           </div>
         </header>
-        <div className="content-row">
-          <section className="terminal-grid">
+        <div
+          className="content-row"
+          style={{
+            gridTemplateColumns:
+              activeWorkspace && gitSidebarVisible
+                ? `minmax(0, 1fr) ${RESIZER_SIZE}px ${gitPanelWidth}px`
+                : "minmax(0, 1fr)"
+          }}
+        >
+          {activeWorkspace && layoutRoot ? (
+            <section className="terminal-grid">
             <PaneTree
               node={layoutRoot}
               profilesById={profilesById}
@@ -469,6 +559,7 @@ export function App() {
               onFocus={setActivePaneId}
               onClosePane={closePane}
               onPaneContextMenu={openPaneContextMenu}
+              onResizeSplit={resizeSplit}
               onSession={(paneId, sessionId) =>
                 setSessionsByWorkspace((current) => {
                   const workspaceSessions = current[activeWorkspace.id] ?? {};
@@ -485,36 +576,31 @@ export function App() {
                 })
               }
             />
-          </section>
+            </section>
+          ) : (
+            <section className="empty-workbench">
+              <TerminalSquare size={28} />
+              <strong>No folders open</strong>
+              <span>Open a folder to create a workspace-specific terminal layout.</span>
+              <button type="button" onClick={() => void openFolder()}>
+                <Plus size={14} />
+                Open folder
+              </button>
+            </section>
+          )}
 
-          {panelOpen ? (
+          {activeWorkspace && gitSidebarVisible ? (
             <>
-              <div className="panel-scrim" onClick={() => setPanelOpen(null)} />
-              <aside className="right-panel open">
-                <div className="panel-tabs">
-                  <button
-                    type="button"
-                    className={rightPanel === "codex" ? "active" : ""}
-                    onClick={() => setRightPanel("codex")}
-                  >
-                    <Sparkles size={15} />
-                    Codex
-                  </button>
-                  <button
-                    type="button"
-                    className={rightPanel === "diff" ? "active" : ""}
-                    onClick={() => setRightPanel("diff")}
-                  >
-                    <GitCompare size={15} />
-                    Diffs
-                  </button>
-                </div>
-                {rightPanel === "codex" ? (
-                  <CodexPanel workspace={activeWorkspace.path} runs={codexRuns} onRefreshGit={() => refreshGit(activeWorkspace.path)} />
-                ) : (
-                  <DiffPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
-                )}
-              </aside>
+            <div
+              className="app-resizer side-panel-resizer"
+              role="separator"
+              aria-orientation="vertical"
+              title="Resize Git panel"
+              onPointerDown={startGitPanelResize}
+            />
+            <aside className="workspace-side-panel">
+              <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
+            </aside>
             </>
           ) : null}
         </div>
@@ -527,20 +613,12 @@ export function App() {
           onOpenWorkspace={switchWorkspace}
           onSplitRight={() => splitActivePane("right")}
           onSplitDown={() => splitActivePane("down")}
-          onShowCodex={() => openPanel("codex")}
-          onShowDiff={() => openPanel("diff")}
+          showGit={Boolean(activeWorkspace && gitStatus?.isRepo)}
+          onShowGit={() => setGitSidebarOpen(true)}
         />
       ) : null}
 
-      {workspaceModalOpen ? (
-        <WorkspaceModal
-          defaultPath={activeWorkspace.defaultCwd || activeWorkspace.path}
-          onClose={() => setWorkspaceModalOpen(false)}
-          onCreate={createWorkspace}
-        />
-      ) : null}
-
-      {settingsOpen ? (
+      {settingsOpen && activeWorkspace ? (
         <SettingsModal
           settings={settings}
           activeWorkspace={activeWorkspace}
@@ -586,8 +664,100 @@ function updateWorkspaceLayoutInSettings(
   };
 }
 
+function startPanelResize(
+  event: ReactPointerEvent<HTMLElement>,
+  options: {
+    initialValue: number;
+    min: number;
+    max: number;
+    calculate: (initialValue: number, deltaX: number, deltaY: number) => number;
+    onChange: (value: number) => void;
+  }
+) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const previousCursor = document.body.style.cursor;
+  const previousUserSelect = document.body.style.userSelect;
+  document.body.style.cursor = event.currentTarget.getAttribute("aria-orientation") === "horizontal" ? "row-resize" : "col-resize";
+  document.body.style.userSelect = "none";
+
+  const onMove = (moveEvent: PointerEvent) => {
+    const nextValue = options.calculate(options.initialValue, moveEvent.clientX - startX, moveEvent.clientY - startY);
+    options.onChange(clamp(nextValue, options.min, options.max));
+  };
+
+  const onUp = () => {
+    document.body.style.cursor = previousCursor;
+    document.body.style.userSelect = previousUserSelect;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, { once: true });
+}
+
+function readStoredNumber(key: string, fallback: number): number {
+  const value = Number(window.localStorage.getItem(key));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function writeStoredNumber(key: string, value: number) {
+  window.localStorage.setItem(key, String(Math.round(value)));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeSplitSizes(sizes: number[] | undefined, childCount: number): number[] {
+  if (childCount <= 0) {
+    return [];
+  }
+  const normalized = Array.from({ length: childCount }, (_, index) => {
+    const value = sizes?.[index];
+    return Number.isFinite(value) && value && value > 0 ? value : 1;
+  });
+  const total = normalized.reduce((sum, value) => sum + value, 0);
+  return total > 0 ? normalized.map((value) => value / total) : Array.from({ length: childCount }, () => 1 / childCount);
+}
+
+function buildSplitTracks(sizes: number[]): string {
+  return sizes.map((size, index) => `${size}fr${index < sizes.length - 1 ? ` ${RESIZER_SIZE}px` : ""}`).join(" ");
+}
+
+function resizeAdjacentSplitSizes(sizes: number[], boundaryIndex: number, deltaPixels: number, dimensionPixels: number): number[] {
+  if (dimensionPixels <= 0 || boundaryIndex < 0 || boundaryIndex >= sizes.length - 1) {
+    return sizes;
+  }
+
+  const next = [...sizes];
+  const pairTotal = next[boundaryIndex] + next[boundaryIndex + 1];
+  const deltaSize = deltaPixels / dimensionPixels;
+  const minSize = Math.min(0.35, pairTotal * 0.18);
+  next[boundaryIndex] = clamp(next[boundaryIndex] + deltaSize, minSize, pairTotal - minSize);
+  next[boundaryIndex + 1] = pairTotal - next[boundaryIndex];
+  return next;
+}
+
+function updateSplitSizes(root: WorkbenchNode, splitId: string, sizes: number[]): WorkbenchNode {
+  if (root.type === "pane") {
+    return root;
+  }
+  if (root.id === splitId) {
+    return { ...root, sizes: normalizeSplitSizes(sizes, root.children.length) };
+  }
+  return {
+    ...root,
+    children: root.children.map((child) => updateSplitSizes(child, splitId, sizes))
+  };
+}
+
 function normalizeSettings(settings: AppSettings): AppSettings {
-  if (settings.workspaces && settings.workspaces.length > 0) {
+  if (settings.workspaces) {
     const workspaces = settings.workspaces.map((workspace) => ({
       ...workspace,
       defaultCwd: workspace.defaultCwd || workspace.path,
@@ -597,7 +767,9 @@ function normalizeSettings(settings: AppSettings): AppSettings {
         cwd: profile.cwd || workspace.defaultCwd || workspace.path
       }))
     }));
-    const activeWorkspaceId = settings.activeWorkspaceId ?? workspaces[0].id;
+    const activeWorkspaceId = workspaces.some((workspace) => workspace.id === settings.activeWorkspaceId)
+      ? settings.activeWorkspaceId
+      : workspaces[0]?.id;
     return { ...settings, activeWorkspaceId, workspaces };
   }
 
@@ -638,6 +810,7 @@ function PaneTree({
   onFocus,
   onClosePane,
   onPaneContextMenu,
+  onResizeSplit,
   onSession
 }: {
   node: WorkbenchNode;
@@ -653,29 +826,70 @@ function PaneTree({
   onFocus: (paneId: string) => void;
   onClosePane: (paneId: string) => void;
   onPaneContextMenu: (event: MouseEvent, paneId: string) => void;
+  onResizeSplit: (splitId: string, sizes: number[]) => void;
   onSession: (paneId: string, sessionId: string) => void;
 }) {
+  const splitRef = useRef<HTMLDivElement | null>(null);
+
   if (node.type === "split") {
+    const sizes = normalizeSplitSizes(node.sizes, node.children.length);
+    const tracks = buildSplitTracks(sizes);
+    const gridStyle =
+      node.direction === "right"
+        ? { gridTemplateColumns: tracks }
+        : { gridTemplateRows: tracks };
+
+    const startSplitResize = (event: ReactPointerEvent<HTMLElement>, boundaryIndex: number) => {
+      const container = splitRef.current;
+      if (!container) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      const dimension = node.direction === "right" ? rect.width : rect.height;
+      const startSizes = normalizeSplitSizes(node.sizes, node.children.length);
+      startPanelResize(event, {
+        initialValue: 0,
+        min: -Infinity,
+        max: Infinity,
+        calculate: (_initialValue, deltaX, deltaY) => (node.direction === "right" ? deltaX : deltaY),
+        onChange: (delta) => {
+          onResizeSplit(node.id, resizeAdjacentSplitSizes(startSizes, boundaryIndex, delta, dimension));
+        }
+      });
+    };
+
     return (
-      <div className={`pane-split ${node.direction === "right" ? "horizontal" : "vertical"}`}>
-        {node.children.map((child) => (
-          <PaneTree
-            key={child.id}
-            node={child}
-            profilesById={profilesById}
-            fallbackProfile={fallbackProfile}
-            workspaceName={workspaceName}
-            terminalFontSize={terminalFontSize}
-            workspaceId={workspaceId}
-            activePaneId={activePaneId}
-            showHeaders={showHeaders}
-            canClosePanes={canClosePanes}
-            sessionsByPane={sessionsByPane}
-            onFocus={onFocus}
-            onClosePane={onClosePane}
-            onPaneContextMenu={onPaneContextMenu}
-            onSession={onSession}
-          />
+      <div ref={splitRef} className={`pane-split ${node.direction === "right" ? "horizontal" : "vertical"}`} style={gridStyle}>
+        {node.children.map((child, index) => (
+          <Fragment key={child.id}>
+            <PaneTree
+              node={child}
+              profilesById={profilesById}
+              fallbackProfile={fallbackProfile}
+              workspaceName={workspaceName}
+              terminalFontSize={terminalFontSize}
+              workspaceId={workspaceId}
+              activePaneId={activePaneId}
+              showHeaders={showHeaders}
+              canClosePanes={canClosePanes}
+              sessionsByPane={sessionsByPane}
+              onFocus={onFocus}
+              onClosePane={onClosePane}
+              onPaneContextMenu={onPaneContextMenu}
+              onResizeSplit={onResizeSplit}
+              onSession={onSession}
+            />
+            {index < node.children.length - 1 ? (
+              <div
+                key={`${node.id}-${index}-resizer`}
+                className={`pane-resizer ${node.direction === "right" ? "vertical" : "horizontal"}`}
+                role="separator"
+                aria-orientation={node.direction === "right" ? "vertical" : "horizontal"}
+                title="Resize terminal pane"
+                onPointerDown={(event) => startSplitResize(event, index)}
+              />
+            ) : null}
+          </Fragment>
         ))}
       </div>
     );
@@ -728,7 +942,8 @@ function normalizeLayoutRoot(
     type: "split",
     id: newId(),
     direction: layout.direction ?? "right",
-    children: normalizedPanes
+    children: normalizedPanes,
+    sizes: normalizeSplitSizes(undefined, normalizedPanes.length)
   };
 }
 
@@ -745,7 +960,7 @@ function normalizeNode(node: WorkbenchNode, fallbackProfileId: string | undefine
   if (children.length === 1) {
     return children[0];
   }
-  return { ...node, id: node.id || newId(), children };
+  return { ...node, id: node.id || newId(), children, sizes: normalizeSplitSizes(node.sizes, children.length) };
 }
 
 function collectPanes(node: WorkbenchNode): WorkbenchPane[] {
@@ -764,7 +979,8 @@ function splitPane(root: WorkbenchNode, targetPaneId: string, direction: "right"
       type: "split",
       id: newId(),
       direction,
-      children: [root, { type: "pane", id: newPane.id, profileId: newPane.profileId }]
+      children: [root, { type: "pane", id: newPane.id, profileId: newPane.profileId }],
+      sizes: [0.5, 0.5]
     };
   }
 
@@ -779,14 +995,18 @@ function removePane(root: WorkbenchNode, targetPaneId: string): WorkbenchNode | 
     return root.id === targetPaneId ? null : root;
   }
 
-  const children = root.children.map((child) => removePane(child, targetPaneId)).filter((child): child is WorkbenchNode => Boolean(child));
+  const previousSizes = normalizeSplitSizes(root.sizes, root.children.length);
+  const retained = root.children
+    .map((child, index) => ({ child: removePane(child, targetPaneId), size: previousSizes[index] }))
+    .filter((item): item is { child: WorkbenchNode; size: number } => Boolean(item.child));
+  const children = retained.map((item) => item.child);
   if (children.length === 0) {
     return null;
   }
   if (children.length === 1) {
     return children[0];
   }
-  return { ...root, children };
+  return { ...root, children, sizes: normalizeSplitSizes(retained.map((item) => item.size), children.length) };
 }
 
 function createShellProfile(path: string, shortcut: string): ConsoleProfile {

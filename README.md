@@ -1,6 +1,6 @@
 # Pui
 
-Pui is a personal macOS Electron terminal workspace with Codex CLI integration.
+Pui is a personal macOS Electron terminal folder workspace with Codex CLI integration.
 
 ## Run
 
@@ -20,10 +20,10 @@ npm run build
 
 ## MVP Features
 
-- PTY-backed workspace terminals with split panes.
-- Workspace-specific terminal setups.
+- PTY-backed folder terminals with split panes.
+- Folder-specific terminal setups.
 - Command palette with `Cmd+K`.
-- Codex side panel using `codex exec --json --cd <workspace>`.
-- Codex and diff drawers kept out of the default terminal view.
-- Live Git status and diff panel with stage, unstage, and confirmed discard actions.
+- Interactive Codex use through normal terminal profiles.
+- Persistent Git sidebar when the active folder is inside a Git repo.
+- Live Git status and diff panel with recent commits, stage, unstage, and confirmed discard actions.
 - Local app settings persisted through Electron app data.

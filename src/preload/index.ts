@@ -1,8 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, CodexRun, GitDiff, GitStatus, TerminalSession } from "../shared/types";
+import type { AppSettings, CodexRun, GitCommit, GitDiff, GitStatus, TerminalSession } from "../shared/types";
 
 const api = {
+  dialog: {
+    openFolder: (defaultPath?: string) => ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
+  },
   settings: {
     load: () => ipcRenderer.invoke(ipc.settings.load) as Promise<AppSettings>,
     save: (settings: AppSettings) => ipcRenderer.invoke(ipc.settings.save, settings) as Promise<AppSettings>
@@ -54,6 +57,8 @@ const api = {
     status: (workspace: string) => ipcRenderer.invoke(ipc.git.status, workspace) as Promise<GitStatus>,
     diff: (workspace: string, file?: string, cached = false) =>
       ipcRenderer.invoke(ipc.git.diff, { workspace, file, cached }) as Promise<GitDiff>,
+    commits: (workspace: string, limit = 16) =>
+      ipcRenderer.invoke(ipc.git.commits, { workspace, limit }) as Promise<GitCommit[]>,
     stage: (workspace: string, paths: string[]) =>
       ipcRenderer.invoke(ipc.git.stage, { workspace, paths }) as Promise<GitStatus>,
     unstage: (workspace: string, paths: string[]) =>

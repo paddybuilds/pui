@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react";
-import { ArrowDownToLine, GitCompare, PanelRightOpen, Sparkles } from "lucide-react";
+import { ArrowDownToLine, GitCompare, PanelRightOpen } from "lucide-react";
 import type { TerminalWorkspace } from "../../../shared/types";
 
 type PaletteCommand = {
@@ -16,8 +16,8 @@ type CommandPaletteProps = {
   onOpenWorkspace: (workspace: TerminalWorkspace) => void;
   onSplitRight: () => void;
   onSplitDown: () => void;
-  onShowCodex: () => void;
-  onShowDiff: () => void;
+  showGit: boolean;
+  onShowGit: () => void;
 };
 
 export function CommandPalette({
@@ -26,24 +26,27 @@ export function CommandPalette({
   onOpenWorkspace,
   onSplitRight,
   onSplitDown,
-  onShowCodex,
-  onShowDiff
+  showGit,
+  onShowGit
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const commands = useMemo<PaletteCommand[]>(
-    () => [
-      ...workspaces.map((workspace) => ({
-        id: `workspace:${workspace.id}`,
-        label: `Switch to folder ${workspace.name}`,
-        shortcut: "",
-        action: () => onOpenWorkspace(workspace)
-      })),
-      { id: "split-right", label: "Split pane right", shortcut: "⌘D", action: onSplitRight, icon: <PanelRightOpen size={16} /> },
-      { id: "split-down", label: "Split pane down", shortcut: "⇧⌘D", action: onSplitDown, icon: <ArrowDownToLine size={16} /> },
-      { id: "codex", label: "Open Codex drawer", shortcut: "⌘J", action: onShowCodex, icon: <Sparkles size={16} /> },
-      { id: "diff", label: "Open diff drawer", shortcut: "", action: onShowDiff, icon: <GitCompare size={16} /> }
-    ],
-    [onOpenWorkspace, onShowCodex, onShowDiff, onSplitDown, onSplitRight, workspaces]
+    () => {
+      const baseCommands: PaletteCommand[] = [
+        ...workspaces.map((workspace) => ({
+          id: `workspace:${workspace.id}`,
+          label: `Switch to folder ${workspace.name}`,
+          shortcut: "",
+          action: () => onOpenWorkspace(workspace)
+        })),
+        { id: "split-right", label: "Split pane right", shortcut: "⌘D", action: onSplitRight, icon: <PanelRightOpen size={16} /> },
+        { id: "split-down", label: "Split pane down", shortcut: "⇧⌘D", action: onSplitDown, icon: <ArrowDownToLine size={16} /> }
+      ];
+      return showGit
+        ? [...baseCommands, { id: "git", label: "Open Git sidebar", shortcut: "", action: onShowGit, icon: <GitCompare size={16} /> }]
+        : baseCommands;
+    },
+    [onOpenWorkspace, onShowGit, onSplitDown, onSplitRight, showGit, workspaces]
   );
   const filtered = commands.filter((command) => command.label.toLowerCase().includes(query.toLowerCase()));
 

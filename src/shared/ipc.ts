@@ -1,4 +1,7 @@
 export const ipc = {
+  dialog: {
+    openFolder: "dialog:open-folder"
+  },
   settings: {
     load: "settings:load",
     save: "settings:save"
@@ -20,6 +23,7 @@ export const ipc = {
   git: {
     status: "git:status",
     diff: "git:diff",
+    commits: "git:commits",
     stage: "git:stage",
     unstage: "git:unstage",
     discard: "git:discard",

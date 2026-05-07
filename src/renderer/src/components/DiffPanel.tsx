@@ -1,20 +1,28 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, RotateCcw, Upload } from "lucide-react";
-import type { GitDiff, GitFileStatus, GitStatus } from "../../../shared/types";
+import { GitCommitHorizontal, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import type { GitCommit, GitDiff, GitFileStatus, GitStatus } from "../../../shared/types";
 import { splitDiff } from "../lib/diff";
 
-type DiffPanelProps = {
+type GitPanelProps = {
   workspace: string;
   status: GitStatus | null;
   onStatus: (status: GitStatus) => void;
 };
 
-export function DiffPanel({ workspace, status, onStatus }: DiffPanelProps) {
+export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [selectedFile, setSelectedFile] = useState<string | undefined>();
   const [diff, setDiff] = useState<GitDiff | null>(null);
+  const [commits, setCommits] = useState<GitCommit[]>([]);
   const files = status?.files ?? [];
 
   useEffect(() => {
+    if (!status?.isRepo) {
+      setSelectedFile(undefined);
+      setDiff(null);
+      setCommits([]);
+      return;
+    }
+
     const nextFile = selectedFile ?? files[0]?.path;
     setSelectedFile(nextFile);
     if (nextFile) {
@@ -22,10 +30,19 @@ export function DiffPanel({ workspace, status, onStatus }: DiffPanelProps) {
     } else {
       setDiff(null);
     }
+    void loadCommits();
   }, [status?.files.map((file) => file.path).join("|")]);
 
   const refresh = async () => {
-    onStatus(await window.pui.git.status(workspace));
+    const nextStatus = await window.pui.git.status(workspace);
+    onStatus(nextStatus);
+    if (nextStatus.isRepo) {
+      await loadCommits();
+    }
+  };
+
+  const loadCommits = async () => {
+    setCommits(await window.pui.git.commits(workspace, 16));
   };
 
   const loadDiff = async (file: string) => {
@@ -54,58 +71,87 @@ export function DiffPanel({ workspace, status, onStatus }: DiffPanelProps) {
   };
 
   return (
-    <div className="diff-panel">
-      <div className="diff-toolbar">
+    <div className="git-panel">
+      <div className="git-panel-header">
+        <div>
+          <strong>Git</strong>
+          <span>{status?.branch ?? "Repository"}</span>
+        </div>
         <button type="button" onClick={refresh}>
           <RefreshCw size={14} />
           Refresh
         </button>
-        <span>{status?.isRepo ? `${files.length} changed` : status?.error || "Not a Git repository"}</span>
       </div>
 
-      <div className="diff-body">
-        <div className="file-list">
-          {files.map((file) => (
-            <FileButton
-              key={file.path}
-              file={file}
-              active={file.path === selectedFile}
-              onClick={() => loadDiff(file.path)}
-            />
+      <section className="commit-section">
+        <header>
+          <GitCommitHorizontal size={14} />
+          <span>Recent commits</span>
+        </header>
+        <div className="commit-list">
+          {commits.map((commit) => (
+            <article key={commit.hash} className="commit-row" title={commit.hash}>
+              <strong>{commit.subject}</strong>
+              <span>
+                {commit.shortHash} · {commit.author} · {commit.date}
+              </span>
+            </article>
           ))}
-          {files.length === 0 ? <div className="empty-state">No changed files.</div> : null}
+          {commits.length === 0 ? <div className="empty-state">No commits found.</div> : null}
         </div>
+      </section>
 
-        <div className="diff-view">
-          {selectedFile ? (
-            <div className="file-actions">
-              <strong>{selectedFile}</strong>
-              <button type="button" onClick={() => stage(selectedFile)}>
-                <Upload size={14} />
-                Stage
-              </button>
-              <button type="button" onClick={() => unstage(selectedFile)}>
-                Unstage
-              </button>
-              <button type="button" className="danger" onClick={() => discard(selectedFile)}>
-                <RotateCcw size={14} />
-                Discard
-              </button>
-            </div>
-          ) : null}
-          <pre className="diff-code">
-            {diff?.text ? (
-              splitDiff(diff.text).map((line, index) => (
-                <div key={index} className={`diff-line ${line.type}`}>
-                  {line.text || " "}
+      <section className="changes-section">
+        <header>
+          <span>Changes</span>
+          <small>{files.length} changed</small>
+        </header>
+        <div className="diff-body">
+          <div className="file-list">
+            {files.map((file) => (
+              <FileButton
+                key={file.path}
+                file={file}
+                active={file.path === selectedFile}
+                onClick={() => loadDiff(file.path)}
+              />
+            ))}
+            {files.length === 0 ? <div className="empty-state">No changed files.</div> : null}
+          </div>
+
+          <div className="diff-view">
+            {selectedFile ? (
+              <div className="file-actions">
+                <strong>{selectedFile}</strong>
+                <div className="file-action-buttons">
+                  <button type="button" onClick={() => stage(selectedFile)}>
+                    <Upload size={14} />
+                    Stage
+                  </button>
+                  <button type="button" onClick={() => unstage(selectedFile)}>
+                    Unstage
+                  </button>
+                  <button type="button" className="danger" onClick={() => discard(selectedFile)}>
+                    <RotateCcw size={14} />
+                    Discard
+                  </button>
                 </div>
-              ))
-            ) : (
-              <div className="empty-state">Select a file to review changes.</div>
-            )}
-          </pre>
+              </div>
+            ) : null}
+            <pre className="diff-code">
+              {diff?.text ? (
+                splitDiff(diff.text).map((line, index) => (
+                  <div key={index} className={`diff-line ${line.type}`}>
+                    {line.text || " "}
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">Select a file to review changes.</div>
+              )}
+            </pre>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

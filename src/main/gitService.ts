@@ -4,7 +4,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { BrowserWindow } from "electron";
 import { parseGitStatus } from "../shared/gitStatus";
 import { ipc } from "../shared/ipc";
-import type { GitDiff, GitStatus } from "../shared/types";
+import type { GitCommit, GitDiff, GitStatus } from "../shared/types";
 
 const execFileAsync = promisify(execFile);
 
@@ -46,6 +46,35 @@ export class GitWorkspaceService {
     }
     const result = await this.git(workspace, args);
     return { workspace, file, cached, text: result.stdout };
+  }
+
+  async getRecentCommits(workspace: string, limit = 16): Promise<GitCommit[]> {
+    const safeLimit = Math.min(50, Math.max(1, Math.round(limit)));
+    let result: { stdout: string };
+    try {
+      result = await this.git(workspace, [
+        "log",
+        `-${safeLimit}`,
+        "--date=short",
+        "--pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s"
+      ]);
+    } catch {
+      return [];
+    }
+
+    return result.stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [hash, shortHash, author, date, subject] = line.split("\x1f");
+        return {
+          hash,
+          shortHash,
+          author,
+          date,
+          subject
+        };
+      });
   }
 
   async stage(workspace: string, paths: string[]): Promise<GitStatus> {

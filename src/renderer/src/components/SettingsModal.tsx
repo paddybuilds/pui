@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Code2, Keyboard, Monitor, Settings, TerminalSquare, X } from "lucide-react";
+import { Keyboard, Monitor, Settings, TerminalSquare, X } from "lucide-react";
 import type { AppSettings, TerminalWorkspace } from "../../../shared/types";
 
-type SettingsSection = "general" | "workspaces" | "terminal" | "codex" | "shortcuts";
+type SettingsSection = "general" | "workspaces" | "terminal" | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
@@ -15,7 +15,6 @@ const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }>
   { id: "general", label: "General", icon: <Settings size={15} /> },
   { id: "workspaces", label: "Folders", icon: <Monitor size={15} /> },
   { id: "terminal", label: "Terminal", icon: <TerminalSquare size={15} /> },
-  { id: "codex", label: "Codex", icon: <Code2 size={15} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={15} /> }
 ];
 
@@ -59,7 +58,6 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, on
           {section === "terminal" ? (
             <TerminalSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
           ) : null}
-          {section === "codex" ? <CodexSettings activeWorkspace={activeWorkspace} /> : null}
           {section === "shortcuts" ? <ShortcutSettings /> : null}
         </main>
       </section>
@@ -257,23 +255,12 @@ function TerminalSettings({
   );
 }
 
-function CodexSettings({ activeWorkspace }: { activeWorkspace: TerminalWorkspace }) {
-  return (
-    <div className="settings-page">
-      <SettingRow label="CLI" value="codex exec --json" />
-      <SettingRow label="Folder" value={activeWorkspace.path} />
-      <SettingRow label="Run mode" value="Prompt panel" />
-    </div>
-  );
-}
-
 function ShortcutSettings() {
   return (
     <div className="settings-page">
       <SettingRow label="Command palette" value="Cmd K" />
       <SettingRow label="Split right" value="Cmd D" />
       <SettingRow label="Split down" value="Shift Cmd D" />
-      <SettingRow label="Codex panel" value="Cmd J" />
     </div>
   );
 }

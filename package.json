@@ -1,7 +1,7 @@
 {
   "name": "pui",
   "version": "0.1.0",
-  "description": "A macOS terminal workspace with Codex CLI integration.",
+  "description": "A macOS terminal folder workspace with Codex CLI integration.",
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {

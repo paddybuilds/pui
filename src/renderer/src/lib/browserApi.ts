@@ -1,5 +1,5 @@
 import type { PuiApi } from "../../../preload";
-import type { AppSettings, CodexRun, ConsoleProfile, GitDiff, GitStatus, TerminalSession } from "../../../shared/types";
+import type { AppSettings, CodexRun, ConsoleProfile, GitCommit, GitDiff, GitStatus, TerminalSession } from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
 
 const workspace = "/Users/paddy/Documents/GitHub/pui";
@@ -49,6 +49,7 @@ let settings: AppSettings = {
 };
 
 const noopUnsubscribe = () => undefined;
+const bridgeBaseUrl = "http://127.0.0.1:4317";
 
 export function getPuiApi(): PuiApi {
   if (!window.pui) {
@@ -58,6 +59,12 @@ export function getPuiApi(): PuiApi {
 }
 
 const browserPreviewApi: PuiApi = {
+  dialog: {
+    openFolder: async (defaultPath) =>
+      bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })
+        .then((result) => result.path)
+        .catch(() => window.prompt("Folder path", defaultPath || workspace) || undefined)
+  },
   settings: {
     load: async () => settings,
     save: async (next) => {
@@ -108,24 +115,43 @@ const browserPreviewApi: PuiApi = {
     onUpdate: () => noopUnsubscribe
   },
   git: {
-    status: async (gitWorkspace) =>
-      ({
-        workspace: gitWorkspace,
-        isRepo: false,
-        files: [],
-        error: "Git integration is available in the Electron app window."
-      }) satisfies GitStatus,
-    diff: async (gitWorkspace, file, cached = false) =>
-      ({
-        workspace: gitWorkspace,
-        file,
-        cached,
-        text: ""
-      }) satisfies GitDiff,
-    stage: async (gitWorkspace) => browserPreviewApi.git.status(gitWorkspace),
-    unstage: async (gitWorkspace) => browserPreviewApi.git.status(gitWorkspace),
-    discard: async (gitWorkspace) => browserPreviewApi.git.status(gitWorkspace),
+    status: (gitWorkspace) => bridgeGet<GitStatus>("/git/status", { workspace: gitWorkspace }),
+    diff: (gitWorkspace, file, cached = false) =>
+      bridgeGet<GitDiff>("/git/diff", { workspace: gitWorkspace, file: file || "", cached: String(cached) }),
+    commits: (gitWorkspace, limit = 16) =>
+      bridgeGet<GitCommit[]>("/git/commits", { workspace: gitWorkspace, limit: String(limit) }),
+    stage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/stage", { workspace: gitWorkspace, paths }),
+    unstage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/unstage", { workspace: gitWorkspace, paths }),
+    discard: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/discard", { workspace: gitWorkspace, paths }),
     watch: async () => undefined,
     onChanged: () => noopUnsubscribe
   }
 };
+
+async function bridgeGet<T>(path: string, params: Record<string, string>): Promise<T> {
+  const url = new URL(path, bridgeBaseUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      url.searchParams.set(key, value);
+    }
+  });
+  const response = await fetch(url);
+  return parseBridgeResponse<T>(response);
+}
+
+async function bridgePost<T>(path: string, payload: unknown): Promise<T> {
+  const response = await fetch(new URL(path, bridgeBaseUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return parseBridgeResponse<T>(response);
+}
+
+async function parseBridgeResponse<T>(response: Response): Promise<T> {
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || `Bridge request failed: ${response.status}`);
+  }
+  return payload as T;
+}

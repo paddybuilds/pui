@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { FolderOpen, Play, TerminalSquare } from "lucide-react";
+import { FolderOpen, Play, TerminalSquare, X } from "lucide-react";
 import type { AppSettings } from "../../../shared/types";
 import {
   basename,
@@ -13,9 +13,10 @@ type OnboardingPanelProps = {
   platform: string;
   onOpenFolder: (defaultPath?: string) => Promise<string | undefined>;
   onComplete: (settings: AppSettings) => Promise<void>;
+  onCancel?: () => void;
 };
 
-export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete }: OnboardingPanelProps) {
+export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, onCancel }: OnboardingPanelProps) {
   const initialPath = settings.workspace;
   const shell = useMemo(() => defaultShellProfile(platform), [platform]);
   const [workspacePath, setWorkspacePath] = useState(initialPath);
@@ -76,6 +77,11 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete }
   return (
     <main className="onboarding-shell">
       <section className="onboarding-panel" aria-labelledby="onboarding-title">
+        {onCancel ? (
+          <button className="icon-button onboarding-close" type="button" title="Close onboarding" onClick={onCancel}>
+            <X size={15} />
+          </button>
+        ) : null}
         <aside className="onboarding-summary">
           <div className="brand onboarding-brand">
             <TerminalSquare size={18} />

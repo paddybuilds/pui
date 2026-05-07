@@ -8,7 +8,19 @@ import {
   useRef,
   useState
 } from "react";
-import { Edit3, GitCompare, PanelRight, PanelTop, Play, Plus, Settings, TerminalSquare, Trash2, X } from "lucide-react";
+import {
+  Edit3,
+  GitCompare,
+  PanelRight,
+  PanelTop,
+  Play,
+  Plus,
+  Settings,
+  TerminalSquare,
+  Trash2,
+  Wrench,
+  X
+} from "lucide-react";
 import type {
   AppSettings,
   ConsoleProfile,
@@ -21,6 +33,7 @@ import type {
 import { createQuickCommandProfile } from "../../shared/workflow";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
+import { DevSettingsModal } from "./components/DevSettingsModal";
 import { GitPanel } from "./components/DiffPanel";
 import { OnboardingPanel } from "./components/OnboardingPanel";
 import { SettingsModal } from "./components/SettingsModal";
@@ -32,6 +45,7 @@ import {
 } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
+import { getDevToolsFlagState } from "./lib/devFlags";
 import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
 import {
   appendWorkbenchNode,
@@ -65,7 +79,9 @@ export function App() {
   const [activePaneId, setActivePaneId] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [devSettingsOpen, setDevSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingDismissible, setOnboardingDismissible] = useState(false);
   const [gitSidebarOpen, setGitSidebarOpen] = useState(true);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
@@ -74,6 +90,8 @@ export function App() {
   const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 360));
   const didHydrateRef = useRef(false);
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
+  const devToolsFlagState = useMemo(() => getDevToolsFlagState(), []);
+  const devToolsEnabled = devToolsFlagState.enabled;
 
   const workspaces = settings?.workspaces ?? [];
   const quickTerminals = workspaces.filter((workspace) => workspace.kind === "quick");
@@ -140,6 +158,7 @@ export function App() {
         normalized.workspaces?.[0];
       setSettings(normalized);
       if (isFirstLaunch) {
+        setOnboardingDismissible(false);
         setOnboardingOpen(true);
         return;
       }
@@ -174,7 +193,20 @@ export function App() {
       void refreshWorkspaceGit(initialWorkspace.path);
     }
     didHydrateRef.current = true;
+    setOnboardingDismissible(false);
     setOnboardingOpen(false);
+  };
+
+  const openDevOnboarding = () => {
+    setDevSettingsOpen(false);
+    setSettingsOpen(false);
+    setOnboardingDismissible(true);
+    setOnboardingOpen(true);
+  };
+
+  const closeDevOnboarding = () => {
+    setOnboardingOpen(false);
+    setOnboardingDismissible(false);
   };
 
   useEffect(() => {
@@ -725,6 +757,7 @@ export function App() {
         platform={pui.platform}
         onOpenFolder={pui.dialog.openFolder}
         onComplete={completeOnboarding}
+        onCancel={onboardingDismissible ? closeDevOnboarding : undefined}
       />
     );
   }
@@ -844,11 +877,28 @@ export function App() {
             <Plus size={14} />
             <span>Open folder</span>
           </button>
+          {devToolsEnabled ? (
+            <button
+              className={devSettingsOpen ? "active" : ""}
+              type="button"
+              title="Developer settings"
+              onClick={() => {
+                setSettingsOpen(false);
+                setDevSettingsOpen(true);
+              }}
+            >
+              <Wrench size={14} />
+              <span>Dev</span>
+            </button>
+          ) : null}
           <button
             className={settingsOpen ? "active" : ""}
             type="button"
             title="Settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => {
+              setDevSettingsOpen(false);
+              setSettingsOpen(true);
+            }}
           >
             <Settings size={14} />
             <span>Settings</span>
@@ -1007,6 +1057,15 @@ export function App() {
           onWorkspaceChange={updateActiveWorkspace}
           platform={pui.platform}
           onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
+
+      {devSettingsOpen && devToolsEnabled ? (
+        <DevSettingsModal
+          flagState={devToolsFlagState}
+          platform={pui.platform}
+          onOpenOnboarding={openDevOnboarding}
+          onClose={() => setDevSettingsOpen(false)}
         />
       ) : null}
 

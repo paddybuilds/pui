@@ -9,6 +9,7 @@ import pty from "node-pty";
 const port = Number(process.env.PUI_TERMINAL_BRIDGE_PORT || 4317);
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
+const posixFallbackShells = new Set(["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"]);
 
 const httpServer = createServer((request, response) => {
   void handleHttpRequest(request, response);
@@ -63,24 +64,30 @@ server.on("connection", (socket) => {
   });
 });
 
+server.on("error", handleListenError);
+
 httpServer.listen(port, "127.0.0.1", () => {
   console.log(`[pui-terminal-bridge] ws://127.0.0.1:${port}`);
 });
 
-httpServer.on("error", (error) => {
+httpServer.on("error", handleListenError);
+
+function handleListenError(error) {
   if (error.code === "EADDRINUSE") {
-    console.log(`[pui-terminal-bridge] port ${port} already in use`);
+    console.log(`[pui-terminal-bridge] port ${port} already in use; reusing existing bridge`);
+    process.exit(0);
     return;
   }
   console.error(error);
-});
+  process.exit(1);
+}
 
 function createSession(socket, message) {
   const profile = message.profile || {};
-  const shell = profile.command || process.env.SHELL || os.userInfo().shell || "/bin/zsh";
+  const shell = resolveShell(profile.command, profile.args || []);
   const cwd = path.resolve(profile.cwd || process.cwd());
   const sessionId = crypto.randomUUID();
-  const child = pty.spawn(shell, profile.args || [], {
+  const child = pty.spawn(shell.command, shell.args, {
     name: "xterm-256color",
     cols: Math.max(1, Number(message.cols || 80)),
     rows: Math.max(1, Number(message.rows || 24)),
@@ -117,6 +124,21 @@ function createSession(socket, message) {
       status: "running"
     }
   });
+}
+
+function resolveShell(command, args) {
+  if (process.platform === "win32" && (!command || posixFallbackShells.has(command))) {
+    const windowsShell = process.env.PUI_SHELL || "powershell.exe";
+    return {
+      command: windowsShell,
+      args: windowsShell.toLowerCase().endsWith("powershell.exe") ? ["-NoLogo"] : []
+    };
+  }
+
+  return {
+    command: command || process.env.SHELL || os.userInfo().shell || "/bin/zsh",
+    args
+  };
 }
 
 function send(socket, payload) {

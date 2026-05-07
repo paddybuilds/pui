@@ -1,14 +1,16 @@
 import { homedir } from "node:os";
 import type { AppSettings, ConsoleProfile, TerminalWorkspace } from "../shared/types";
+import { defaultShell } from "./shell";
 
 export function defaultProfiles(workspace: string): ConsoleProfile[] {
+  const shell = defaultShell();
   return [
     {
-      id: "default-zsh",
-      name: "zsh",
+      id: "default-shell",
+      name: shell.name,
       cwd: workspace,
-      command: process.env.SHELL || "/bin/zsh",
-      args: [],
+      command: shell.command,
+      args: shell.args,
       env: {},
       shortcut: "CmdOrCtrl+1",
       appearance: {

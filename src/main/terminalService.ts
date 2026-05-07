@@ -1,9 +1,9 @@
-import os from "node:os";
 import path from "node:path";
 import { BrowserWindow } from "electron";
 import pty, { type IPty } from "node-pty";
 import { ipc } from "../shared/ipc";
 import type { ConsoleProfile, TerminalSession } from "../shared/types";
+import { defaultShell, resolveProfileShell } from "./shell";
 
 type SessionRecord = {
   session: TerminalSession;
@@ -18,7 +18,7 @@ export class TerminalService {
   create(profile: ConsoleProfile, paneId: string, cols: number, rows: number): TerminalSession {
     const sessionId = crypto.randomUUID();
     const cwd = profile.cwd || process.cwd();
-    const shell = profile.command || process.env.SHELL || "/bin/zsh";
+    const shell = resolveProfileShell(profile.command, profile.args);
     const env = {
       ...process.env,
       TERM: "xterm-256color",
@@ -27,7 +27,7 @@ export class TerminalService {
       ...profile.env
     };
 
-    const child = pty.spawn(shell, profile.args || [], {
+    const child = pty.spawn(shell.command, shell.args, {
       name: "xterm-256color",
       cols,
       rows,
@@ -83,6 +83,6 @@ export class TerminalService {
   }
 
   static defaultShellName(): string {
-    return path.basename(process.env.SHELL || os.userInfo().shell || "zsh");
+    return defaultShell().name;
   }
 }

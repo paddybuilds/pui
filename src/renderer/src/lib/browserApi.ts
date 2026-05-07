@@ -11,15 +11,19 @@ import type {
 } from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
 
-const workspace = "/Users/paddy/Documents/GitHub/pui";
+const isPreviewWindows = navigator.platform.toLowerCase().includes("win");
+const workspace = isPreviewWindows ? "C:\\Users\\paddy\\Documents\\GitHub\\pui" : "/Users/paddy/Documents/GitHub/pui";
+const defaultShell = isPreviewWindows
+  ? { id: "preview-powershell", name: "PowerShell", command: "powershell.exe", args: ["-NoLogo"] }
+  : { id: "preview-zsh", name: "zsh", command: "/bin/zsh", args: [] };
 
 const defaultProfiles: ConsoleProfile[] = [
   {
-    id: "preview-zsh",
-    name: "zsh",
+    id: defaultShell.id,
+    name: defaultShell.name,
     cwd: workspace,
-    command: "/bin/zsh",
-    args: [],
+    command: defaultShell.command,
+    args: defaultShell.args,
     env: {},
     shortcut: "CmdOrCtrl+1",
     appearance: { color: "#9ca3af", icon: "terminal" }
@@ -71,7 +75,7 @@ export function getPuiApi(): PuiApi {
 }
 
 const browserPreviewApi: PuiApi = {
-  platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : "linux",
+  platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : isPreviewWindows ? "win32" : "linux",
   dialog: {
     openFolder: async (defaultPath) =>
       bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })

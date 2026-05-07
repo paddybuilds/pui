@@ -948,25 +948,25 @@ export function App() {
             <span>{activeWorkspace ? activeFolderSubtitle : "Open a folder to start a terminal session"}</span>
           </div>
           <div className="workspace-topbar-actions">
-            <button type="button" title="Open folder" onClick={() => void openFolder()}>
-              <Plus size={14} />
-              <span>Folder</span>
-            </button>
             {activeWorkspace ? (
               <>
-                <button type="button" title="Split right" onClick={() => splitActivePane("right")}>
+                <button
+                  type="button"
+                  title="Split right"
+                  aria-label="Split right"
+                  onClick={() => splitActivePane("right")}
+                >
                   <PanelRight size={14} />
-                  <span>Split</span>
                 </button>
                 {activeWorkspace.kind !== "quick" && gitStatus?.isRepo ? (
                   <button
                     type="button"
                     className={gitSidebarVisible ? "active" : ""}
                     title="Git"
+                    aria-label="Git"
                     onClick={() => setGitSidebarOpen((current) => !current)}
                   >
                     <GitCompare size={14} />
-                    <span>Git</span>
                     {gitStatus.files.length ? <small>{gitStatus.files.length}</small> : null}
                   </button>
                 ) : null}
@@ -976,10 +976,10 @@ export function App() {
                         key={command.id}
                         type="button"
                         title={command.name}
+                        aria-label={command.name}
                         onClick={() => runQuickCommand(command)}
                       >
                         <Play size={14} />
-                        <span>{command.name}</span>
                       </button>
                     ))
                   : null}

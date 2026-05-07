@@ -132,7 +132,6 @@ export function SettingsModal({
               activeWorkspace={activeWorkspace}
               preferences={preferences}
               onSettingsChange={onSettingsChange}
-              onWorkspaceChange={onWorkspaceChange}
               platform={platform}
             />
           ) : null}
@@ -141,10 +140,11 @@ export function SettingsModal({
           ) : null}
           {section === "codex" ? (
             <CodexSettings
+              settings={settings}
               activeWorkspace={activeWorkspace}
               preferences={preferences}
-              onSave={savePreferences}
-              onWorkspaceChange={onWorkspaceChange}
+              onSettingsChange={onSettingsChange}
+              platform={platform}
             />
           ) : null}
           {section === "git" ? <GitSettings preferences={preferences} onSave={savePreferences} /> : null}
@@ -285,14 +285,12 @@ function TerminalProfilesSettings({
   activeWorkspace,
   preferences,
   onSettingsChange,
-  onWorkspaceChange,
   platform
 }: {
   settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
   preferences: AppPreferences;
   onSettingsChange: (settings: AppSettings) => Promise<void>;
-  onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
   platform: string;
 }) {
   const [shells, setShells] = useState<ShellCandidate[]>([]);
@@ -307,6 +305,11 @@ function TerminalProfilesSettings({
       .listShells()
       .then((items) => setShells(items.filter((item) => item.available || item.source === "custom")));
   }, []);
+
+  useEffect(() => {
+    setEditing(profileDraft(activeWorkspace.profiles[0], activeWorkspace.defaultCwd || activeWorkspace.path));
+    setStatus("idle");
+  }, [activeWorkspace.defaultCwd, activeWorkspace.id, activeWorkspace.path, activeWorkspace.profiles]);
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -330,12 +333,7 @@ function TerminalProfilesSettings({
     };
     await onSettingsChange(
       updateAppPreferences(
-        {
-          ...settings,
-          workspaces: (settings.workspaces ?? []).map((workspace) =>
-            workspace.id === nextWorkspace.id ? nextWorkspace : workspace
-          )
-        },
+        replaceWorkspaceInSettings(settings, nextWorkspace),
         {
           defaultTerminalProfileId: preferences.defaultTerminalProfileId || profile.id,
           defaultTerminalProfileTemplate: createTerminalProfileTemplateFromProfile(profile)
@@ -353,7 +351,22 @@ function TerminalProfilesSettings({
       return;
     }
     const nextProfiles = activeWorkspace.profiles.filter((profile) => profile.id !== id);
-    await onWorkspaceChange({ ...activeWorkspace, profiles: nextProfiles });
+    const nextWorkspace = { ...activeWorkspace, profiles: nextProfiles };
+    const nextDefaultProfile = nextProfiles[0];
+    const nextSettings = replaceWorkspaceInSettings(settings, nextWorkspace);
+
+    await onSettingsChange(
+      id === defaultProfileId && nextDefaultProfile
+        ? updateAppPreferences(
+            nextSettings,
+            {
+              defaultTerminalProfileId: nextDefaultProfile.id,
+              defaultTerminalProfileTemplate: createTerminalProfileTemplateFromProfile(nextDefaultProfile)
+            },
+            platform
+          )
+        : nextSettings
+    );
   };
 
   return (
@@ -507,28 +520,32 @@ function WorkspaceDefaultsSettings({
 }
 
 function CodexSettings({
+  settings,
   activeWorkspace,
   preferences,
-  onSave,
-  onWorkspaceChange
+  onSettingsChange,
+  platform
 }: {
+  settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
   preferences: AppPreferences;
-  onSave: (next: Partial<AppPreferences>) => Promise<void>;
-  onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+  onSettingsChange: (settings: AppSettings) => Promise<void>;
+  platform: string;
 }) {
   const hasCodexProfile = activeWorkspace.profiles.some((profile) => profile.command === "codex");
   const toggleCodex = async (enabled: boolean) => {
-    await onSave({ codexProfileEnabled: enabled });
-    if (enabled && !hasCodexProfile) {
-      await onWorkspaceChange({
-        ...activeWorkspace,
-        profiles: [
-          ...activeWorkspace.profiles,
-          createCodexProfile(activeWorkspace.defaultCwd || activeWorkspace.path, "CmdOrCtrl+2")
-        ]
-      });
-    }
+    const nextSettings =
+      enabled && !hasCodexProfile
+        ? replaceWorkspaceInSettings(settings, {
+            ...activeWorkspace,
+            profiles: [
+              ...activeWorkspace.profiles,
+              createCodexProfile(activeWorkspace.defaultCwd || activeWorkspace.path, "CmdOrCtrl+2")
+            ]
+          })
+        : settings;
+
+    await onSettingsChange(updateAppPreferences(nextSettings, { codexProfileEnabled: enabled }, platform));
   };
   return (
     <div className="settings-page">
@@ -709,6 +726,15 @@ function SettingGroup({ title, children }: { title: string; children: ReactNode 
       <div className="settings-list">{children}</div>
     </section>
   );
+}
+
+function replaceWorkspaceInSettings(settings: AppSettings, workspace: TerminalWorkspace): AppSettings {
+  return {
+    ...settings,
+    workspace: workspace.path,
+    recentWorkspaces: Array.from(new Set([workspace.path, ...settings.recentWorkspaces])).slice(0, 12),
+    workspaces: (settings.workspaces ?? []).map((item) => (item.id === workspace.id ? workspace : item))
+  };
 }
 
 function SaveButton({ status, label = "Save" }: { status: string; label?: string }) {

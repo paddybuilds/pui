@@ -268,8 +268,12 @@ export function createInitialWorkspaceSettings(
     ? [shellProfile, createCodexProfile(defaultCwd, "CmdOrCtrl+2", idFactory)]
     : [shellProfile];
   const paneId = idFactory();
+  const existingWorkspaces = settings.workspaces ?? [];
+  const targetWorkspace = existingWorkspaces.find(
+    (workspace) => workspace.id === settings.activeWorkspaceId && workspace.kind !== "quick"
+  );
   const workspace: TerminalWorkspace = normalizeWorkspaceWorkflow({
-    id: idFactory(),
+    id: targetWorkspace?.id ?? idFactory(),
     name,
     kind: "folder",
     path,
@@ -283,6 +287,9 @@ export function createInitialWorkspaceSettings(
     layoutPresets: [],
     quickCommands: []
   });
+  const workspaces = targetWorkspace
+    ? existingWorkspaces.map((item) => (item.id === targetWorkspace.id ? workspace : item))
+    : [...existingWorkspaces, workspace];
 
   return {
     ...settings,
@@ -291,7 +298,7 @@ export function createInitialWorkspaceSettings(
     recentWorkspaces: Array.from(new Set([path, ...settings.recentWorkspaces].filter(Boolean))).slice(0, 12),
     appPreferences,
     activeWorkspaceId: workspace.id,
-    workspaces: [workspace],
+    workspaces,
     layout: undefined
   };
 }

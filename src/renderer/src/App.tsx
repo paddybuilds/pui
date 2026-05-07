@@ -702,9 +702,17 @@ export function App() {
   };
 
   const updateSettings = async (nextSettings: AppSettings) => {
+    const shouldHydrateActiveWorkspace = settings?.workspaces !== nextSettings.workspaces;
     const saved = await pui.settings.save(nextSettings);
     const normalized = normalizeSettings(saved, pui.platform, newId);
     setSettings(normalized);
+    const nextActiveWorkspace = normalized.workspaces?.find(
+      (workspace) => workspace.id === (normalized.activeWorkspaceId ?? activeWorkspaceId)
+    );
+    if (shouldHydrateActiveWorkspace && nextActiveWorkspace) {
+      setActiveWorkspaceId(nextActiveWorkspace.id);
+      hydrateWorkspace(nextActiveWorkspace);
+    }
   };
 
   const openWorkspaceContextMenu = (event: MouseEvent, workspace: TerminalWorkspace) => {

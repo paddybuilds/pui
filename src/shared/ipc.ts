@@ -18,6 +18,9 @@ export const ipc = {
   system: {
     listShells: "system:list-shells"
   },
+  fileSystem: {
+    readDirectory: "file-system:read-directory"
+  },
   terminal: {
     create: "terminal:create",
     write: "terminal:write",

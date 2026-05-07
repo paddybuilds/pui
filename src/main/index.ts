@@ -4,6 +4,7 @@ import { join } from "node:path";
 import electronUpdater from "electron-updater";
 import { ipc } from "../shared/ipc";
 import type { AppSettings, AppUpdateSnapshot, ConsoleProfile, TitleBarTheme } from "../shared/types";
+import { FileExplorerService } from "./fileExplorerService";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
 import { StoreService } from "./store";
@@ -21,6 +22,7 @@ const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
 };
 
 const storeService = new StoreService();
+const fileExplorerService = new FileExplorerService();
 const { autoUpdater } = electronUpdater;
 function createWindow(): void {
   const isMac = process.platform === "darwin";
@@ -114,6 +116,9 @@ function registerIpc(): void {
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
 
   ipcMain.handle(ipc.system.listShells, () => listShells());
+  ipcMain.handle(ipc.fileSystem.readDirectory, (_event, payload: { workspace: string; directory?: string }) => {
+    return fileExplorerService.readDirectory(payload.workspace, payload.directory);
+  });
 
   ipcMain.handle(
     ipc.terminal.create,

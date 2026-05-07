@@ -8,6 +8,7 @@ import type {
   GitCommitDetails,
   GitCommitFileDiff,
   GitDiff,
+  FileSystemEntry,
   GitOperationResult,
   GitStatus,
   SettingsLoadState,
@@ -51,6 +52,10 @@ const api = {
   },
   system: {
     listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
+  },
+  fileSystem: {
+    readDirectory: (workspace: string, directory?: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.readDirectory, { workspace, directory }) as Promise<FileSystemEntry[]>
   },
   terminal: {
     create: (payload: unknown) => ipcRenderer.invoke(ipc.terminal.create, payload) as Promise<TerminalSession>,

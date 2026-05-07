@@ -5,6 +5,7 @@ import type {
   AppUpdateSnapshot,
   AppVersionInfo,
   ConsoleProfile,
+  FileSystemEntry,
   GitCommit,
   GitCommitDetails,
   GitCommitFileDiff,
@@ -127,6 +128,35 @@ const browserPreviewApi: PuiApi = {
   },
   system: {
     listShells: async () => previewShellCandidates(browserPreviewApi.platform)
+  },
+  fileSystem: {
+    readDirectory: async (workspacePath, directory): Promise<FileSystemEntry[]> => {
+      const isRoot = !directory || directory === workspacePath;
+      if (isRoot) {
+        return [
+          {
+            name: "src",
+            path: `${workspacePath}${pathSeparator()}src`,
+            relativePath: "src",
+            kind: "directory"
+          },
+          {
+            name: "package.json",
+            path: `${workspacePath}${pathSeparator()}package.json`,
+            relativePath: "package.json",
+            kind: "file"
+          }
+        ];
+      }
+      return [
+        {
+          name: "App.tsx",
+          path: `${directory}${pathSeparator()}App.tsx`,
+          relativePath: "src/App.tsx",
+          kind: "file"
+        }
+      ];
+    }
   },
   terminal: {
     create: (payload) =>
@@ -295,4 +325,8 @@ function customShellCandidate(): ShellCandidate {
     source: "custom",
     available: true
   };
+}
+
+function pathSeparator(): string {
+  return isPreviewWindows ? "\\" : "/";
 }

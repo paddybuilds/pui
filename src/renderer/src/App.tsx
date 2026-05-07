@@ -11,6 +11,7 @@ import {
 import type { ITheme } from "@xterm/xterm";
 import {
   Edit3,
+  Files,
   GitCompare,
   PanelRight,
   PanelTop,
@@ -36,6 +37,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { DevSettingsModal } from "./components/DevSettingsModal";
 import { GitPanel } from "./components/DiffPanel";
+import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { OnboardingPanel } from "./components/OnboardingPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import {
@@ -72,6 +74,7 @@ const pui = getPuiApi();
 const RESIZER_SIZE = 5;
 const SIDEBAR_WIDTH_KEY = "pui.sidebarWidth";
 const GIT_PANEL_WIDTH_KEY = "pui.gitPanelWidth";
+type WorkspaceSidePanel = "files" | "git";
 
 export function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -84,7 +87,7 @@ export function App() {
   const [devSettingsOpen, setDevSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingDismissible, setOnboardingDismissible] = useState(false);
-  const [gitSidebarOpen, setGitSidebarOpen] = useState(true);
+  const [activeSidePanel, setActiveSidePanel] = useState<WorkspaceSidePanel | null>("git");
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
@@ -116,7 +119,11 @@ export function App() {
   const panes = useMemo(() => (layoutRoot ? collectPanes(layoutRoot) : []), [layoutRoot]);
   const activeWorkspaceSessions = activeWorkspace ? (sessionsByWorkspace[activeWorkspace.id] ?? {}) : {};
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
-  const gitSidebarVisible = Boolean(activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && gitSidebarOpen);
+  const fileExplorerVisible = Boolean(activeWorkspace?.kind !== "quick" && activeSidePanel === "files");
+  const gitSidebarVisible = Boolean(
+    activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && activeSidePanel === "git"
+  );
+  const sidePanelVisible = fileExplorerVisible || gitSidebarVisible;
   const appPreferences = useMemo(
     () => normalizeAppPreferences(settings?.appPreferences, { defaultTerminalProfileId: settings?.profiles[0]?.id }),
     [settings?.appPreferences, settings?.profiles]
@@ -662,7 +669,7 @@ export function App() {
       setLayoutRoot(null);
       setActivePaneId("");
       setGitStatus(null);
-      setGitSidebarOpen(true);
+      setActiveSidePanel("git");
     }
     closeContextMenu();
   };
@@ -990,13 +997,24 @@ export function App() {
                 >
                   <PanelRight size={14} />
                 </button>
+                {activeWorkspace.kind !== "quick" ? (
+                  <button
+                    type="button"
+                    className={fileExplorerVisible ? "active" : ""}
+                    title="Explorer"
+                    aria-label="Explorer"
+                    onClick={() => setActiveSidePanel((current) => (current === "files" ? null : "files"))}
+                  >
+                    <Files size={14} />
+                  </button>
+                ) : null}
                 {activeWorkspace.kind !== "quick" && gitStatus?.isRepo ? (
                   <button
                     type="button"
                     className={gitSidebarVisible ? "active" : ""}
                     title="Git"
                     aria-label="Git"
-                    onClick={() => setGitSidebarOpen((current) => !current)}
+                    onClick={() => setActiveSidePanel((current) => (current === "git" ? null : "git"))}
                   >
                     <GitCompare size={14} />
                     {gitStatus.files.length ? <small>{gitStatus.files.length}</small> : null}
@@ -1023,7 +1041,7 @@ export function App() {
           className="content-row"
           style={{
             gridTemplateColumns:
-              activeWorkspace && gitSidebarVisible
+              activeWorkspace && sidePanelVisible
                 ? `minmax(0, 1fr) ${RESIZER_SIZE}px ${gitPanelWidth}px`
                 : "minmax(0, 1fr)"
           }}
@@ -1077,17 +1095,21 @@ export function App() {
             </section>
           )}
 
-          {activeWorkspace && gitSidebarVisible ? (
+          {activeWorkspace && sidePanelVisible ? (
             <>
               <div
                 className="app-resizer side-panel-resizer"
                 role="separator"
                 aria-orientation="vertical"
-                title="Resize Git panel"
+                title="Resize side panel"
                 onPointerDown={startGitPanelResize}
               />
               <aside className="workspace-side-panel">
-                <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
+                {fileExplorerVisible ? (
+                  <FileExplorerPanel workspace={activeWorkspace.path} workspaceName={activeFolderTitle} />
+                ) : (
+                  <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
+                )}
               </aside>
             </>
           ) : null}
@@ -1108,7 +1130,7 @@ export function App() {
           onApplyLayoutPreset={(preset) => void applyLayoutPreset(preset)}
           onRunQuickCommand={runQuickCommand}
           showGit={Boolean(activeWorkspace && gitStatus?.isRepo)}
-          onShowGit={() => setGitSidebarOpen(true)}
+          onShowGit={() => setActiveSidePanel("git")}
         />
       ) : null}
 

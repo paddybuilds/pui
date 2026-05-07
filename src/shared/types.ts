@@ -76,6 +76,13 @@ export type GitOperationResult = {
   error?: string;
 };
 
+export type FileSystemEntry = {
+  name: string;
+  path: string;
+  relativePath: string;
+  kind: "file" | "directory";
+};
+
 export type AppVersionInfo = {
   name: string;
   version: string;

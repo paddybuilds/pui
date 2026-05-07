@@ -32,9 +32,9 @@ function createWindow(): void {
           color: "#0b0f14",
           symbolColor: "#9ca3af",
           height: 44
-        },
+    },
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.cjs"),
       nodeIntegration: false,
       contextIsolation: true
     }
@@ -84,8 +84,7 @@ function registerIpc(): void {
       defaultPath: defaultPath && existsSync(defaultPath) ? defaultPath : undefined,
       properties: ["openDirectory"] as Array<"openDirectory">
     };
-    const result =
-      process.platform === "win32" ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(mainWindow, options);
+    const result = await dialog.showOpenDialog(mainWindow, options);
     return result.canceled ? undefined : result.filePaths[0];
   });
 

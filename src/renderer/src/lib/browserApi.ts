@@ -69,6 +69,9 @@ const bridgeBaseUrl = "http://127.0.0.1:4317";
 
 export function getPuiApi(): PuiApi {
   if (!window.pui) {
+    if (navigator.userAgent.includes("Electron")) {
+      throw new Error("Pui preload API did not load in Electron.");
+    }
     window.pui = browserPreviewApi;
   }
   return window.pui;

@@ -45,15 +45,16 @@ export class TerminalService {
     };
 
     child.onData((data) => {
-      this.window.webContents.send(ipc.terminal.data, { sessionId, data });
+      this.send(ipc.terminal.data, { sessionId, data });
     });
 
     child.onExit(({ exitCode, signal }) => {
       const record = this.sessions.get(sessionId);
-      if (record) {
-        record.session.status = "exited";
+      if (!record) {
+        return;
       }
-      this.window.webContents.send(ipc.terminal.exit, { sessionId, exitCode, signal });
+      record.session.status = "exited";
+      this.send(ipc.terminal.exit, { sessionId, exitCode, signal });
       this.sessions.delete(sessionId);
     });
 
@@ -79,6 +80,16 @@ export class TerminalService {
   killAll(): void {
     for (const id of this.sessions.keys()) {
       this.kill(id);
+    }
+  }
+
+  private send(channel: string, payload: unknown): void {
+    if (!this.window.isDestroyed() && !this.window.webContents.isDestroyed()) {
+      try {
+        this.window.webContents.send(channel, payload);
+      } catch {
+        // The renderer can disappear while node-pty is still flushing exit data during app shutdown.
+      }
     }
   }
 

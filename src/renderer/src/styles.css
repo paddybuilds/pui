@@ -20,6 +20,9 @@
   --text: #d8dee6;
   --text-muted: #8b95a5;
   --text-faint: #5f6877;
+  --titlebar-height: 44px;
+  --window-controls-width: 154px;
+  scrollbar-color: #303946 #0b0f14;
 }
 
 * {
@@ -29,6 +32,25 @@
 body {
   margin: 0;
   overflow: hidden;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0b0f14;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #303946;
+  border: 2px solid #0b0f14;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #465365;
 }
 
 button,
@@ -120,9 +142,14 @@ kbd {
   padding-top: 58px;
 }
 
+.platform-win32 .sidebar,
+.platform-linux .sidebar {
+  padding-top: calc(var(--titlebar-height) + 8px);
+}
+
 .platform-win32 .workspace-topbar,
 .platform-linux .workspace-topbar {
-  padding-right: 154px;
+  padding-right: var(--window-controls-width);
 }
 
 .platform-browser .workspace-topbar {
@@ -335,7 +362,7 @@ kbd {
   min-height: 0;
   height: 100vh;
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
 }
 
 .icon-button {
@@ -366,6 +393,13 @@ kbd {
   background: #0b0f14;
   border-bottom: 1px solid var(--line-soft);
   -webkit-app-region: drag;
+}
+
+.workspace-topbar-actions,
+.workspace-topbar-actions *,
+.app-resizer,
+.pane-resizer {
+  -webkit-app-region: no-drag;
 }
 
 .workspace-topbar-title {
@@ -437,10 +471,10 @@ kbd {
   min-width: 0;
   min-height: 0;
   display: grid;
-  place-content: center;
+  place-content: start center;
   justify-items: center;
   gap: 10px;
-  padding: 24px;
+  padding: clamp(72px, 16vh, 150px) 24px 24px;
   color: var(--text-muted);
   background: #0d1117;
 }
@@ -667,7 +701,7 @@ kbd {
 
 .commit-section {
   border-bottom: 1px solid var(--line-soft);
-  max-height: 190px;
+  max-height: 124px;
 }
 
 .commit-section header,
@@ -764,7 +798,7 @@ kbd {
 .diff-body {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(90px, 26%) minmax(0, 1fr);
+  grid-template-rows: minmax(72px, 18%) minmax(0, 1fr);
 }
 
 .file-list {

@@ -52,7 +52,7 @@ export function App() {
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber(SIDEBAR_WIDTH_KEY, 224));
-  const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 460));
+  const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 360));
   const didHydrateRef = useRef(false);
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
 
@@ -251,8 +251,8 @@ export function App() {
   const startGitPanelResize = (event: ReactPointerEvent<HTMLElement>) => {
     startPanelResize(event, {
       initialValue: gitPanelWidth,
-      min: 340,
-      max: Math.min(760, Math.max(360, window.innerWidth - sidebarWidth - 280)),
+      min: 320,
+      max: Math.min(560, Math.max(360, Math.floor((window.innerWidth - sidebarWidth) * 0.42))),
       calculate: (initialValue, deltaX) => initialValue - deltaX,
       onChange: (width) => {
         setGitPanelWidth(width);

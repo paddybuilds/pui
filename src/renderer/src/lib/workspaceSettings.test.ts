@@ -243,6 +243,7 @@ describe("workspace settings helpers", () => {
         defaultTerminalProfileId: "profile-a",
         gitPanelDefault: "closed",
         updateChecksEnabled: false,
+        codeAutocompleteEnabled: false,
         onboardingCompletedVersion: "0.2.0"
       })
     ).toEqual({
@@ -256,6 +257,7 @@ describe("workspace settings helpers", () => {
       defaultTerminalProfileId: "profile-a",
       gitPanelDefault: "closed",
       updateChecksEnabled: false,
+      codeAutocompleteEnabled: false,
       onboardingCompletedVersion: "0.2.0"
     });
   });

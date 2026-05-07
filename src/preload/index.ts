@@ -8,6 +8,7 @@ import type {
   GitCommitDetails,
   GitCommitFileDiff,
   GitDiff,
+  FilePathListResult,
   FileSystemEntry,
   FileReadResult,
   FileWriteResult,
@@ -58,6 +59,8 @@ const api = {
   fileSystem: {
     readDirectory: (workspace: string, directory?: string) =>
       ipcRenderer.invoke(ipc.fileSystem.readDirectory, { workspace, directory }) as Promise<FileSystemEntry[]>,
+    listFilePaths: (workspace: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.listFilePaths, workspace) as Promise<FilePathListResult>,
     readFile: (workspace: string, filePath: string) =>
       ipcRenderer.invoke(ipc.fileSystem.readFile, { workspace, filePath }) as Promise<FileReadResult>,
     writeFile: (workspace: string, filePath: string, contents: string) =>

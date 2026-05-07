@@ -4,8 +4,21 @@ import { CodeWorkspace } from "./CodeWorkspace";
 import type { CodeFileTab } from "../lib/codeWorkspace";
 
 vi.mock("@uiw/react-codemirror", () => ({
-  default: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
-    <textarea aria-label="Code editor" value={value} onChange={(event) => onChange(event.currentTarget.value)} />
+  default: ({
+    value,
+    extensions,
+    onChange
+  }: {
+    value: string;
+    extensions: unknown[];
+    onChange: (value: string) => void;
+  }) => (
+    <textarea
+      aria-label="Code editor"
+      data-extension-count={extensions.length}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+    />
   )
 }));
 
@@ -29,6 +42,8 @@ describe("CodeWorkspace", () => {
     render(
       <CodeWorkspace
         platform="win32"
+        autocompleteEnabled
+        workspaceFilePaths={["src/App.tsx"]}
         tabs={[{ ...tab, contents: "after", dirty: true }]}
         activePath={tab.path}
         onActivate={vi.fn()}
@@ -51,6 +66,8 @@ describe("CodeWorkspace", () => {
     render(
       <CodeWorkspace
         platform="win32"
+        autocompleteEnabled
+        workspaceFilePaths={["src/App.tsx"]}
         tabs={[{ ...tab, dirty: true }]}
         activePath={tab.path}
         onActivate={vi.fn()}
@@ -72,6 +89,8 @@ describe("CodeWorkspace", () => {
     render(
       <CodeWorkspace
         platform="win32"
+        autocompleteEnabled
+        workspaceFilePaths={["src/App.tsx"]}
         tabs={[{ ...tab, dirty: true }]}
         activePath={tab.path}
         onActivate={vi.fn()}
@@ -90,5 +109,40 @@ describe("CodeWorkspace", () => {
     fireEvent.contextMenu(screen.getByText("src/App.tsx"));
     fireEvent.click(screen.getByRole("menuitem", { name: "Split right" }));
     expect(screen.getAllByText("src/App.tsx")).toHaveLength(2);
+  });
+
+  it("adds autocomplete extensions only when enabled", () => {
+    const { rerender } = render(
+      <CodeWorkspace
+        platform="win32"
+        autocompleteEnabled={false}
+        workspaceFilePaths={["src/App.tsx"]}
+        tabs={[tab]}
+        activePath={tab.path}
+        onActivate={vi.fn()}
+        onChange={vi.fn()}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onClose={vi.fn()}
+      />
+    );
+    const disabledCount = Number(screen.getByLabelText("Code editor").getAttribute("data-extension-count"));
+
+    rerender(
+      <CodeWorkspace
+        platform="win32"
+        autocompleteEnabled
+        workspaceFilePaths={["src/App.tsx"]}
+        tabs={[tab]}
+        activePath={tab.path}
+        onActivate={vi.fn()}
+        onChange={vi.fn()}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(Number(screen.getByLabelText("Code editor").getAttribute("data-extension-count"))).toBeGreaterThan(
+      disabledCount
+    );
   });
 });

@@ -104,6 +104,7 @@ export function App() {
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<WorkspaceView>("terminal");
   const [codeTabsByWorkspace, setCodeTabsByWorkspace] = useState<Record<string, CodeFileTab[]>>({});
   const [activeCodePathByWorkspace, setActiveCodePathByWorkspace] = useState<Record<string, string | undefined>>({});
+  const [workspaceFilePathsByWorkspace, setWorkspaceFilePathsByWorkspace] = useState<Record<string, string[]>>({});
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
@@ -136,6 +137,7 @@ export function App() {
   const activeWorkspaceSessions = activeWorkspace ? (sessionsByWorkspace[activeWorkspace.id] ?? {}) : {};
   const activeCodeTabs = activeWorkspace ? (codeTabsByWorkspace[activeWorkspace.id] ?? []) : [];
   const activeCodePath = activeWorkspace ? activeCodePathByWorkspace[activeWorkspace.id] : undefined;
+  const activeWorkspaceFilePaths = activeWorkspace ? (workspaceFilePathsByWorkspace[activeWorkspace.id] ?? []) : [];
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
   const fileExplorerVisible = Boolean(activeWorkspace?.kind !== "quick" && activeSidePanel === "files");
   const gitSidebarVisible = Boolean(
@@ -278,6 +280,28 @@ export function App() {
   useEffect(() => {
     activeGitWorkspaceRef.current = activeWorkspace?.kind === "quick" ? null : (activeWorkspace?.path ?? null);
   }, [activeWorkspace?.kind, activeWorkspace?.path]);
+
+  useEffect(() => {
+    if (!activeWorkspace || activeWorkspace.kind === "quick" || !appPreferences.codeAutocompleteEnabled) {
+      return;
+    }
+    let canceled = false;
+    void pui.fileSystem
+      .listFilePaths(activeWorkspace.path)
+      .then((result) => {
+        if (!canceled) {
+          setWorkspaceFilePathsByWorkspace((current) => ({ ...current, [activeWorkspace.id]: result.paths }));
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setWorkspaceFilePathsByWorkspace((current) => ({ ...current, [activeWorkspace.id]: [] }));
+        }
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [activeWorkspace, appPreferences.codeAutocompleteEnabled]);
 
   useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {
@@ -1213,6 +1237,8 @@ export function App() {
                 <div className={activeWorkspaceView === "code" ? "code-grid" : "code-grid hidden-view"}>
                   <CodeWorkspace
                     platform={pui.platform}
+                    autocompleteEnabled={appPreferences.codeAutocompleteEnabled}
+                    workspaceFilePaths={activeWorkspaceFilePaths}
                     tabs={activeCodeTabs}
                     activePath={activeCodePath}
                     onActivate={(path) =>

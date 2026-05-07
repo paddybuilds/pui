@@ -119,6 +119,9 @@ function registerIpc(): void {
   ipcMain.handle(ipc.fileSystem.readDirectory, (_event, payload: { workspace: string; directory?: string }) => {
     return fileExplorerService.readDirectory(payload.workspace, payload.directory);
   });
+  ipcMain.handle(ipc.fileSystem.listFilePaths, (_event, workspace: string) => {
+    return fileExplorerService.listFilePaths(workspace);
+  });
   ipcMain.handle(ipc.fileSystem.readFile, (_event, payload: { workspace: string; filePath: string }) => {
     return fileExplorerService.readFile(payload.workspace, payload.filePath);
   });

@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
+  Code2,
   GitBranch,
   Info,
   Keyboard,
@@ -133,7 +134,12 @@ export function SettingsModal({
           {section === "git" ? <GitSettings preferences={preferences} onSave={savePreferences} /> : null}
           {section === "updates" ? <UpdateSettings preferences={preferences} onSave={savePreferences} /> : null}
           {section === "workflow" ? (
-            <WorkflowSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
+            <WorkflowSettings
+              activeWorkspace={activeWorkspace}
+              preferences={preferences}
+              onSavePreferences={savePreferences}
+              onWorkspaceChange={onWorkspaceChange}
+            />
           ) : null}
           {section === "shortcuts" ? <ShortcutSettings platform={platform} /> : null}
         </main>
@@ -636,9 +642,13 @@ function UpdateSettings({
 
 function WorkflowSettings({
   activeWorkspace,
+  preferences,
+  onSavePreferences,
   onWorkspaceChange
 }: {
   activeWorkspace: TerminalWorkspace;
+  preferences: AppPreferences;
+  onSavePreferences: (next: Partial<AppPreferences>) => Promise<void>;
   onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
 }) {
   const [name, setName] = useState("");
@@ -678,6 +688,17 @@ function WorkflowSettings({
 
   return (
     <div className="settings-page">
+      <SettingGroup title="Code editor">
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={preferences.codeAutocompleteEnabled}
+            onChange={(event) => void onSavePreferences({ codeAutocompleteEnabled: event.target.checked })}
+          />
+          <Code2 size={14} />
+          <span>Show autocomplete suggestions</span>
+        </label>
+      </SettingGroup>
       <form className="settings-form" onSubmit={saveQuickCommand}>
         <label htmlFor="quick-command-name">Quick command</label>
         <div className="settings-inline-control">

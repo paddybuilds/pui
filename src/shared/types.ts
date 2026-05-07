@@ -99,6 +99,13 @@ export type FileWriteResult = {
   modifiedAt: string;
 };
 
+export type FilePathListResult = {
+  workspace: string;
+  paths: string[];
+  limit: number;
+  truncated: boolean;
+};
+
 export type AppVersionInfo = {
   name: string;
   version: string;
@@ -203,6 +210,7 @@ export type AppPreferences = {
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
   gitPanelDefault: GitPanelDefault;
   updateChecksEnabled: boolean;
+  codeAutocompleteEnabled: boolean;
   onboardingCompletedVersion?: string;
 };
 
@@ -211,7 +219,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   density: "comfortable",
   terminalFontSize: 13,
   gitPanelDefault: "open",
-  updateChecksEnabled: true
+  updateChecksEnabled: true,
+  codeAutocompleteEnabled: true
 };
 
 export type AppSettings = {

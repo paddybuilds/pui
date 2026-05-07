@@ -20,6 +20,7 @@ export const ipc = {
   },
   fileSystem: {
     readDirectory: "file-system:read-directory",
+    listFilePaths: "file-system:list-file-paths",
     readFile: "file-system:read-file",
     writeFile: "file-system:write-file"
   },

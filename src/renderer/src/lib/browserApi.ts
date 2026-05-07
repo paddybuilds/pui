@@ -163,6 +163,14 @@ const browserPreviewApi: PuiApi = {
         }
       ];
     },
+    listFilePaths: async (workspacePath) => ({
+      workspace: workspacePath,
+      paths: Array.from(previewFiles.keys()).sort((left, right) =>
+        left.localeCompare(right, undefined, { sensitivity: "base", numeric: true })
+      ),
+      limit: 2000,
+      truncated: false
+    }),
     readFile: async (workspacePath, filePath): Promise<FileReadResult> => {
       const relativePath = relativePreviewPath(workspacePath, filePath);
       const contents = previewFiles.get(relativePath);

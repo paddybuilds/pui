@@ -121,6 +121,12 @@ export function normalizeAppPreferences(
         : typeof defaults.updateChecksEnabled === "boolean"
           ? defaults.updateChecksEnabled
           : DEFAULT_APP_PREFERENCES.updateChecksEnabled,
+    codeAutocompleteEnabled:
+      typeof preferences?.codeAutocompleteEnabled === "boolean"
+        ? preferences.codeAutocompleteEnabled
+        : typeof defaults.codeAutocompleteEnabled === "boolean"
+          ? defaults.codeAutocompleteEnabled
+          : DEFAULT_APP_PREFERENCES.codeAutocompleteEnabled,
     ...(onboardingCompletedVersion ? { onboardingCompletedVersion } : {})
   };
 }

@@ -32,10 +32,13 @@ import {
   splitCodeEditorGroup,
   updateCodeSplitSizes
 } from "../lib/codeWorkspace";
+import { codeAutocompleteExtension } from "../lib/editorAutocomplete";
 import { shortcutLabel } from "../lib/shortcuts";
 
 type CodeWorkspaceProps = {
   platform: string;
+  autocompleteEnabled: boolean;
+  workspaceFilePaths: string[];
   tabs: CodeFileTab[];
   activePath?: string;
   onActivate: (path: string) => void;
@@ -46,6 +49,8 @@ type CodeWorkspaceProps = {
 
 export function CodeWorkspace({
   platform,
+  autocompleteEnabled,
+  workspaceFilePaths,
   tabs,
   activePath,
   onActivate,
@@ -251,6 +256,8 @@ export function CodeWorkspace({
             tabs={tabs}
             activeGroupId={activeGroup?.id}
             tabByPath={tabByPath}
+            autocompleteEnabled={autocompleteEnabled}
+            workspaceFilePaths={workspaceFilePaths}
             onFocusGroup={setActiveGroupId}
             onActivatePath={activateGroupPath}
             onChange={onChange}
@@ -327,6 +334,8 @@ function CodeEditorTree({
   tabs,
   activeGroupId,
   tabByPath,
+  autocompleteEnabled,
+  workspaceFilePaths,
   onFocusGroup,
   onActivatePath,
   onChange,
@@ -341,6 +350,8 @@ function CodeEditorTree({
   tabs: CodeFileTab[];
   activeGroupId?: string;
   tabByPath: Map<string, CodeFileTab>;
+  autocompleteEnabled: boolean;
+  workspaceFilePaths: string[];
   onFocusGroup: (groupId: string) => void;
   onActivatePath: (groupId: string, path: string) => void;
   onChange: (path: string, contents: string) => void;
@@ -395,6 +406,8 @@ function CodeEditorTree({
               tabs={tabs}
               activeGroupId={activeGroupId}
               tabByPath={tabByPath}
+              autocompleteEnabled={autocompleteEnabled}
+              workspaceFilePaths={workspaceFilePaths}
               onFocusGroup={onFocusGroup}
               onActivatePath={onActivatePath}
               onChange={onChange}
@@ -426,6 +439,9 @@ function CodeEditorTree({
       active={node.id === activeGroupId}
       tab={node.activePath ? tabByPath.get(node.activePath) : undefined}
       fallbackTab={tabs[0]}
+      allTabs={tabs}
+      autocompleteEnabled={autocompleteEnabled}
+      workspaceFilePaths={workspaceFilePaths}
       onFocus={() => onFocusGroup(node.id)}
       onActivatePath={(path) => onActivatePath(node.id, path)}
       onChange={onChange}
@@ -441,6 +457,9 @@ function CodeEditorGroupView({
   active,
   tab,
   fallbackTab,
+  allTabs,
+  autocompleteEnabled,
+  workspaceFilePaths,
   onFocus,
   onActivatePath,
   onChange,
@@ -452,6 +471,9 @@ function CodeEditorGroupView({
   active: boolean;
   tab?: CodeFileTab;
   fallbackTab?: CodeFileTab;
+  allTabs: CodeFileTab[];
+  autocompleteEnabled: boolean;
+  workspaceFilePaths: string[];
   onFocus: () => void;
   onActivatePath: (path: string) => void;
   onChange: (path: string, contents: string) => void;
@@ -460,7 +482,15 @@ function CodeEditorGroupView({
   canCloseGroup: boolean;
 }) {
   const activeTab = tab ?? fallbackTab;
-  const extensions = useMemo(() => (activeTab ? editorExtensionsForPath(activeTab.path) : []), [activeTab]);
+  const extensions = useMemo(() => {
+    if (!activeTab) {
+      return [];
+    }
+    const baseExtensions = editorExtensionsForPath(activeTab.path);
+    return autocompleteEnabled
+      ? [...baseExtensions, codeAutocompleteExtension(allTabs, workspaceFilePaths)]
+      : baseExtensions;
+  }, [activeTab, allTabs, autocompleteEnabled, workspaceFilePaths]);
 
   useEffect(() => {
     if (activeTab && activeTab.path !== group.activePath) {

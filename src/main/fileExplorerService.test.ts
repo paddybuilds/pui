@@ -52,6 +52,37 @@ describe("FileExplorerService", () => {
     });
   });
 
+  it("lists workspace file paths with noisy folders ignored", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
+    await mkdir(path.join(workspace, "src"));
+    await mkdir(path.join(workspace, "node_modules"));
+    await writeFile(path.join(workspace, "README.md"), "");
+    await writeFile(path.join(workspace, "src", "App.tsx"), "");
+    await writeFile(path.join(workspace, "node_modules", "ignored.js"), "");
+    const service = new FileExplorerService();
+
+    await expect(service.listFilePaths(workspace)).resolves.toEqual({
+      workspace,
+      paths: ["src/App.tsx", "README.md"],
+      limit: 2000,
+      truncated: false
+    });
+  });
+
+  it("caps workspace file path listings", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
+    await writeFile(path.join(workspace, "a.txt"), "");
+    await writeFile(path.join(workspace, "b.txt"), "");
+    const service = new FileExplorerService({ filePathLimit: 1 });
+
+    await expect(service.listFilePaths(workspace)).resolves.toEqual({
+      workspace,
+      paths: ["a.txt"],
+      limit: 1,
+      truncated: true
+    });
+  });
+
   it("writes text files inside the workspace", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
     const filePath = path.join(workspace, "notes.txt");

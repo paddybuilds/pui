@@ -119,6 +119,15 @@ function registerIpc(): void {
   ipcMain.handle(ipc.fileSystem.readDirectory, (_event, payload: { workspace: string; directory?: string }) => {
     return fileExplorerService.readDirectory(payload.workspace, payload.directory);
   });
+  ipcMain.handle(ipc.fileSystem.readFile, (_event, payload: { workspace: string; filePath: string }) => {
+    return fileExplorerService.readFile(payload.workspace, payload.filePath);
+  });
+  ipcMain.handle(
+    ipc.fileSystem.writeFile,
+    (_event, payload: { workspace: string; filePath: string; contents: string }) => {
+      return fileExplorerService.writeFile(payload.workspace, payload.filePath, payload.contents);
+    }
+  );
 
   ipcMain.handle(
     ipc.terminal.create,

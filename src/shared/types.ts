@@ -83,6 +83,22 @@ export type FileSystemEntry = {
   kind: "file" | "directory";
 };
 
+export type FileReadResult = {
+  path: string;
+  relativePath: string;
+  name: string;
+  contents: string;
+  size: number;
+  modifiedAt: string;
+};
+
+export type FileWriteResult = {
+  path: string;
+  relativePath: string;
+  size: number;
+  modifiedAt: string;
+};
+
 export type AppVersionInfo = {
   name: string;
   version: string;

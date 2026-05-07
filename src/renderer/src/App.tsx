@@ -34,6 +34,7 @@ type Pane = WorkbenchPane & {
 
 const newId = () => crypto.randomUUID();
 const pui = getPuiApi();
+const isWindows = pui.platform === "win32";
 const RESIZER_SIZE = 5;
 const SIDEBAR_WIDTH_KEY = "pui.sidebarWidth";
 const GIT_PANEL_WIDTH_KEY = "pui.gitPanelWidth";
@@ -1330,12 +1331,13 @@ function removePane(root: WorkbenchNode, targetPaneId: string): WorkbenchNode | 
 }
 
 function createShellProfile(path: string, shortcut: string): ConsoleProfile {
+  const shell = defaultShellProfile();
   return {
     id: newId(),
-    name: "shell",
+    name: shell.name,
     cwd: path,
-    command: "/bin/zsh",
-    args: [],
+    command: shell.command,
+    args: shell.args,
     env: {},
     shortcut,
     appearance: {
@@ -1343,6 +1345,13 @@ function createShellProfile(path: string, shortcut: string): ConsoleProfile {
       icon: "terminal"
     }
   };
+}
+
+function defaultShellProfile(): { name: string; command: string; args: string[] } {
+  if (isWindows) {
+    return { name: "PowerShell", command: "powershell.exe", args: ["-NoLogo"] };
+  }
+  return { name: "zsh", command: "/bin/zsh", args: [] };
 }
 
 function basename(path: string): string {

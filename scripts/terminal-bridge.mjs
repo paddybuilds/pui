@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -10,6 +11,7 @@ const port = Number(process.env.PUI_TERMINAL_BRIDGE_PORT || 4317);
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
 const posixFallbackShells = new Set(["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"]);
+let cachedGitCommand;
 
 const httpServer = createServer((request, response) => {
   void handleHttpRequest(request, response);
@@ -214,11 +216,40 @@ async function handleHttpRequest(request, response) {
 }
 
 async function openFolderDialog(defaultPath) {
+  if (process.platform === "win32") {
+    return openWindowsFolderDialog(defaultPath);
+  }
+
+  if (process.platform !== "darwin") {
+    return undefined;
+  }
+
   const script = defaultPath
     ? `POSIX path of (choose folder default location POSIX file ${JSON.stringify(defaultPath)})`
     : "POSIX path of (choose folder)";
   try {
     const result = await execFileAsync("osascript", ["-e", script]);
+    return result.stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function openWindowsFolderDialog(defaultPath) {
+  const script = `
+Add-Type -AssemblyName System.Windows.Forms
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::UTF8
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.ShowNewFolderButton = $true
+if ($args[0] -and (Test-Path -LiteralPath $args[0])) {
+  $dialog.SelectedPath = $args[0]
+}
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+  Write-Output $dialog.SelectedPath
+}
+`;
+  try {
+    const result = await execFileAsync("powershell.exe", ["-NoProfile", "-Sta", "-Command", script, defaultPath || ""]);
     return result.stdout.trim() || undefined;
   } catch {
     return undefined;
@@ -327,13 +358,53 @@ async function discardGitPaths(workspace, paths) {
 }
 
 async function git(workspace, args) {
-  const result = await execFileAsync("git", ["-C", workspace, ...args], {
+  const result = await execFileAsync(gitCommand(), ["-C", workspace, ...args], {
     maxBuffer: 1024 * 1024 * 12
   });
   return {
     stdout: result.stdout,
     stderr: result.stderr
   };
+}
+
+function gitCommand() {
+  if (cachedGitCommand) {
+    return cachedGitCommand;
+  }
+  cachedGitCommand = process.env.PUI_GIT || resolveWindowsGitCommand() || "git";
+  return cachedGitCommand;
+}
+
+function resolveWindowsGitCommand() {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+
+  const candidates = [
+    process.env.ProgramFiles ? path.join(process.env.ProgramFiles, "Git", "cmd", "git.exe") : undefined,
+    process.env["ProgramFiles(x86)"] ? path.join(process.env["ProgramFiles(x86)"], "Git", "cmd", "git.exe") : undefined,
+    ...githubDesktopGitCandidates()
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function githubDesktopGitCandidates() {
+  const localAppData = process.env.LOCALAPPDATA;
+  if (!localAppData) {
+    return [];
+  }
+
+  const desktopDir = path.join(localAppData, "GitHubDesktop");
+  try {
+    return fs
+      .readdirSync(desktopDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("app-"))
+      .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }))
+      .map((entry) => path.join(desktopDir, entry.name, "resources", "app", "git", "cmd", "git.exe"));
+  } catch {
+    return [];
+  }
 }
 
 async function gitOperation(workspace, args) {

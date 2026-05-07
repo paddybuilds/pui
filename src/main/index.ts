@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ipc } from "../shared/ipc";
 import type { AppSettings, ConsoleProfile } from "../shared/types";
@@ -78,7 +79,7 @@ function registerIpc(): void {
       return undefined;
     }
     const result = await dialog.showOpenDialog(mainWindow, {
-      defaultPath,
+      defaultPath: defaultPath && existsSync(defaultPath) ? defaultPath : undefined,
       properties: ["openDirectory", "createDirectory"]
     });
     return result.canceled ? undefined : result.filePaths[0];

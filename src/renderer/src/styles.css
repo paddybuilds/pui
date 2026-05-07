@@ -642,7 +642,7 @@ kbd {
 }
 
 .git-panel {
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(96px, 18%);
+  grid-template-rows: auto auto minmax(0, 1fr);
   background: #0b0f14;
 }
 
@@ -710,6 +710,57 @@ kbd {
   font-size: 11px;
 }
 
+.git-tabs {
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #0d1117;
+}
+
+.git-tabs button {
+  min-width: 0;
+  height: 28px;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 8px;
+  border-color: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.git-tabs button:hover,
+.git-tabs button.active {
+  color: var(--text-strong);
+  background: var(--surface-active);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.git-tabs small {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.git-tab-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.changes-tab-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .commit-section,
 .changes-section,
 .commit-composer {
@@ -720,8 +771,6 @@ kbd {
 
 .commit-section {
   min-height: 0;
-  border-bottom: 1px solid var(--line-soft);
-  border-top: 1px solid var(--line-soft);
 }
 
 .commit-section header,

@@ -98,10 +98,47 @@ export type AppUpdateCheckResult = {
   repositoryUrl?: string;
 };
 
+export type ThemePreset = "system" | "light" | "dark";
+
+export type AppDensity = "comfortable" | "compact";
+
+export type GitPanelDefault = "open" | "closed";
+
+export type TerminalProfileTemplate = {
+  id?: string;
+  name: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  appearance?: ConsoleProfile["appearance"];
+};
+
+export type AppPreferences = {
+  themePreset: ThemePreset;
+  density: AppDensity;
+  terminalFontSize: number;
+  defaultTerminalProfileId?: string;
+  defaultTerminalProfileTemplate?: TerminalProfileTemplate;
+  codexProfileEnabled: boolean;
+  gitPanelDefault: GitPanelDefault;
+  updateChecksEnabled: boolean;
+  onboardingCompletedVersion?: string;
+};
+
+export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  themePreset: "system",
+  density: "comfortable",
+  terminalFontSize: 13,
+  codexProfileEnabled: true,
+  gitPanelDefault: "open",
+  updateChecksEnabled: true
+};
+
 export type AppSettings = {
   workspace: string;
   profiles: ConsoleProfile[];
   recentWorkspaces: string[];
+  appPreferences?: AppPreferences;
   activeWorkspaceId?: string;
   workspaces?: TerminalWorkspace[];
   layout?: WorkbenchLayout;

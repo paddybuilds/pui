@@ -11,6 +11,9 @@ export const ipc = {
     load: "settings:load",
     save: "settings:save"
   },
+  system: {
+    listShells: "system:list-shells"
+  },
   terminal: {
     create: "terminal:create",
     write: "terminal:write",

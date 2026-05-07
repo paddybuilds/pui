@@ -1,4 +1,4 @@
-import type { PuiApi } from "../../../preload";
+import type { PuiApi, ShellCandidate } from "../../../preload";
 import type {
   AppSettings,
   AppUpdateCheckResult,
@@ -112,6 +112,9 @@ const browserPreviewApi: PuiApi = {
       return settings;
     }
   },
+  system: {
+    listShells: async () => previewShellCandidates(browserPreviewApi.platform)
+  },
   terminal: {
     create: (payload) =>
       terminalBridge
@@ -210,4 +213,92 @@ async function parseBridgeResponse<T>(response: Response): Promise<T> {
     throw new Error(payload?.error || `Bridge request failed: ${response.status}`);
   }
   return payload as T;
+}
+
+function previewShellCandidates(platform: NodeJS.Platform): ShellCandidate[] {
+  if (platform === "win32") {
+    return [
+      {
+        id: "powershell",
+        name: "Windows PowerShell",
+        command: "powershell.exe",
+        args: ["-NoLogo"],
+        source: "system",
+        available: true
+      },
+      {
+        id: "pwsh",
+        name: "PowerShell",
+        command: "pwsh.exe",
+        args: ["-NoLogo"],
+        source: "system",
+        available: false
+      },
+      {
+        id: "cmd",
+        name: "Command Prompt",
+        command: "cmd.exe",
+        args: [],
+        source: "system",
+        available: true
+      },
+      {
+        id: "wsl",
+        name: "WSL",
+        command: "wsl.exe",
+        args: [],
+        source: "wsl",
+        available: false
+      },
+      customShellCandidate()
+    ];
+  }
+
+  const shell = platform === "darwin" ? "/bin/zsh" : "/bin/bash";
+  return [
+    {
+      id: `env-${platform === "darwin" ? "zsh" : "bash"}`,
+      name: platform === "darwin" ? "zsh" : "bash",
+      command: shell,
+      args: [],
+      source: "environment",
+      available: true
+    },
+    {
+      id: "zsh",
+      name: "zsh",
+      command: "/bin/zsh",
+      args: [],
+      source: "system",
+      available: platform === "darwin"
+    },
+    {
+      id: "bash",
+      name: "bash",
+      command: "/bin/bash",
+      args: [],
+      source: "system",
+      available: true
+    },
+    {
+      id: "sh",
+      name: "sh",
+      command: "/bin/sh",
+      args: [],
+      source: "system",
+      available: true
+    },
+    customShellCandidate()
+  ];
+}
+
+function customShellCandidate(): ShellCandidate {
+  return {
+    id: "custom",
+    name: "Custom",
+    command: "",
+    args: [],
+    source: "custom",
+    available: true
+  };
 }

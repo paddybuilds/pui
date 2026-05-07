@@ -5,6 +5,7 @@ import { ipc } from "../shared/ipc";
 import type { AppSettings, ConsoleProfile } from "../shared/types";
 import { CodexCliAdapter } from "./codexAdapter";
 import { GitWorkspaceService } from "./gitService";
+import { listShells } from "./shell";
 import { StoreService } from "./store";
 import { TerminalService } from "./terminalService";
 import { AppUpdateService } from "./updateService";
@@ -98,6 +99,8 @@ function registerIpc(): void {
   ipcMain.handle(ipc.settings.loadState, () => storeService.loadSettingsState());
   ipcMain.handle(ipc.settings.load, () => storeService.loadSettings());
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
+
+  ipcMain.handle(ipc.system.listShells, () => listShells());
 
   ipcMain.handle(
     ipc.terminal.create,

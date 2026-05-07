@@ -1,39 +1,93 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { Info, Keyboard, Monitor, Play, RefreshCw, Settings, TerminalSquare, X } from "lucide-react";
+import {
+  Bot,
+  GitBranch,
+  Info,
+  Keyboard,
+  Monitor,
+  Paintbrush,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  TerminalSquare,
+  X
+} from "lucide-react";
+import type { ShellCandidate } from "../../../preload";
 import type {
+  AppDensity,
+  AppPreferences,
   AppSettings,
   AppUpdateCheckResult,
   AppVersionInfo,
+  ConsoleProfile,
+  GitPanelDefault,
   QuickCommand,
-  TerminalWorkspace
+  TerminalWorkspace,
+  ThemePreset
 } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { shortcutLabel } from "../lib/shortcuts";
+import {
+  createCodexProfile,
+  createTerminalProfileTemplateFromProfile,
+  normalizeAppPreferences,
+  normalizeTerminalFontSize,
+  updateAppPreferences
+} from "../lib/workspaceSettings";
 
 const pui = getPuiApi();
 
-type SettingsSection = "about" | "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
+type SettingsSection =
+  | "about"
+  | "appearance"
+  | "profiles"
+  | "defaults"
+  | "codex"
+  | "git"
+  | "updates"
+  | "workflow"
+  | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
+  onSettingsChange: (settings: AppSettings) => Promise<void>;
   onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+  onReplayOnboarding: () => void;
   platform: string;
   onClose: () => void;
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }> = [
   { id: "about", label: "About", icon: <Info size={15} /> },
-  { id: "general", label: "General", icon: <Settings size={15} /> },
-  { id: "workspaces", label: "Folders", icon: <Monitor size={15} /> },
-  { id: "terminal", label: "Terminal", icon: <TerminalSquare size={15} /> },
+  { id: "appearance", label: "Appearance", icon: <Paintbrush size={15} /> },
+  { id: "profiles", label: "Terminal profiles", icon: <TerminalSquare size={15} /> },
+  { id: "defaults", label: "Workspace defaults", icon: <Monitor size={15} /> },
+  { id: "codex", label: "Codex", icon: <Bot size={15} /> },
+  { id: "git", label: "Git", icon: <GitBranch size={15} /> },
+  { id: "updates", label: "Updates", icon: <RefreshCw size={15} /> },
   { id: "workflow", label: "Workflow", icon: <Play size={15} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={15} /> }
 ];
 
-export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, platform, onClose }: SettingsModalProps) {
+export function SettingsModal({
+  settings,
+  activeWorkspace,
+  onSettingsChange,
+  onWorkspaceChange,
+  onReplayOnboarding,
+  platform,
+  onClose
+}: SettingsModalProps) {
   const [section, setSection] = useState<SettingsSection>("about");
   const activeSection = sections.find((item) => item.id === section) ?? sections[0];
+  const preferences = normalizeAppPreferences(settings.appPreferences, {
+    defaultTerminalProfileId: settings.profiles[0]?.id
+  });
+
+  const savePreferences = async (next: Partial<AppPreferences>) => {
+    await onSettingsChange(updateAppPreferences(settings, next, platform));
+  };
 
   return (
     <div className="settings-backdrop" role="presentation" onMouseDown={onClose}>
@@ -70,18 +124,31 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
           <header className="settings-content-header">
             <h2>{activeSection.label}</h2>
           </header>
-          {section === "about" ? <AboutSettings /> : null}
-          {section === "general" ? <GeneralSettings settings={settings} activeWorkspace={activeWorkspace} /> : null}
-          {section === "workspaces" ? (
-            <WorkspaceSettings
+          {section === "about" ? <AboutSettings onReplayOnboarding={onReplayOnboarding} /> : null}
+          {section === "appearance" ? <AppearanceSettings preferences={preferences} onSave={savePreferences} /> : null}
+          {section === "profiles" ? (
+            <TerminalProfilesSettings
               settings={settings}
               activeWorkspace={activeWorkspace}
+              preferences={preferences}
+              onSettingsChange={onSettingsChange}
+              onWorkspaceChange={onWorkspaceChange}
+              platform={platform}
+            />
+          ) : null}
+          {section === "defaults" ? (
+            <WorkspaceDefaultsSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
+          ) : null}
+          {section === "codex" ? (
+            <CodexSettings
+              activeWorkspace={activeWorkspace}
+              preferences={preferences}
+              onSave={savePreferences}
               onWorkspaceChange={onWorkspaceChange}
             />
           ) : null}
-          {section === "terminal" ? (
-            <TerminalSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
-          ) : null}
+          {section === "git" ? <GitSettings preferences={preferences} onSave={savePreferences} /> : null}
+          {section === "updates" ? <UpdateSettings preferences={preferences} onSave={savePreferences} /> : null}
           {section === "workflow" ? (
             <WorkflowSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
           ) : null}
@@ -92,7 +159,7 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
   );
 }
 
-function AboutSettings() {
+function AboutSettings({ onReplayOnboarding }: { onReplayOnboarding: () => void }) {
   const [versionInfo, setVersionInfo] = useState<AppVersionInfo>();
   const [versionError, setVersionError] = useState<string>();
   const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult>();
@@ -108,12 +175,7 @@ function AboutSettings() {
           setVersionError(undefined);
         }
       })
-      .catch((error: unknown) => {
-        if (mounted) {
-          setVersionError(error instanceof Error ? error.message : String(error));
-        }
-      });
-
+      .catch((error: unknown) => mounted && setVersionError(error instanceof Error ? error.message : String(error)));
     return () => {
       mounted = false;
     };
@@ -123,8 +185,7 @@ function AboutSettings() {
     setUpdateStatus("checking");
     setUpdateCheck(undefined);
     try {
-      const result = await pui.app.checkForUpdates();
-      setUpdateCheck(result);
+      setUpdateCheck(await pui.app.checkForUpdates());
       setVersionError(undefined);
     } catch (error) {
       setUpdateCheck({
@@ -137,21 +198,6 @@ function AboutSettings() {
       setUpdateStatus("idle");
     }
   };
-
-  const updateMessage =
-    updateStatus === "checking"
-      ? "Checking GitHub releases..."
-      : updateCheck
-        ? updateCheckMessage(updateCheck)
-        : versionError;
-  const updateStatusClass =
-    updateStatus === "checking"
-      ? "settings-update-status"
-      : updateCheck
-        ? `settings-update-status ${updateCheckTone(updateCheck)}`
-        : versionError
-          ? "settings-update-status error"
-          : "settings-update-status";
 
   return (
     <div className="settings-page">
@@ -170,119 +216,249 @@ function AboutSettings() {
             <RefreshCw size={14} className={updateStatus === "checking" ? "settings-spin" : undefined} />
             <span>{updateStatus === "checking" ? "Checking" : "Check for updates"}</span>
           </button>
-          {updateMessage ? (
-            <span className={updateStatusClass} role="status" aria-live="polite">
-              {updateMessage}
-            </span>
-          ) : null}
+          <span
+            className={`settings-update-status ${updateCheck ? updateCheckTone(updateCheck) : versionError ? "error" : ""}`}
+            role="status"
+          >
+            {updateStatus === "checking" ? "Checking GitHub releases..." : updateCheck?.message || versionError || ""}
+          </span>
+        </div>
+      </SettingGroup>
+      <SettingGroup title="Onboarding">
+        <div className="settings-action-row">
+          <button type="button" onClick={onReplayOnboarding}>
+            <RotateCcw size={14} />
+            <span>Replay onboarding</span>
+          </button>
+          <span className="settings-update-status">Review workspace, terminal, appearance, and workflow defaults.</span>
         </div>
       </SettingGroup>
     </div>
   );
 }
 
-function GeneralSettings({ settings, activeWorkspace }: { settings: AppSettings; activeWorkspace: TerminalWorkspace }) {
+function AppearanceSettings({
+  preferences,
+  onSave
+}: {
+  preferences: AppPreferences;
+  onSave: (next: Partial<AppPreferences>) => Promise<void>;
+}) {
+  const [themePreset, setThemePreset] = useState<ThemePreset>(preferences.themePreset);
+  const [density, setDensity] = useState<AppDensity>(preferences.density);
+  const [status, setStatus] = useState("idle");
+
+  useEffect(() => {
+    setThemePreset(preferences.themePreset);
+    setDensity(preferences.density);
+  }, [preferences.density, preferences.themePreset]);
+
   return (
     <div className="settings-page">
-      <SettingRow label="Folder label" value={activeWorkspace.name} />
-      <SettingRow label="Open folder" value={basename(activeWorkspace.path)} />
-      <SettingRow label="Folder path" value={activeWorkspace.path} />
-      <SettingRow label="Recent folders" value={String(settings.recentWorkspaces.length)} />
+      <form
+        className="settings-form"
+        onSubmit={(event) => void saveForm(event, setStatus, () => onSave({ themePreset, density }))}
+      >
+        <label htmlFor="theme-preset">Theme</label>
+        <select
+          id="theme-preset"
+          value={themePreset}
+          onChange={(event) => setThemePreset(event.target.value as ThemePreset)}
+        >
+          <option value="system">System</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+        <label htmlFor="density">Density</label>
+        <select id="density" value={density} onChange={(event) => setDensity(event.target.value as AppDensity)}>
+          <option value="comfortable">Comfortable</option>
+          <option value="compact">Compact</option>
+        </select>
+        <SaveButton status={status} />
+      </form>
     </div>
   );
 }
 
-function WorkspaceSettings({
+function TerminalProfilesSettings({
   settings,
   activeWorkspace,
-  onWorkspaceChange
+  preferences,
+  onSettingsChange,
+  onWorkspaceChange,
+  platform
 }: {
   settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
+  preferences: AppPreferences;
+  onSettingsChange: (settings: AppSettings) => Promise<void>;
   onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+  platform: string;
 }) {
-  const [name, setName] = useState(activeWorkspace.name);
-  const [path, setPath] = useState(activeWorkspace.path);
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [shells, setShells] = useState<ShellCandidate[]>([]);
+  const [editing, setEditing] = useState(() =>
+    profileDraft(activeWorkspace.profiles[0], activeWorkspace.defaultCwd || activeWorkspace.path)
+  );
+  const [status, setStatus] = useState("idle");
+  const defaultProfileId = preferences.defaultTerminalProfileId || activeWorkspace.profiles[0]?.id;
 
   useEffect(() => {
-    setName(activeWorkspace.name);
-    setPath(activeWorkspace.path);
-    setStatus("idle");
-  }, [activeWorkspace.id, activeWorkspace.name, activeWorkspace.path]);
+    void pui.system
+      .listShells()
+      .then((items) => setShells(items.filter((item) => item.available || item.source === "custom")));
+  }, []);
 
-  const saveWorkspace = async (event: FormEvent<HTMLFormElement>) => {
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextName = name.trim() || activeWorkspace.name;
-    const nextPath = path.trim() || activeWorkspace.path;
-    const previousDefaultCwd = activeWorkspace.defaultCwd || activeWorkspace.path;
-    const nextDefaultCwd =
-      activeWorkspace.defaultCwd && activeWorkspace.defaultCwd !== activeWorkspace.path
-        ? activeWorkspace.defaultCwd
-        : nextPath;
+    if (!editing.name.trim() || !editing.command.trim()) {
+      return;
+    }
     setStatus("saving");
-    await onWorkspaceChange({
+    const profile: ConsoleProfile = {
+      id: editing.id || crypto.randomUUID(),
+      name: editing.name.trim(),
+      cwd: editing.cwd.trim() || activeWorkspace.defaultCwd || activeWorkspace.path,
+      command: editing.command.trim(),
+      args: splitArgs(editing.args),
+      env: parseEnvLines(editing.env),
+      shortcut: editing.shortcut.trim(),
+      appearance: { color: editing.color.trim() || "#9ca3af", icon: editing.icon.trim() || "terminal" }
+    };
+    const nextWorkspace = {
       ...activeWorkspace,
-      name: nextName,
-      path: nextPath,
-      defaultCwd: nextDefaultCwd,
-      profiles: activeWorkspace.profiles.map((profile) =>
-        profile.cwd === activeWorkspace.path || profile.cwd === previousDefaultCwd
-          ? { ...profile, cwd: nextDefaultCwd }
-          : profile
+      profiles: [...activeWorkspace.profiles.filter((item) => item.id !== profile.id), profile]
+    };
+    await onSettingsChange(
+      updateAppPreferences(
+        {
+          ...settings,
+          workspaces: (settings.workspaces ?? []).map((workspace) =>
+            workspace.id === nextWorkspace.id ? nextWorkspace : workspace
+          )
+        },
+        {
+          defaultTerminalProfileId: preferences.defaultTerminalProfileId || profile.id,
+          defaultTerminalProfileTemplate: createTerminalProfileTemplateFromProfile(profile)
+        },
+        platform
       )
-    });
-    setName(nextName);
-    setPath(nextPath);
+    );
+    setEditing(profileDraft(profile, profile.cwd));
     setStatus("saved");
     window.setTimeout(() => setStatus("idle"), 1200);
   };
 
+  const deleteProfile = async (id: string) => {
+    if (activeWorkspace.profiles.length <= 1) {
+      return;
+    }
+    const nextProfiles = activeWorkspace.profiles.filter((profile) => profile.id !== id);
+    await onWorkspaceChange({ ...activeWorkspace, profiles: nextProfiles });
+  };
+
   return (
     <div className="settings-page">
-      <form className="settings-form" onSubmit={saveWorkspace}>
-        <label htmlFor="workspace-settings-name">Folder label</label>
+      <SettingGroup title="Detected terminals">
+        <div className="settings-list">
+          {shells.map((shell) => (
+            <button
+              key={shell.id}
+              className="settings-list-row settings-select-row"
+              type="button"
+              onClick={() => setEditing(shellDraft(shell, activeWorkspace.defaultCwd || activeWorkspace.path))}
+            >
+              <span>{shell.name}</span>
+              <code>{[shell.command, ...shell.args].join(" ") || "Custom command"}</code>
+            </button>
+          ))}
+        </div>
+      </SettingGroup>
+      <form className="settings-form" onSubmit={saveProfile}>
+        <strong>{editing.id ? "Edit profile" : "New profile"}</strong>
         <input
-          id="workspace-settings-name"
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            setStatus("idle");
-          }}
+          value={editing.name}
+          onChange={(event) => setEditing({ ...editing, name: event.target.value })}
+          placeholder="Name"
         />
-        <label htmlFor="workspace-settings-path">Folder path</label>
+        <input
+          value={editing.command}
+          onChange={(event) => setEditing({ ...editing, command: event.target.value })}
+          placeholder="Command"
+        />
+        <input
+          value={editing.args}
+          onChange={(event) => setEditing({ ...editing, args: event.target.value })}
+          placeholder="Args"
+        />
+        <input
+          value={editing.cwd}
+          onChange={(event) => setEditing({ ...editing, cwd: event.target.value })}
+          placeholder="Working directory"
+        />
+        <textarea
+          value={editing.env}
+          onChange={(event) => setEditing({ ...editing, env: event.target.value })}
+          placeholder={"ENV=value\nNEXT=value"}
+        />
         <div className="settings-inline-control">
           <input
-            id="workspace-settings-path"
-            value={path}
-            onChange={(event) => {
-              setPath(event.target.value);
-              setStatus("idle");
-            }}
+            value={editing.shortcut}
+            onChange={(event) => setEditing({ ...editing, shortcut: event.target.value })}
+            placeholder="Shortcut"
           />
-          <button type="submit" disabled={status === "saving"}>
-            {status === "saving" ? "Saving" : "Save"}
-          </button>
+          <input
+            value={editing.icon}
+            onChange={(event) => setEditing({ ...editing, icon: event.target.value })}
+            placeholder="Icon"
+          />
+          <input
+            value={editing.color}
+            onChange={(event) => setEditing({ ...editing, color: event.target.value })}
+            placeholder="#9ca3af"
+          />
         </div>
-        <p>The label is only used in Pui. The open folder title comes from the path.</p>
-        {status === "saved" ? <span className="settings-save-state">Saved</span> : null}
+        <SaveButton status={status} label={editing.id ? "Save profile" : "Add profile"} />
       </form>
-      <div className="settings-list">
-        {(settings.workspaces ?? []).map((workspace) => (
-          <div
-            key={workspace.id}
-            className={workspace.id === activeWorkspace.id ? "settings-list-row active" : "settings-list-row"}
-          >
-            <span>{workspace.name}</span>
-            <code>{workspace.path}</code>
+      <SettingGroup title="Workspace profiles">
+        {activeWorkspace.profiles.map((profile) => (
+          <div key={profile.id} className="settings-list-row">
+            <span>{profile.name}</span>
+            <code>{profile.id === defaultProfileId ? "Default" : [profile.command, ...profile.args].join(" ")}</code>
+            <button
+              type="button"
+              onClick={() =>
+                void onSettingsChange(
+                  updateAppPreferences(
+                    settings,
+                    {
+                      defaultTerminalProfileId: profile.id,
+                      defaultTerminalProfileTemplate: createTerminalProfileTemplateFromProfile(profile)
+                    },
+                    platform
+                  )
+                )
+              }
+            >
+              Default
+            </button>
+            <button type="button" onClick={() => setEditing(profileDraft(profile, profile.cwd))}>
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteProfile(profile.id)}
+              disabled={activeWorkspace.profiles.length <= 1}
+            >
+              Delete
+            </button>
           </div>
         ))}
-      </div>
+      </SettingGroup>
     </div>
   );
 }
 
-function TerminalSettings({
+function WorkspaceDefaultsSettings({
   activeWorkspace,
   onWorkspaceChange
 }: {
@@ -291,90 +467,130 @@ function TerminalSettings({
 }) {
   const [defaultCwd, setDefaultCwd] = useState(activeWorkspace.defaultCwd || activeWorkspace.path);
   const [fontSize, setFontSize] = useState(String(activeWorkspace.terminalFontSize || 13));
-  const [cwdStatus, setCwdStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [fontStatus, setFontStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [status, setStatus] = useState("idle");
 
   useEffect(() => {
     setDefaultCwd(activeWorkspace.defaultCwd || activeWorkspace.path);
     setFontSize(String(activeWorkspace.terminalFontSize || 13));
-    setCwdStatus("idle");
-    setFontStatus("idle");
   }, [activeWorkspace.defaultCwd, activeWorkspace.id, activeWorkspace.path, activeWorkspace.terminalFontSize]);
-
-  const saveDefaultCwd = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const cwd = defaultCwd.trim() || activeWorkspace.path;
-    setCwdStatus("saving");
-    await onWorkspaceChange({
-      ...activeWorkspace,
-      defaultCwd: cwd,
-      profiles: activeWorkspace.profiles.map((profile) => ({ ...profile, cwd }))
-    });
-    setDefaultCwd(cwd);
-    setCwdStatus("saved");
-    window.setTimeout(() => setCwdStatus("idle"), 1200);
-  };
-
-  const saveFontSize = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const nextFontSize = clampTerminalFontSize(Number(fontSize));
-    setFontStatus("saving");
-    await onWorkspaceChange({
-      ...activeWorkspace,
-      terminalFontSize: nextFontSize
-    });
-    setFontSize(String(nextFontSize));
-    setFontStatus("saved");
-    window.setTimeout(() => setFontStatus("idle"), 1200);
-  };
 
   return (
     <div className="settings-page">
-      <form className="settings-form" onSubmit={saveDefaultCwd}>
+      <form
+        className="settings-form"
+        onSubmit={(event) =>
+          void saveForm(event, setStatus, () =>
+            onWorkspaceChange({
+              ...activeWorkspace,
+              defaultCwd: defaultCwd.trim() || activeWorkspace.path,
+              terminalFontSize: normalizeTerminalFontSize(Number(fontSize))
+            })
+          )
+        }
+      >
         <label htmlFor="default-cwd">Default working directory</label>
-        <div className="settings-inline-control">
-          <input
-            id="default-cwd"
-            value={defaultCwd}
-            onChange={(event) => {
-              setDefaultCwd(event.target.value);
-              setCwdStatus("idle");
-            }}
-            placeholder={activeWorkspace.path}
-          />
-          <button type="submit" disabled={cwdStatus === "saving"}>
-            {cwdStatus === "saving" ? "Saving" : "Save"}
-          </button>
-        </div>
-        <p>New terminals in this folder will start here. Existing profile cwd values are updated when you save.</p>
-        {cwdStatus === "saved" ? <span className="settings-save-state">Saved</span> : null}
+        <input id="default-cwd" value={defaultCwd} onChange={(event) => setDefaultCwd(event.target.value)} />
+        <label htmlFor="workspace-font-size">Terminal font size</label>
+        <input
+          id="workspace-font-size"
+          type="number"
+          min={10}
+          max={24}
+          step={1}
+          value={fontSize}
+          onChange={(event) => setFontSize(event.target.value)}
+        />
+        <SaveButton status={status} />
       </form>
-      <form className="settings-form" onSubmit={saveFontSize}>
-        <label htmlFor="terminal-font-size">Terminal font size</label>
-        <div className="settings-inline-control">
+    </div>
+  );
+}
+
+function CodexSettings({
+  activeWorkspace,
+  preferences,
+  onSave,
+  onWorkspaceChange
+}: {
+  activeWorkspace: TerminalWorkspace;
+  preferences: AppPreferences;
+  onSave: (next: Partial<AppPreferences>) => Promise<void>;
+  onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+}) {
+  const hasCodexProfile = activeWorkspace.profiles.some((profile) => profile.command === "codex");
+  const toggleCodex = async (enabled: boolean) => {
+    await onSave({ codexProfileEnabled: enabled });
+    if (enabled && !hasCodexProfile) {
+      await onWorkspaceChange({
+        ...activeWorkspace,
+        profiles: [
+          ...activeWorkspace.profiles,
+          createCodexProfile(activeWorkspace.defaultCwd || activeWorkspace.path, "CmdOrCtrl+2")
+        ]
+      });
+    }
+  };
+  return (
+    <div className="settings-page">
+      <SettingGroup title="Codex profile">
+        <label className="settings-check-row">
           <input
-            id="terminal-font-size"
-            type="number"
-            min={10}
-            max={24}
-            step={1}
-            value={fontSize}
-            onChange={(event) => {
-              setFontSize(event.target.value);
-              setFontStatus("idle");
-            }}
+            type="checkbox"
+            checked={preferences.codexProfileEnabled}
+            onChange={(event) => void toggleCodex(event.target.checked)}
           />
-          <button type="submit" disabled={fontStatus === "saving"}>
-            {fontStatus === "saving" ? "Saving" : "Save"}
-          </button>
-        </div>
-        <p>Applies to terminals in this folder.</p>
-        {fontStatus === "saved" ? <span className="settings-save-state">Saved</span> : null}
-      </form>
-      <SettingRow label="Shell marker" value="Hidden" />
-      <SettingRow label="Cursor" value="Focused pane only" />
-      <SettingRow label="Font" value={`Geist Mono, ${activeWorkspace.terminalFontSize || 13}px`} />
-      <SettingRow label="Splits" value="Warp-style shortcuts" />
+          <span>Add Codex profile to new workspaces</span>
+        </label>
+        <SettingRow label="Current workspace" value={hasCodexProfile ? "Codex profile present" : "No Codex profile"} />
+      </SettingGroup>
+    </div>
+  );
+}
+
+function GitSettings({
+  preferences,
+  onSave
+}: {
+  preferences: AppPreferences;
+  onSave: (next: Partial<AppPreferences>) => Promise<void>;
+}) {
+  return (
+    <div className="settings-page">
+      <SettingGroup title="Git panel">
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={preferences.gitPanelDefault === "open"}
+            onChange={(event) =>
+              void onSave({ gitPanelDefault: event.target.checked ? "open" : ("closed" as GitPanelDefault) })
+            }
+          />
+          <span>Open Git panel by default for repositories</span>
+        </label>
+      </SettingGroup>
+    </div>
+  );
+}
+
+function UpdateSettings({
+  preferences,
+  onSave
+}: {
+  preferences: AppPreferences;
+  onSave: (next: Partial<AppPreferences>) => Promise<void>;
+}) {
+  return (
+    <div className="settings-page">
+      <SettingGroup title="Update checks">
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={preferences.updateChecksEnabled}
+            onChange={(event) => void onSave({ updateChecksEnabled: event.target.checked })}
+          />
+          <span>Enable update checks</span>
+        </label>
+      </SettingGroup>
     </div>
   );
 }
@@ -391,29 +607,24 @@ function WorkflowSettings({
   const [args, setArgs] = useState("");
   const [cwd, setCwd] = useState("");
   const [splitDirection, setSplitDirection] = useState<"right" | "down">("down");
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
-
-  useEffect(() => {
-    setStatus("idle");
-  }, [activeWorkspace.id]);
+  const [status, setStatus] = useState("idle");
 
   const saveQuickCommand = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmedCommand = command.trim();
-    if (!trimmedCommand) {
+    if (!command.trim()) {
       return;
     }
+    setStatus("saving");
     const quickCommand: QuickCommand = {
       id: crypto.randomUUID(),
-      name: name.trim() || trimmedCommand,
-      command: trimmedCommand,
+      name: name.trim() || command.trim(),
+      command: command.trim(),
       args: splitArgs(args),
       cwd: cwd.trim() || undefined,
       env: {},
       shortcut: "",
       splitDirection
     };
-    setStatus("saving");
     await onWorkspaceChange({
       ...activeWorkspace,
       quickCommands: [...(activeWorkspace.quickCommands ?? []), quickCommand]
@@ -424,34 +635,6 @@ function WorkflowSettings({
     setCwd("");
     setStatus("saved");
     window.setTimeout(() => setStatus("idle"), 1200);
-  };
-
-  const deleteQuickCommand = async (id: string) => {
-    await onWorkspaceChange({
-      ...activeWorkspace,
-      quickCommands: (activeWorkspace.quickCommands ?? []).filter((item) => item.id !== id)
-    });
-  };
-
-  const renamePreset = async (id: string) => {
-    const preset = activeWorkspace.layoutPresets?.find((item) => item.id === id);
-    const nextName = window.prompt("Preset name", preset?.name)?.trim();
-    if (!preset || !nextName) {
-      return;
-    }
-    await onWorkspaceChange({
-      ...activeWorkspace,
-      layoutPresets: (activeWorkspace.layoutPresets ?? []).map((item) =>
-        item.id === id ? { ...item, name: nextName, updatedAt: new Date().toISOString() } : item
-      )
-    });
-  };
-
-  const deletePreset = async (id: string) => {
-    await onWorkspaceChange({
-      ...activeWorkspace,
-      layoutPresets: (activeWorkspace.layoutPresets ?? []).filter((item) => item.id !== id)
-    });
   };
 
   return (
@@ -475,47 +658,34 @@ function WorkflowSettings({
         </div>
         <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Command, e.g. npm" />
         <input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="Args, e.g. run test" />
-        <div className="settings-inline-control">
-          <input
-            value={cwd}
-            onChange={(event) => setCwd(event.target.value)}
-            placeholder={activeWorkspace.defaultCwd || activeWorkspace.path}
-          />
-          <button type="submit" disabled={status === "saving" || !command.trim()}>
-            {status === "saving" ? "Saving" : "Add"}
-          </button>
-        </div>
-        <p>Commands run in a new split terminal. Empty cwd uses the folder default.</p>
-        {status === "saved" ? <span className="settings-save-state">Saved</span> : null}
+        <input
+          value={cwd}
+          onChange={(event) => setCwd(event.target.value)}
+          placeholder={activeWorkspace.defaultCwd || activeWorkspace.path}
+        />
+        <SaveButton status={status} label="Add" />
       </form>
-
       <SettingGroup title="Quick commands">
         {(activeWorkspace.quickCommands ?? []).map((item) => (
           <div key={item.id} className="settings-list-row">
             <span>{item.name}</span>
             <code>{[item.command, ...item.args].join(" ")}</code>
-            <button type="button" onClick={() => void deleteQuickCommand(item.id)}>
+            <button
+              type="button"
+              onClick={() =>
+                void onWorkspaceChange({
+                  ...activeWorkspace,
+                  quickCommands: (activeWorkspace.quickCommands ?? []).filter(
+                    (commandItem) => commandItem.id !== item.id
+                  )
+                })
+              }
+            >
               Delete
             </button>
           </div>
         ))}
         {(activeWorkspace.quickCommands ?? []).length === 0 ? <p>No quick commands yet.</p> : null}
-      </SettingGroup>
-
-      <SettingGroup title="Layout presets">
-        {(activeWorkspace.layoutPresets ?? []).map((preset) => (
-          <div key={preset.id} className="settings-list-row">
-            <span>{preset.name}</span>
-            <code>{new Date(preset.updatedAt).toLocaleDateString()}</code>
-            <button type="button" onClick={() => void renamePreset(preset.id)}>
-              Rename
-            </button>
-            <button type="button" onClick={() => void deletePreset(preset.id)}>
-              Delete
-            </button>
-          </div>
-        ))}
-        {(activeWorkspace.layoutPresets ?? []).length === 0 ? <p>No saved layouts yet.</p> : null}
       </SettingGroup>
     </div>
   );
@@ -541,22 +711,75 @@ function SettingGroup({ title, children }: { title: string; children: ReactNode 
   );
 }
 
+function SaveButton({ status, label = "Save" }: { status: string; label?: string }) {
+  return (
+    <button type="submit" disabled={status === "saving"}>
+      {status === "saving" ? "Saving" : label}
+    </button>
+  );
+}
+
+async function saveForm(
+  event: FormEvent<HTMLFormElement>,
+  setStatus: (status: string) => void,
+  save: () => Promise<void>
+) {
+  event.preventDefault();
+  setStatus("saving");
+  await save();
+  setStatus("saved");
+  window.setTimeout(() => setStatus("idle"), 1200);
+}
+
+function profileDraft(profile: ConsoleProfile | undefined, cwd: string) {
+  return {
+    id: profile?.id ?? "",
+    name: profile?.name ?? "",
+    command: profile?.command ?? "",
+    args: profile?.args.join(" ") ?? "",
+    cwd: profile?.cwd ?? cwd,
+    env: Object.entries(profile?.env ?? {})
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n"),
+    shortcut: profile?.shortcut ?? "",
+    icon: profile?.appearance.icon ?? "terminal",
+    color: profile?.appearance.color ?? "#9ca3af"
+  };
+}
+
+function shellDraft(shell: ShellCandidate, cwd: string) {
+  return {
+    id: "",
+    name: shell.source === "custom" ? "" : shell.name,
+    command: shell.command,
+    args: shell.args.join(" "),
+    cwd,
+    env: "",
+    shortcut: "",
+    icon: "terminal",
+    color: "#9ca3af"
+  };
+}
+
+function parseEnvLines(value: string): Record<string, string> {
+  return Object.fromEntries(
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [key, ...rest] = line.split("=");
+        return [key.trim(), rest.join("=").trim()];
+      })
+      .filter(([key]) => key)
+  );
+}
+
 function splitArgs(value: string): string[] {
   return value
     .split(" ")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function clampTerminalFontSize(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 13;
-  }
-  return Math.min(24, Math.max(10, Math.round(value)));
-}
-
-function updateCheckMessage(result: AppUpdateCheckResult): string {
-  return result.message;
 }
 
 function updateCheckTone(result: AppUpdateCheckResult): "success" | "notice" | "error" {
@@ -576,8 +799,4 @@ function SettingRow({ label, value }: { label: string; value: string }) {
       <code>{value}</code>
     </div>
   );
-}
-
-function basename(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
 }

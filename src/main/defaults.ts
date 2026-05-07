@@ -1,5 +1,10 @@
 import { homedir } from "node:os";
-import type { AppSettings, ConsoleProfile, TerminalWorkspace } from "../shared/types";
+import {
+  DEFAULT_APP_PREFERENCES,
+  type AppSettings,
+  type ConsoleProfile,
+  type TerminalWorkspace
+} from "../shared/types";
 import { defaultShell } from "./shell";
 
 export function defaultProfiles(workspace: string): ConsoleProfile[] {
@@ -57,6 +62,10 @@ export function defaultSettings(): AppSettings {
     workspace,
     profiles,
     recentWorkspaces: [workspace],
+    appPreferences: {
+      ...DEFAULT_APP_PREFERENCES,
+      defaultTerminalProfileId: profiles[0]?.id
+    },
     activeWorkspaceId: defaultWorkspace.id,
     workspaces: [defaultWorkspace],
     layout: undefined

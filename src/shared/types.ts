@@ -77,6 +77,25 @@ export type GitOperationResult = {
   error?: string;
 };
 
+export type AppVersionInfo = {
+  name: string;
+  version: string;
+  repositoryUrl?: string;
+  updateCheckConfigured: boolean;
+};
+
+export type AppUpdateCheckStatus = "update-available" | "up-to-date" | "unavailable" | "error";
+
+export type AppUpdateCheckResult = {
+  status: AppUpdateCheckStatus;
+  currentVersion: string;
+  checkedAt: string;
+  message: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  repositoryUrl?: string;
+};
+
 export type AppSettings = {
   workspace: string;
   profiles: ConsoleProfile[];
@@ -84,6 +103,11 @@ export type AppSettings = {
   activeWorkspaceId?: string;
   workspaces?: TerminalWorkspace[];
   layout?: WorkbenchLayout;
+};
+
+export type SettingsLoadState = {
+  settings: AppSettings;
+  isFirstLaunch: boolean;
 };
 
 export type WorkbenchPane = {

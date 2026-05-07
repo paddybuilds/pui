@@ -1,12 +1,15 @@
 import type { PuiApi } from "../../../preload";
 import type {
   AppSettings,
+  AppUpdateCheckResult,
+  AppVersionInfo,
   CodexRun,
   ConsoleProfile,
   GitCommit,
   GitDiff,
   GitOperationResult,
   GitStatus,
+  SettingsLoadState,
   TerminalSession
 } from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
@@ -66,6 +69,7 @@ let settings: AppSettings = {
 
 const noopUnsubscribe = () => undefined;
 const bridgeBaseUrl = "http://127.0.0.1:4317";
+const previewVersion = "0.1.0";
 
 export function getPuiApi(): PuiApi {
   if (!window.pui) {
@@ -79,6 +83,19 @@ export function getPuiApi(): PuiApi {
 
 const browserPreviewApi: PuiApi = {
   platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : isPreviewWindows ? "win32" : "linux",
+  app: {
+    getVersionInfo: async (): Promise<AppVersionInfo> => ({
+      name: "pui",
+      version: previewVersion,
+      updateCheckConfigured: false
+    }),
+    checkForUpdates: async (): Promise<AppUpdateCheckResult> => ({
+      status: "unavailable",
+      currentVersion: previewVersion,
+      checkedAt: new Date().toISOString(),
+      message: "Update checks are unavailable in browser preview."
+    })
+  },
   dialog: {
     openFolder: async (defaultPath) =>
       bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })
@@ -86,6 +103,7 @@ const browserPreviewApi: PuiApi = {
         .catch(() => window.prompt("Folder path", defaultPath || workspace)?.trim() || undefined)
   },
   settings: {
+    loadState: async (): Promise<SettingsLoadState> => ({ settings, isFirstLaunch: false }),
     load: async () => settings,
     save: async (next) => {
       settings = next;

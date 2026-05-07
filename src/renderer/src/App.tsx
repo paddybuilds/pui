@@ -22,6 +22,7 @@ import { createQuickCommandProfile } from "../../shared/workflow";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { GitPanel } from "./components/DiffPanel";
+import { OnboardingPanel } from "./components/OnboardingPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import {
   disposeTerminalPane,
@@ -64,6 +65,7 @@ export function App() {
   const [activePaneId, setActivePaneId] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [gitSidebarOpen, setGitSidebarOpen] = useState(true);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
@@ -131,12 +133,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void pui.settings.load().then(async (loaded) => {
+    void pui.settings.loadState().then(async ({ settings: loaded, isFirstLaunch }) => {
       const normalized = normalizeSettings(loaded, pui.platform, newId);
       const initialWorkspace =
         normalized.workspaces?.find((workspace) => workspace.id === normalized.activeWorkspaceId) ??
         normalized.workspaces?.[0];
       setSettings(normalized);
+      if (isFirstLaunch) {
+        setOnboardingOpen(true);
+        return;
+      }
       if (initialWorkspace) {
         hydrateWorkspace(initialWorkspace);
         setActiveWorkspaceId(initialWorkspace.id);
@@ -155,6 +161,21 @@ export function App() {
       offGit();
     };
   }, [hydrateWorkspace, refreshGit, refreshWorkspaceGit]);
+
+  const completeOnboarding = async (nextSettings: AppSettings) => {
+    const normalized = normalizeSettings(nextSettings, pui.platform, newId);
+    const saved = normalizeSettings(await pui.settings.save(normalized), pui.platform, newId);
+    const initialWorkspace =
+      saved.workspaces?.find((workspace) => workspace.id === saved.activeWorkspaceId) ?? saved.workspaces?.[0];
+    setSettings(saved);
+    if (initialWorkspace) {
+      hydrateWorkspace(initialWorkspace);
+      setActiveWorkspaceId(initialWorkspace.id);
+      void refreshWorkspaceGit(initialWorkspace.path);
+    }
+    didHydrateRef.current = true;
+    setOnboardingOpen(false);
+  };
 
   useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {
@@ -695,6 +716,17 @@ export function App() {
 
   if (!settings) {
     return <div className="boot">loading shell</div>;
+  }
+
+  if (onboardingOpen) {
+    return (
+      <OnboardingPanel
+        settings={settings}
+        platform={pui.platform}
+        onOpenFolder={pui.dialog.openFolder}
+        onComplete={completeOnboarding}
+      />
+    );
   }
 
   return (

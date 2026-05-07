@@ -1,8 +1,13 @@
 export const ipc = {
+  app: {
+    versionInfo: "app:version-info",
+    checkForUpdates: "app:check-for-updates"
+  },
   dialog: {
     openFolder: "dialog:open-folder"
   },
   settings: {
+    loadState: "settings:load-state",
     load: "settings:load",
     save: "settings:save"
   },

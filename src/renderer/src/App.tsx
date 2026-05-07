@@ -26,6 +26,7 @@ import {
 import type {
   AppSettings,
   ConsoleProfile,
+  FileSystemEntry,
   GitStatus,
   LayoutPreset,
   QuickCommand,
@@ -34,6 +35,7 @@ import type {
 } from "../../shared/types";
 import { createQuickCommandProfile } from "../../shared/workflow";
 import { CommandPalette } from "./components/CommandPalette";
+import { CodeWorkspace } from "./components/CodeWorkspace";
 import { ContextMenu } from "./components/ContextMenu";
 import { DevSettingsModal } from "./components/DevSettingsModal";
 import { GitPanel } from "./components/DiffPanel";
@@ -48,6 +50,17 @@ import {
 } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
+import {
+  type CodeFileTab,
+  type WorkspaceView,
+  createLoadedCodeTab,
+  createLoadingCodeTab,
+  markCodeTabError,
+  markCodeTabSaved,
+  nextActiveCodeTabPath,
+  updateCodeTabContents,
+  upsertCodeTab
+} from "./lib/codeWorkspace";
 import { getDevToolsFlagState } from "./lib/devFlags";
 import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
 import { applyThemePreferences, readTitleBarTheme, resolveTerminalTheme, themeKey } from "./lib/theme";
@@ -88,6 +101,9 @@ export function App() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingDismissible, setOnboardingDismissible] = useState(false);
   const [activeSidePanel, setActiveSidePanel] = useState<WorkspaceSidePanel | null>("git");
+  const [activeWorkspaceView, setActiveWorkspaceView] = useState<WorkspaceView>("terminal");
+  const [codeTabsByWorkspace, setCodeTabsByWorkspace] = useState<Record<string, CodeFileTab[]>>({});
+  const [activeCodePathByWorkspace, setActiveCodePathByWorkspace] = useState<Record<string, string | undefined>>({});
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
@@ -118,6 +134,8 @@ export function App() {
   const profiles = useMemo(() => activeWorkspace?.profiles ?? [], [activeWorkspace?.profiles]);
   const panes = useMemo(() => (layoutRoot ? collectPanes(layoutRoot) : []), [layoutRoot]);
   const activeWorkspaceSessions = activeWorkspace ? (sessionsByWorkspace[activeWorkspace.id] ?? {}) : {};
+  const activeCodeTabs = activeWorkspace ? (codeTabsByWorkspace[activeWorkspace.id] ?? []) : [];
+  const activeCodePath = activeWorkspace ? activeCodePathByWorkspace[activeWorkspace.id] : undefined;
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
   const fileExplorerVisible = Boolean(activeWorkspace?.kind !== "quick" && activeSidePanel === "files");
   const gitSidebarVisible = Boolean(
@@ -282,12 +300,96 @@ export function App() {
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
+      setActiveWorkspaceView("terminal");
       setGitStatus(null);
     } else {
       await refreshWorkspaceGit(workspace.path);
     }
     setPaletteOpen(false);
     closeContextMenu();
+  };
+
+  const openCodeFile = async (entry: FileSystemEntry) => {
+    if (!activeWorkspace || activeWorkspace.kind === "quick" || entry.kind !== "file") {
+      return;
+    }
+    const workspace = activeWorkspace;
+    setActiveWorkspaceView("code");
+    setCodeTabsByWorkspace((current) => ({
+      ...current,
+      [workspace.id]: upsertCodeTab(current[workspace.id] ?? [], createLoadingCodeTab(entry.path))
+    }));
+    setActiveCodePathByWorkspace((current) => ({ ...current, [workspace.id]: entry.path }));
+
+    try {
+      const file = await pui.fileSystem.readFile(workspace.path, entry.path);
+      setCodeTabsByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: upsertCodeTab(current[workspace.id] ?? [], createLoadedCodeTab(file))
+      }));
+    } catch (error) {
+      setCodeTabsByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: markCodeTabError(
+          current[workspace.id] ?? [],
+          entry.path,
+          error instanceof Error ? error.message : String(error)
+        )
+      }));
+    }
+  };
+
+  const updateCodeTab = (path: string, contents: string) => {
+    if (!activeWorkspace) {
+      return;
+    }
+    setCodeTabsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspace.id]: updateCodeTabContents(current[activeWorkspace.id] ?? [], path, contents)
+    }));
+  };
+
+  const saveCodeTab = async (path: string) => {
+    if (!activeWorkspace || activeWorkspace.kind === "quick") {
+      return;
+    }
+    const workspace = activeWorkspace;
+    const tab = (codeTabsByWorkspace[workspace.id] ?? []).find((item) => item.path === path);
+    if (!tab) {
+      return;
+    }
+    try {
+      const result = await pui.fileSystem.writeFile(workspace.path, path, tab.contents);
+      setCodeTabsByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: markCodeTabSaved(current[workspace.id] ?? [], path, result)
+      }));
+      void refreshWorkspaceGit(workspace.path);
+    } catch (error) {
+      setCodeTabsByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: markCodeTabError(
+          current[workspace.id] ?? [],
+          path,
+          error instanceof Error ? error.message : String(error)
+        )
+      }));
+    }
+  };
+
+  const closeCodeTab = (path: string) => {
+    if (!activeWorkspace) {
+      return;
+    }
+    const workspaceId = activeWorkspace.id;
+    setCodeTabsByWorkspace((current) => {
+      const tabs = current[workspaceId] ?? [];
+      return { ...current, [workspaceId]: tabs.filter((tab) => tab.path !== path) };
+    });
+    setActiveCodePathByWorkspace((current) => ({
+      ...current,
+      [workspaceId]: nextActiveCodeTabPath(codeTabsByWorkspace[workspaceId] ?? [], path, current[workspaceId])
+    }));
   };
 
   const applyWorkspaceLayout = useCallback(
@@ -501,6 +603,7 @@ export function App() {
     setSettings(normalizeSettings(saved, pui.platform, newId));
     activeGitWorkspaceRef.current = null;
     setActiveWorkspaceId(quickTerminal.id);
+    setActiveWorkspaceView("terminal");
     hydrateWorkspace(quickTerminal);
     setGitStatus(null);
   };
@@ -986,6 +1089,28 @@ export function App() {
             <strong>{activeWorkspace ? activeFolderTitle : "No folder open"}</strong>
             <span>{activeWorkspace ? activeFolderSubtitle : "Open a folder to start a terminal session"}</span>
           </div>
+          {activeWorkspace?.kind !== "quick" ? (
+            <div className="workspace-view-switch" role="tablist" aria-label="Workspace view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeWorkspaceView === "terminal"}
+                className={activeWorkspaceView === "terminal" ? "active" : ""}
+                onClick={() => setActiveWorkspaceView("terminal")}
+              >
+                Terminal
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeWorkspaceView === "code"}
+                className={activeWorkspaceView === "code" ? "active" : ""}
+                onClick={() => setActiveWorkspaceView("code")}
+              >
+                Code
+              </button>
+            </div>
+          ) : null}
           <div className="workspace-topbar-actions">
             {activeWorkspace ? (
               <>
@@ -1047,41 +1172,57 @@ export function App() {
           }}
         >
           {activeWorkspace && layoutRoot ? (
-            <section className="terminal-grid">
-              <PaneTree
-                node={layoutRoot}
-                profilesById={profilesById}
-                fallbackProfile={profiles[0]}
-                workspaceName={activeFolderTitle}
-                terminalFontSize={activeWorkspace.terminalFontSize}
-                terminalTheme={terminalTheme}
-                terminalThemeKey={terminalThemeKey}
-                activePaneId={activePaneId}
-                workspaceId={activeWorkspace.id}
-                showHeaders={panes.length > 1}
-                canClosePanes={panes.length > 1}
-                sessionsByPane={activeWorkspaceSessions}
-                onFocus={setActivePaneId}
-                onClosePane={closePane}
-                onPaneContextMenu={openPaneContextMenu}
-                onSplitPane={splitPaneById}
-                onResizeSplit={resizeSplit}
-                onSession={(paneId, sessionId) =>
-                  setSessionsByWorkspace((current) => {
-                    const workspaceSessions = current[activeWorkspace.id] ?? {};
-                    if (workspaceSessions[paneId] === sessionId) {
-                      return current;
-                    }
-                    return {
-                      ...current,
-                      [activeWorkspace.id]: {
-                        ...workspaceSessions,
-                        [paneId]: sessionId
+            <section className="workspace-main-stack">
+              <div className={activeWorkspaceView === "terminal" ? "terminal-grid" : "terminal-grid hidden-view"}>
+                <PaneTree
+                  node={layoutRoot}
+                  profilesById={profilesById}
+                  fallbackProfile={profiles[0]}
+                  workspaceName={activeFolderTitle}
+                  terminalFontSize={activeWorkspace.terminalFontSize}
+                  terminalTheme={terminalTheme}
+                  terminalThemeKey={terminalThemeKey}
+                  activePaneId={activePaneId}
+                  workspaceId={activeWorkspace.id}
+                  showHeaders={panes.length > 1}
+                  canClosePanes={panes.length > 1}
+                  sessionsByPane={activeWorkspaceSessions}
+                  onFocus={setActivePaneId}
+                  onClosePane={closePane}
+                  onPaneContextMenu={openPaneContextMenu}
+                  onSplitPane={splitPaneById}
+                  onResizeSplit={resizeSplit}
+                  onSession={(paneId, sessionId) =>
+                    setSessionsByWorkspace((current) => {
+                      const workspaceSessions = current[activeWorkspace.id] ?? {};
+                      if (workspaceSessions[paneId] === sessionId) {
+                        return current;
                       }
-                    };
-                  })
-                }
-              />
+                      return {
+                        ...current,
+                        [activeWorkspace.id]: {
+                          ...workspaceSessions,
+                          [paneId]: sessionId
+                        }
+                      };
+                    })
+                  }
+                />
+              </div>
+              {activeWorkspace.kind !== "quick" ? (
+                <div className={activeWorkspaceView === "code" ? "code-grid" : "code-grid hidden-view"}>
+                  <CodeWorkspace
+                    tabs={activeCodeTabs}
+                    activePath={activeCodePath}
+                    onActivate={(path) =>
+                      setActiveCodePathByWorkspace((current) => ({ ...current, [activeWorkspace.id]: path }))
+                    }
+                    onChange={updateCodeTab}
+                    onSave={saveCodeTab}
+                    onClose={closeCodeTab}
+                  />
+                </div>
+              ) : null}
             </section>
           ) : (
             <section className="empty-workbench">
@@ -1110,6 +1251,7 @@ export function App() {
                     workspace={activeWorkspace.path}
                     workspaceName={activeFolderTitle}
                     gitStatus={gitStatus}
+                    onOpenFile={(entry) => void openCodeFile(entry)}
                   />
                 ) : (
                   <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />

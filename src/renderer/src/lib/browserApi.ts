@@ -70,7 +70,7 @@ const bridgeBaseUrl = "http://127.0.0.1:4317";
 const previewVersion = "0.1.0";
 const previewFiles = new Map<string, string>([
   ["package.json", '{\n  "name": "pui",\n  "version": "0.1.0"\n}\n'],
-  ["src/App.tsx", 'export function App() {\n  return <div>Pui preview</div>;\n}\n']
+  ["src/App.tsx", "export function App() {\n  return <div>Pui preview</div>;\n}\n"]
 ]);
 
 export function getPuiApi(): PuiApi {

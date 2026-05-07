@@ -1,0 +1,53 @@
+import { describe, expect, it } from "vitest";
+import {
+  createLoadedCodeTab,
+  createLoadingCodeTab,
+  markCodeTabSaved,
+  nextActiveCodeTabPath,
+  updateCodeTabContents,
+  upsertCodeTab
+} from "./codeWorkspace";
+
+describe("code workspace tab helpers", () => {
+  it("creates and updates dirty tabs", () => {
+    const loaded = createLoadedCodeTab({
+      path: "/repo/src/App.tsx",
+      relativePath: "src/App.tsx",
+      name: "App.tsx",
+      contents: "before",
+      size: 6,
+      modifiedAt: "2026-05-07T22:00:00.000Z"
+    });
+
+    const changed = updateCodeTabContents([loaded], loaded.path, "after");
+    expect(changed[0]).toMatchObject({ contents: "after", dirty: true });
+    expect(markCodeTabSaved(changed, loaded.path, { size: 5, modifiedAt: "now" })[0]).toMatchObject({
+      savedContents: "after",
+      dirty: false,
+      size: 5
+    });
+  });
+
+  it("upserts loading and loaded tabs by path", () => {
+    const loading = createLoadingCodeTab("/repo/README.md");
+    const loaded = createLoadedCodeTab({
+      path: "/repo/README.md",
+      relativePath: "README.md",
+      name: "README.md",
+      contents: "readme",
+      size: 6,
+      modifiedAt: "now"
+    });
+
+    expect(upsertCodeTab([], loading)).toHaveLength(1);
+    expect(upsertCodeTab([loading], loaded)).toEqual([loaded]);
+  });
+
+  it("selects the nearest tab after closing the active tab", () => {
+    const tabs = ["/repo/a.ts", "/repo/b.ts", "/repo/c.ts"].map(createLoadingCodeTab);
+
+    expect(nextActiveCodeTabPath(tabs, "/repo/b.ts", "/repo/b.ts")).toBe("/repo/a.ts");
+    expect(nextActiveCodeTabPath(tabs, "/repo/b.ts", "/repo/c.ts")).toBe("/repo/c.ts");
+    expect(nextActiveCodeTabPath([tabs[0]], "/repo/a.ts", "/repo/a.ts")).toBeUndefined();
+  });
+});

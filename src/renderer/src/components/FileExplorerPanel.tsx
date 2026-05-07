@@ -7,6 +7,7 @@ type FileExplorerPanelProps = {
   workspace: string;
   workspaceName: string;
   gitStatus: GitStatus | null;
+  onOpenFile: (entry: FileSystemEntry) => void;
 };
 
 type DirectoryState = {
@@ -17,7 +18,7 @@ type DirectoryState = {
 
 const pui = getPuiApi();
 
-export function FileExplorerPanel({ workspace, workspaceName, gitStatus }: FileExplorerPanelProps) {
+export function FileExplorerPanel({ workspace, workspaceName, gitStatus, onOpenFile }: FileExplorerPanelProps) {
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set([workspace]));
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
 
@@ -105,6 +106,7 @@ export function FileExplorerPanel({ workspace, workspaceName, gitStatus }: FileE
             directories={directories}
             gitFileStatusByPath={gitFileStatusByPath}
             changedDirectoryPaths={changedDirectoryPaths}
+            onOpenFile={onOpenFile}
             onToggleDirectory={toggleDirectory}
           />
         ))}
@@ -123,6 +125,7 @@ function FileTreeEntry({
   directories,
   gitFileStatusByPath,
   changedDirectoryPaths,
+  onOpenFile,
   onToggleDirectory
 }: {
   entry: FileSystemEntry;
@@ -131,6 +134,7 @@ function FileTreeEntry({
   directories: Record<string, DirectoryState>;
   gitFileStatusByPath: Map<string, GitFileStatus>;
   changedDirectoryPaths: Set<string>;
+  onOpenFile: (entry: FileSystemEntry) => void;
   onToggleDirectory: (entry: FileSystemEntry) => void;
 }) {
   const isDirectory = entry.kind === "directory";
@@ -154,6 +158,8 @@ function FileTreeEntry({
         onClick={() => {
           if (isDirectory) {
             onToggleDirectory(entry);
+          } else {
+            onOpenFile(entry);
           }
         }}
       >
@@ -185,6 +191,7 @@ function FileTreeEntry({
               directories={directories}
               gitFileStatusByPath={gitFileStatusByPath}
               changedDirectoryPaths={changedDirectoryPaths}
+              onOpenFile={onOpenFile}
               onToggleDirectory={onToggleDirectory}
             />
           ))}

@@ -15,6 +15,14 @@ export function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean
   return modifierMatch && event.key.toLowerCase() === key;
 }
 
-export function shortcutLabel(shortcut: string): string {
+export function shortcutLabel(shortcut: string, platform = "darwin"): string {
+  if (platform === "win32" || platform === "linux") {
+    return shortcut
+      .replace("CmdOrCtrl", "Ctrl")
+      .replace("Command", "Ctrl")
+      .replace("Cmd", "Ctrl")
+      .replace(/\+/g, " + ");
+  }
+
   return shortcut.replace("CmdOrCtrl", "⌘").replace("Ctrl", "⌃").replace("Alt", "⌥").replace("Shift", "⇧");
 }

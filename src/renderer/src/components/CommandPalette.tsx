@@ -1,6 +1,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { ArrowDownToLine, GitCompare, PanelRightOpen, Play, Save } from "lucide-react";
 import type { LayoutPreset, QuickCommand, TerminalWorkspace } from "../../../shared/types";
+import { shortcutLabel } from "../lib/shortcuts";
 
 type PaletteCommand = {
   id: string;
@@ -16,6 +17,7 @@ type CommandPaletteProps = {
   onOpenWorkspace: (workspace: TerminalWorkspace) => void;
   onSplitRight: () => void;
   onSplitDown: () => void;
+  platform: string;
   layoutPresets: LayoutPreset[];
   quickCommands: QuickCommand[];
   onSaveLayoutPreset: () => void;
@@ -31,6 +33,7 @@ export function CommandPalette({
   onOpenWorkspace,
   onSplitRight,
   onSplitDown,
+  platform,
   layoutPresets,
   quickCommands,
   onSaveLayoutPreset,
@@ -49,8 +52,20 @@ export function CommandPalette({
           shortcut: "",
           action: () => onOpenWorkspace(workspace)
         })),
-        { id: "split-right", label: "Split pane right", shortcut: "⌘D", action: onSplitRight, icon: <PanelRightOpen size={16} /> },
-        { id: "split-down", label: "Split pane down", shortcut: "⇧⌘D", action: onSplitDown, icon: <ArrowDownToLine size={16} /> },
+        {
+          id: "split-right",
+          label: "Split pane right",
+          shortcut: shortcutLabel("CmdOrCtrl+D", platform),
+          action: onSplitRight,
+          icon: <PanelRightOpen size={16} />
+        },
+        {
+          id: "split-down",
+          label: "Split pane down",
+          shortcut: shortcutLabel("CmdOrCtrl+Shift+D", platform),
+          action: onSplitDown,
+          icon: <ArrowDownToLine size={16} />
+        },
         { id: "save-layout", label: "Save current layout preset", shortcut: "", action: onSaveLayoutPreset, icon: <Save size={16} /> },
         ...layoutPresets.map((preset) => ({
           id: `preset:${preset.id}`,
@@ -80,6 +95,7 @@ export function CommandPalette({
       onShowGit,
       onSplitDown,
       onSplitRight,
+      platform,
       quickCommands,
       showGit,
       workspaces

@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Keyboard, Monitor, Play, Settings, TerminalSquare, X } from "lucide-react";
 import type { AppSettings, QuickCommand, TerminalWorkspace } from "../../../shared/types";
+import { shortcutLabel } from "../lib/shortcuts";
 
 type SettingsSection = "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
 
@@ -8,6 +9,7 @@ type SettingsModalProps = {
   settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
   onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+  platform: string;
   onClose: () => void;
 };
 
@@ -19,7 +21,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }>
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={15} /> }
 ];
 
-export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, onClose }: SettingsModalProps) {
+export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, platform, onClose }: SettingsModalProps) {
   const [section, setSection] = useState<SettingsSection>("general");
   const activeSection = sections.find((item) => item.id === section) ?? sections[0];
 
@@ -62,7 +64,7 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, on
           {section === "workflow" ? (
             <WorkflowSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
           ) : null}
-          {section === "shortcuts" ? <ShortcutSettings /> : null}
+          {section === "shortcuts" ? <ShortcutSettings platform={platform} /> : null}
         </main>
       </section>
     </div>
@@ -383,12 +385,13 @@ function WorkflowSettings({
   );
 }
 
-function ShortcutSettings() {
+function ShortcutSettings({ platform }: { platform: string }) {
   return (
     <div className="settings-page">
-      <SettingRow label="Command palette" value="Cmd K" />
-      <SettingRow label="Split right" value="Cmd D" />
-      <SettingRow label="Split down" value="Shift Cmd D" />
+      <SettingRow label="Command palette" value={shortcutLabel("CmdOrCtrl+K", platform)} />
+      <SettingRow label="Split right" value={shortcutLabel("CmdOrCtrl+D", platform)} />
+      <SettingRow label="Split down" value={shortcutLabel("CmdOrCtrl+Shift+D", platform)} />
+      <SettingRow label="Close pane" value={shortcutLabel("CmdOrCtrl+W", platform)} />
     </div>
   );
 }

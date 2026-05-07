@@ -27,6 +27,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { disposeTerminalPane, disposeTerminalPanes, moveTerminalPaneRecord, TerminalPane } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
+import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
 
 type Pane = WorkbenchPane & {
   sessionId?: string;
@@ -263,25 +264,32 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (isEditableShortcutTarget(event.target) && !matchesShortcut(event, "CmdOrCtrl+K")) {
+        return;
+      }
+      if (matchesShortcut(event, "CmdOrCtrl+K")) {
         event.preventDefault();
         setPaletteOpen(true);
         return;
       }
-      if (event.metaKey && !event.shiftKey && event.key.toLowerCase() === "d") {
+      if (matchesShortcut(event, "CmdOrCtrl+D")) {
         event.preventDefault();
         splitActivePane("right");
         return;
       }
-      if (event.metaKey && event.shiftKey && event.key.toLowerCase() === "d") {
+      if (matchesShortcut(event, "CmdOrCtrl+Shift+D")) {
         event.preventDefault();
         splitActivePane("down");
         return;
       }
+      if (matchesShortcut(event, "CmdOrCtrl+W")) {
+        event.preventDefault();
+        closePane(activePaneId);
+      }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [splitActivePane]);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [activePaneId, closePane, splitActivePane]);
 
   const openFolder = async () => {
     if (!settings) {
@@ -588,21 +596,21 @@ export function App() {
       {
         id: "split-right",
         label: "Split right",
-        shortcut: "Cmd D",
+        shortcut: shortcutLabel("CmdOrCtrl+D", pui.platform),
         icon: <PanelRight size={14} />,
         onSelect: () => splitPaneById(paneId, "right")
       },
       {
         id: "split-down",
         label: "Split down",
-        shortcut: "Shift Cmd D",
+        shortcut: shortcutLabel("CmdOrCtrl+Shift+D", pui.platform),
         icon: <PanelTop size={14} />,
         onSelect: () => splitPaneById(paneId, "down")
       },
       {
         id: "close-pane",
         label: panes.length <= 1 ? "Cannot close last pane" : "Close pane",
-        shortcut: "Cmd W",
+        shortcut: shortcutLabel("CmdOrCtrl+W", pui.platform),
         icon: <X size={14} />,
         destructive: true,
         disabled: panes.length <= 1,
@@ -876,6 +884,7 @@ export function App() {
           onOpenWorkspace={switchWorkspace}
           onSplitRight={() => splitActivePane("right")}
           onSplitDown={() => splitActivePane("down")}
+          platform={pui.platform}
           layoutPresets={activeWorkspace?.kind !== "quick" ? activeWorkspace?.layoutPresets ?? [] : []}
           quickCommands={activeWorkspace?.kind !== "quick" ? activeWorkspace?.quickCommands ?? [] : []}
           onSaveLayoutPreset={() => void saveCurrentLayoutPreset()}
@@ -891,6 +900,7 @@ export function App() {
           settings={settings}
           activeWorkspace={activeWorkspace}
           onWorkspaceChange={updateActiveWorkspace}
+          platform={pui.platform}
           onClose={() => setSettingsOpen(false)}
         />
       ) : null}
@@ -1359,6 +1369,13 @@ function createShellProfile(path: string, shortcut: string): ConsoleProfile {
       icon: "terminal"
     }
   };
+}
+
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 function defaultShellProfile(): { name: string; command: string; args: string[] } {

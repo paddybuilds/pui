@@ -50,7 +50,7 @@
 }
 
 :root[data-density="compact"] {
-  --titlebar-height: 38px;
+  --titlebar-height: 44px;
 }
 
 * {
@@ -393,14 +393,9 @@ kbd {
   padding-top: 58px;
 }
 
-.platform-win32 .sidebar,
-.platform-linux .sidebar {
-  padding-top: calc(var(--titlebar-height) + 8px);
-}
-
 .platform-win32 .workspace-topbar,
 .platform-linux .workspace-topbar {
-  padding-right: var(--window-controls-width);
+  padding-right: calc(var(--window-controls-width) + 12px);
 }
 
 .platform-browser .workspace-topbar {
@@ -631,7 +626,7 @@ kbd {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 0 12px 0 14px;
+  padding: 0 12px 0 16px;
   background: var(--surface-root);
   border-bottom: 1px solid var(--line-soft);
   -webkit-app-region: drag;
@@ -675,11 +670,16 @@ kbd {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .workspace-topbar-actions button {
+  position: relative;
+  width: 30px;
   height: 30px;
-  padding: 0 9px;
+  min-width: 0;
+  justify-content: center;
+  padding: 0;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -690,7 +690,17 @@ kbd {
   background: var(--surface-hover);
 }
 
+.workspace-topbar-actions button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-topbar-actions small {
+  position: absolute;
+  top: 2px;
+  right: 2px;
   min-width: 16px;
   height: 16px;
   display: grid;
@@ -699,6 +709,8 @@ kbd {
   background: var(--surface-active);
   color: var(--text);
   font-size: 10px;
+  pointer-events: none;
+  transform: translate(40%, -35%);
 }
 
 .terminal-grid {
@@ -914,10 +926,6 @@ kbd {
   box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
-.workbench {
-  grid-template-rows: 38px minmax(0, 1fr);
-}
-
 .workspace-topbar {
   background: color-mix(in srgb, var(--surface-root) 96%, transparent);
   border-bottom-color: var(--line-soft);
@@ -932,8 +940,8 @@ kbd {
 }
 
 .workspace-topbar-actions button {
-  height: 26px;
-  padding: 0 8px;
+  height: 30px;
+  padding: 0;
 }
 
 .terminal-grid,

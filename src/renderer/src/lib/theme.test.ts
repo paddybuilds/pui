@@ -6,6 +6,8 @@ import {
   DARK_THEME_TOKENS,
   LIGHT_THEME_TOKENS,
   readTerminalTheme,
+  readTitleBarTheme,
+  resolveTerminalTheme,
   resolveThemeTokens,
   themeKey
 } from "./theme";
@@ -33,6 +35,28 @@ describe("theme helpers", () => {
   it("uses the system scheme for system theme preferences", () => {
     expect(resolveThemeTokens({ themePreset: "system" }, "dark")).toMatchObject(DARK_THEME_TOKENS);
     expect(resolveThemeTokens({ themePreset: "system" }, "light")).toMatchObject(LIGHT_THEME_TOKENS);
+  });
+
+  it("resolves terminal theme directly from preferences", () => {
+    expect(
+      resolveTerminalTheme(
+        {
+          themePreset: "dark",
+          customTheme: {
+            terminalBackground: "#101010",
+            terminalForeground: "#fafafa",
+            terminalCursor: "#ff00aa",
+            terminalSelection: "#334455"
+          }
+        },
+        "light"
+      )
+    ).toEqual({
+      background: "#101010",
+      foreground: "#fafafa",
+      cursor: "#ff00aa",
+      selectionBackground: "#334455"
+    });
   });
 
   it("applies theme preferences as root data attributes and CSS variables", () => {
@@ -75,6 +99,20 @@ describe("theme helpers", () => {
       foreground: "#aabbcc",
       cursor: "#ddeeff",
       selectionBackground: "#112233"
+    });
+
+    root.remove();
+  });
+
+  it("reads native titlebar theme variables", () => {
+    const root = document.createElement("div");
+    root.style.setProperty("--surface-root", "#f8fafc");
+    root.style.setProperty("--text-muted", "#475569");
+    document.body.append(root);
+
+    expect(readTitleBarTheme(root)).toEqual({
+      color: "#f8fafc",
+      symbolColor: "#475569"
     });
 
     root.remove();

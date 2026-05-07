@@ -78,6 +78,11 @@ export type AppUpdateCheckResult = {
   repositoryUrl?: string;
 };
 
+export type TitleBarTheme = {
+  color: string;
+  symbolColor: string;
+};
+
 export type ThemePreset = "system" | "light" | "dark";
 
 export type AppDensity = "comfortable" | "compact";

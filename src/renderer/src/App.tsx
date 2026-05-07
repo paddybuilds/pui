@@ -815,7 +815,7 @@ export function App() {
               terminalFontSize={activeWorkspace.terminalFontSize}
               activePaneId={activePaneId}
               workspaceId={activeWorkspace.id}
-              showHeaders={true}
+              showHeaders={panes.length > 1}
               canClosePanes={panes.length > 1}
               sessionsByPane={activeWorkspaceSessions}
               onFocus={setActivePaneId}

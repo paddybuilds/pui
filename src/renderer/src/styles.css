@@ -12,10 +12,12 @@
   --font-mono: "Geist Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --surface-root: #090b0f;
   --surface-sidebar: #0c1015;
-  --surface-panel: #10141a;
-  --surface-hover: rgba(148, 163, 184, 0.08);
-  --surface-active: rgba(148, 163, 184, 0.12);
-  --line-soft: rgba(148, 163, 184, 0.1);
+  --surface-panel: #0f1319;
+  --surface-raised: #121821;
+  --surface-hover: rgba(148, 163, 184, 0.075);
+  --surface-active: rgba(148, 163, 184, 0.13);
+  --line-soft: rgba(148, 163, 184, 0.09);
+  --line-strong: rgba(148, 163, 184, 0.16);
   --text-strong: #f1f5f9;
   --text: #d8dee6;
   --text-muted: #8b95a5;
@@ -126,11 +128,12 @@ kbd {
   height: 100vh;
   display: grid;
   grid-template-columns: 224px 5px minmax(0, 1fr);
-  background: var(--surface-root);
+  background: #080b10;
 }
 
 .sidebar {
-  background: var(--surface-sidebar);
+  background: linear-gradient(180deg, #0c1016 0%, #090d12 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.08);
   padding: 14px 10px;
   display: flex;
   flex-direction: column;
@@ -631,6 +634,71 @@ kbd {
 .terminal-host .xterm-rows span.xterm-bold.xterm-bg-257.xterm-fg-257:not(.xterm-cursor) {
   color: transparent !important;
   background-color: transparent !important;
+}
+
+.workspace-button {
+  height: 34px;
+  border-radius: 7px;
+}
+
+.workspace-button span:first-child {
+  width: 24px;
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.workspace-button.active {
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.06);
+}
+
+.workbench {
+  grid-template-rows: 38px minmax(0, 1fr);
+}
+
+.workspace-topbar {
+  background: rgba(9, 12, 17, 0.96);
+  border-bottom-color: rgba(148, 163, 184, 0.07);
+}
+
+.workspace-topbar-title strong {
+  font-size: 12px;
+}
+
+.workspace-topbar-title span {
+  font-size: 10px;
+}
+
+.workspace-topbar-actions button {
+  height: 26px;
+  padding: 0 8px;
+}
+
+.terminal-grid,
+.pane-split {
+  background: #0c1016;
+}
+
+.workspace-side-panel {
+  background: #0b0f14;
+  border-left: 1px solid rgba(148, 163, 184, 0.07);
+}
+
+.terminal-pane {
+  grid-template-rows: minmax(0, 1fr);
+  background: #10141a;
+}
+
+.terminal-pane.has-header {
+  grid-template-rows: 24px minmax(0, 1fr);
+}
+
+.pane-header {
+  background: rgba(9, 12, 17, 0.56);
+  border-bottom-color: rgba(148, 163, 184, 0.075);
+}
+
+.terminal-host {
+  padding: 10px 12px;
 }
 
 .diff-panel,

@@ -187,7 +187,7 @@ export function TerminalPane({
 
   return (
     <div
-      className={active ? "terminal-pane active" : "terminal-pane inactive"}
+      className={`${active ? "terminal-pane active" : "terminal-pane inactive"}${showHeader ? " has-header" : ""}`}
       tabIndex={0}
       onMouseDown={focusPane}
       onContextMenu={onContextMenu}

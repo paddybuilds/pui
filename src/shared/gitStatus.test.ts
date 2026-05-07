@@ -9,4 +9,16 @@ describe("parseGitStatus", () => {
       { path: "new.ts", indexStatus: "R", workingTreeStatus: " " }
     ]);
   });
+
+  it("handles CRLF output without trimming porcelain paths", () => {
+    expect(parseGitStatus("?? spaced file.txt \r\n")).toEqual([
+      { path: "spaced file.txt ", indexStatus: "?", workingTreeStatus: "?" }
+    ]);
+  });
+
+  it("can trim paths for the terminal bridge compatibility path", () => {
+    expect(parseGitStatus("?? spaced file.txt \r\n", { trimPaths: true })).toEqual([
+      { path: "spaced file.txt", indexStatus: "?", workingTreeStatus: "?" }
+    ]);
+  });
 });

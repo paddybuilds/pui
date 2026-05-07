@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { promisify } from "node:util";
 import { WebSocketServer } from "ws";
 import pty from "node-pty";
+import { parseGitStatus } from "../src/shared/gitStatusParser.js";
 
 const port = Number(process.env.PUI_TERMINAL_BRIDGE_PORT || 4317);
 const sessions = new Map();
@@ -306,7 +307,7 @@ async function getGitStatus(workspace) {
       workspace,
       isRepo: true,
       branch: branchResult.stdout.trim() || "HEAD",
-      files: parseGitStatus(statusResult.stdout)
+      files: parseGitStatus(statusResult.stdout, { trimPaths: true })
     };
   } catch (error) {
     return {
@@ -432,21 +433,4 @@ async function gitOperation(workspace, args) {
       error: error?.stderr || error?.message || String(error)
     };
   }
-}
-
-function parseGitStatus(output) {
-  return output
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const indexStatus = line[0] ?? " ";
-      const workingTreeStatus = line[1] ?? " ";
-      const rawPath = line.slice(3);
-      const renamedPath = rawPath.includes(" -> ") ? rawPath.split(" -> ").at(-1) || rawPath : rawPath;
-      return {
-        path: renamedPath.trim(),
-        indexStatus,
-        workingTreeStatus
-      };
-    });
 }

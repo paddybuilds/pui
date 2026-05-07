@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AppUpdateCheckResult,
   AppVersionInfo,
+  GitBranch,
   GitCommit,
   GitCommitDetails,
   GitCommitFileDiff,
@@ -75,6 +76,9 @@ const api = {
   },
   git: {
     status: (workspace: string) => ipcRenderer.invoke(ipc.git.status, workspace) as Promise<GitStatus>,
+    branches: (workspace: string) => ipcRenderer.invoke(ipc.git.branches, workspace) as Promise<GitBranch[]>,
+    switchBranch: (workspace: string, branch: string) =>
+      ipcRenderer.invoke(ipc.git.switchBranch, { workspace, branch }) as Promise<GitOperationResult>,
     diff: (workspace: string, file?: string, cached = false) =>
       ipcRenderer.invoke(ipc.git.diff, { workspace, file, cached }) as Promise<GitDiff>,
     commits: (workspace: string, limit = 16) =>

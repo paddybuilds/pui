@@ -131,6 +131,10 @@ function registerIpc(): void {
   ipcMain.handle(ipc.terminal.kill, (_event, sessionId: string) => terminalService?.kill(sessionId));
 
   ipcMain.handle(ipc.git.status, (_event, workspace: string) => gitService?.getStatus(workspace));
+  ipcMain.handle(ipc.git.branches, (_event, workspace: string) => gitService?.getBranches(workspace));
+  ipcMain.handle(ipc.git.switchBranch, (_event, payload: { workspace: string; branch: string }) => {
+    return gitService?.switchBranch(payload.workspace, payload.branch);
+  });
   ipcMain.handle(ipc.git.diff, (_event, payload: { workspace: string; file?: string; cached?: boolean }) => {
     return gitService?.getDiff(payload.workspace, payload.file, payload.cached);
   });

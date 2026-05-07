@@ -1,4 +1,12 @@
-import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
@@ -7,8 +15,20 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { Save, X } from "lucide-react";
-import type { CodeFileTab } from "../lib/codeWorkspace";
+import { PanelRight, PanelTop, Save, X } from "lucide-react";
+import {
+  type CodeEditorGroup,
+  type CodeEditorNode,
+  type CodeFileTab,
+  collectCodeEditorGroups,
+  createCodeEditorGroup,
+  normalizeCodeSplitSizes,
+  removeCodeEditorGroup,
+  resizeAdjacentCodeSplitSizes,
+  setCodeEditorGroupPath,
+  splitCodeEditorGroup,
+  updateCodeSplitSizes
+} from "../lib/codeWorkspace";
 
 type CodeWorkspaceProps = {
   tabs: CodeFileTab[];
@@ -21,14 +41,38 @@ type CodeWorkspaceProps = {
 
 export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, onClose }: CodeWorkspaceProps) {
   const [closeRequest, setCloseRequest] = useState<CodeFileTab | null>(null);
-  const activeTab = tabs.find((tab) => tab.path === activePath) ?? tabs[0];
-  const extensions = useMemo(() => (activeTab ? editorExtensionsForPath(activeTab.path) : []), [activeTab]);
+  const [layoutRoot, setLayoutRoot] = useState<CodeEditorNode>(() => createCodeEditorGroup(crypto.randomUUID()));
+  const [activeGroupId, setActiveGroupId] = useState(() => collectCodeEditorGroups(layoutRoot)[0]?.id ?? "");
+  const groups = useMemo(() => collectCodeEditorGroups(layoutRoot), [layoutRoot]);
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0];
+  const activeGroupPath = activeGroup?.activePath ?? activePath;
+  const activeTab =
+    tabs.find((tab) => tab.path === activeGroupPath) ?? tabs.find((tab) => tab.path === activePath) ?? tabs[0];
+  const tabByPath = useMemo(() => new Map(tabs.map((tab) => [tab.path, tab])), [tabs]);
 
   useEffect(() => {
-    if (activeTab && activeTab.path !== activePath) {
-      onActivate(activeTab.path);
+    if (!activeGroup) {
+      const nextRoot = createCodeEditorGroup(crypto.randomUUID(), activePath);
+      setLayoutRoot(nextRoot);
+      setActiveGroupId(nextRoot.id);
+      return;
     }
-  }, [activePath, activeTab, onActivate]);
+    if (activePath && activePath !== activeGroup.activePath) {
+      setLayoutRoot((current) => setCodeEditorGroupPath(current, activeGroup.id, activePath));
+    }
+  }, [activeGroup, activePath]);
+
+  useEffect(() => {
+    setLayoutRoot((current) => {
+      let next = current;
+      collectCodeEditorGroups(current).forEach((group) => {
+        if (group.activePath && !tabByPath.has(group.activePath)) {
+          next = setCodeEditorGroupPath(next, group.id, tabs[0]?.path);
+        }
+      });
+      return next;
+    });
+  }, [tabByPath, tabs]);
 
   const requestClose = (tab: CodeFileTab) => {
     if (tab.dirty) {
@@ -42,6 +86,40 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
     if (activeTab && !activeTab.loading) {
       await onSave(activeTab.path);
     }
+  };
+
+  const activateGroupPath = (groupId: string, path: string) => {
+    setActiveGroupId(groupId);
+    setLayoutRoot((current) => setCodeEditorGroupPath(current, groupId, path));
+    onActivate(path);
+  };
+
+  const splitGroup = (groupId: string, direction: "right" | "down") => {
+    const group = groups.find((item) => item.id === groupId);
+    const nextGroupId = crypto.randomUUID();
+    setLayoutRoot((current) =>
+      splitCodeEditorGroup(
+        current,
+        groupId,
+        direction,
+        { splitId: crypto.randomUUID(), groupId: nextGroupId },
+        group?.activePath ?? activeTab?.path
+      )
+    );
+    setActiveGroupId(nextGroupId);
+  };
+
+  const closeGroup = (groupId: string) => {
+    if (groups.length <= 1) {
+      return;
+    }
+    const nextRoot = removeCodeEditorGroup(layoutRoot, groupId);
+    if (!nextRoot) {
+      return;
+    }
+    const nextGroups = collectCodeEditorGroups(nextRoot);
+    setLayoutRoot(nextRoot);
+    setActiveGroupId((current) => (current === groupId ? (nextGroups[0]?.id ?? "") : current));
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -62,7 +140,12 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
             aria-selected={tab.path === activeTab?.path}
             className={tab.path === activeTab?.path ? "code-tab active" : "code-tab"}
             title={tab.relativePath}
-            onClick={() => onActivate(tab.path)}
+            onClick={() => {
+              const groupId = activeGroup?.id ?? groups[0]?.id;
+              if (groupId) {
+                activateGroupPath(groupId, tab.path);
+              }
+            }}
           >
             <span>{tab.name}</span>
             {tab.dirty ? <small aria-label="Unsaved changes" /> : null}
@@ -89,39 +172,24 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
         ))}
       </div>
 
-      {activeTab ? (
-        <div className="code-editor-shell">
-          <header className="code-editor-header">
-            <div>
-              <strong title={activeTab.path}>{activeTab.relativePath}</strong>
-              <span>{activeTab.loading ? "Loading" : activeTab.dirty ? "Unsaved changes" : "Saved"}</span>
-            </div>
-            <button
-              type="button"
-              disabled={activeTab.loading || !activeTab.dirty}
-              onClick={() => void onSave(activeTab.path)}
-            >
-              <Save size={14} />
-              <span>Save</span>
-            </button>
-          </header>
-          {activeTab.error ? <div className="code-error">{activeTab.error}</div> : null}
-          <div className="code-editor-host">
-            <CodeMirror
-              value={activeTab.contents}
-              height="100%"
-              theme={oneDark}
-              extensions={extensions}
-              editable={!activeTab.loading}
-              basicSetup={{
-                foldGutter: true,
-                highlightActiveLine: true,
-                lineNumbers: true,
-                searchKeymap: true
-              }}
-              onChange={(value) => onChange(activeTab.path, value)}
-            />
-          </div>
+      {tabs.length ? (
+        <div className="code-editor-layout">
+          <CodeEditorTree
+            node={layoutRoot}
+            tabs={tabs}
+            activeGroupId={activeGroup?.id}
+            tabByPath={tabByPath}
+            onFocusGroup={setActiveGroupId}
+            onActivatePath={activateGroupPath}
+            onChange={onChange}
+            onSave={onSave}
+            onSplit={splitGroup}
+            onCloseGroup={closeGroup}
+            onResizeSplit={(splitId, sizes) =>
+              setLayoutRoot((current) => updateCodeSplitSizes(current, splitId, sizes))
+            }
+            canCloseGroups={groups.length > 1}
+          />
         </div>
       ) : (
         <div className="code-empty">
@@ -169,6 +237,225 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
       ) : null}
     </section>
   );
+}
+
+function CodeEditorTree({
+  node,
+  tabs,
+  activeGroupId,
+  tabByPath,
+  onFocusGroup,
+  onActivatePath,
+  onChange,
+  onSave,
+  onSplit,
+  onCloseGroup,
+  onResizeSplit,
+  canCloseGroups
+}: {
+  node: CodeEditorNode;
+  tabs: CodeFileTab[];
+  activeGroupId?: string;
+  tabByPath: Map<string, CodeFileTab>;
+  onFocusGroup: (groupId: string) => void;
+  onActivatePath: (groupId: string, path: string) => void;
+  onChange: (path: string, contents: string) => void;
+  onSave: (path: string) => Promise<void>;
+  onSplit: (groupId: string, direction: "right" | "down") => void;
+  onCloseGroup: (groupId: string) => void;
+  onResizeSplit: (splitId: string, sizes: number[]) => void;
+  canCloseGroups: boolean;
+}) {
+  const splitRef = useRef<HTMLDivElement | null>(null);
+
+  if (node.type === "split") {
+    const sizes = normalizeCodeSplitSizes(node.sizes, node.children.length);
+    const tracks = buildCodeSplitTracks(sizes);
+    const gridStyle = node.direction === "right" ? { gridTemplateColumns: tracks } : { gridTemplateRows: tracks };
+
+    const startResize = (event: ReactPointerEvent<HTMLElement>, boundaryIndex: number) => {
+      const container = splitRef.current;
+      if (!container) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      const dimension = node.direction === "right" ? rect.width : rect.height;
+      const startSizes = normalizeCodeSplitSizes(node.sizes, node.children.length);
+      const startX = event.clientX;
+      const startY = event.clientY;
+      event.preventDefault();
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const delta = node.direction === "right" ? moveEvent.clientX - startX : moveEvent.clientY - startY;
+        onResizeSplit(node.id, resizeAdjacentCodeSplitSizes(startSizes, boundaryIndex, delta, dimension));
+      };
+      const onPointerUp = () => {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+      };
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp, { once: true });
+    };
+
+    return (
+      <div
+        ref={splitRef}
+        className={`code-editor-split ${node.direction === "right" ? "horizontal" : "vertical"}`}
+        style={gridStyle}
+      >
+        {node.children.map((child, index) => (
+          <Fragment key={child.id}>
+            <CodeEditorTree
+              node={child}
+              tabs={tabs}
+              activeGroupId={activeGroupId}
+              tabByPath={tabByPath}
+              onFocusGroup={onFocusGroup}
+              onActivatePath={onActivatePath}
+              onChange={onChange}
+              onSave={onSave}
+              onSplit={onSplit}
+              onCloseGroup={onCloseGroup}
+              onResizeSplit={onResizeSplit}
+              canCloseGroups={canCloseGroups}
+            />
+            {index < node.children.length - 1 ? (
+              <div
+                className={`code-editor-resizer ${node.direction === "right" ? "vertical" : "horizontal"}`}
+                role="separator"
+                aria-orientation={node.direction === "right" ? "vertical" : "horizontal"}
+                title="Resize code split"
+                onPointerDown={(event) => startResize(event, index)}
+              />
+            ) : null}
+          </Fragment>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <CodeEditorGroupView
+      group={node}
+      tabs={tabs}
+      active={node.id === activeGroupId}
+      tab={node.activePath ? tabByPath.get(node.activePath) : undefined}
+      fallbackTab={tabs[0]}
+      onFocus={() => onFocusGroup(node.id)}
+      onActivatePath={(path) => onActivatePath(node.id, path)}
+      onChange={onChange}
+      onSave={onSave}
+      onSplit={(direction) => onSplit(node.id, direction)}
+      onCloseGroup={() => onCloseGroup(node.id)}
+      canCloseGroup={canCloseGroups}
+    />
+  );
+}
+
+function CodeEditorGroupView({
+  group,
+  tabs,
+  active,
+  tab,
+  fallbackTab,
+  onFocus,
+  onActivatePath,
+  onChange,
+  onSave,
+  onSplit,
+  onCloseGroup,
+  canCloseGroup
+}: {
+  group: CodeEditorGroup;
+  tabs: CodeFileTab[];
+  active: boolean;
+  tab?: CodeFileTab;
+  fallbackTab?: CodeFileTab;
+  onFocus: () => void;
+  onActivatePath: (path: string) => void;
+  onChange: (path: string, contents: string) => void;
+  onSave: (path: string) => Promise<void>;
+  onSplit: (direction: "right" | "down") => void;
+  onCloseGroup: () => void;
+  canCloseGroup: boolean;
+}) {
+  const activeTab = tab ?? fallbackTab;
+  const extensions = useMemo(() => (activeTab ? editorExtensionsForPath(activeTab.path) : []), [activeTab]);
+
+  useEffect(() => {
+    if (activeTab && activeTab.path !== group.activePath) {
+      onActivatePath(activeTab.path);
+    }
+  }, [activeTab, group.activePath, onActivatePath]);
+
+  if (!activeTab) {
+    return null;
+  }
+
+  return (
+    <div className={active ? "code-editor-shell active" : "code-editor-shell"} onMouseDown={onFocus}>
+      <header className="code-editor-header">
+        <div>
+          <strong title={activeTab.path}>{activeTab.relativePath}</strong>
+          <span>{activeTab.loading ? "Loading" : activeTab.dirty ? "Unsaved changes" : "Saved"}</span>
+        </div>
+        <select
+          value={activeTab.path}
+          aria-label="Editor split file"
+          onChange={(event) => onActivatePath(event.target.value)}
+        >
+          {tabs.map((item) => (
+            <option key={item.path} value={item.path}>
+              {item.relativePath}
+            </option>
+          ))}
+        </select>
+        <div className="code-editor-actions">
+          <button type="button" title="Split code right" aria-label="Split code right" onClick={() => onSplit("right")}>
+            <PanelRight size={14} />
+          </button>
+          <button type="button" title="Split code down" aria-label="Split code down" onClick={() => onSplit("down")}>
+            <PanelTop size={14} />
+          </button>
+          {canCloseGroup ? (
+            <button type="button" title="Close split" aria-label="Close split" onClick={onCloseGroup}>
+              <X size={14} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={activeTab.loading || !activeTab.dirty}
+            onClick={() => void onSave(activeTab.path)}
+          >
+            <Save size={14} />
+            <span>Save</span>
+          </button>
+        </div>
+      </header>
+      {activeTab.error ? <div className="code-error">{activeTab.error}</div> : null}
+      <div className="code-editor-host">
+        <CodeMirror
+          value={activeTab.contents}
+          height="100%"
+          theme={oneDark}
+          extensions={extensions}
+          editable={!activeTab.loading}
+          basicSetup={{
+            foldGutter: true,
+            highlightActiveLine: true,
+            lineNumbers: true,
+            searchKeymap: true
+          }}
+          onFocus={onFocus}
+          onChange={(value) => onChange(activeTab.path, value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function buildCodeSplitTracks(sizes: number[]): string {
+  return sizes.map((size) => `${size}fr`).join(" 5px ");
 }
 
 function editorExtensionsForPath(filePath: string): Extension[] {

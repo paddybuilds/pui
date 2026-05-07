@@ -1300,6 +1300,44 @@ kbd {
   outline: none;
 }
 
+.code-editor-layout {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+  background: var(--line-soft);
+}
+
+.code-editor-split {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-area: 1 / 1;
+  overflow: hidden;
+  background: var(--line-soft);
+}
+
+.code-editor-resizer {
+  min-width: 0;
+  min-height: 0;
+  background: var(--line-soft);
+  touch-action: none;
+  z-index: 1;
+}
+
+.code-editor-resizer:hover,
+.code-editor-resizer:active {
+  background: var(--line-strong);
+}
+
+.code-editor-resizer.vertical {
+  cursor: col-resize;
+}
+
+.code-editor-resizer.horizontal {
+  cursor: row-resize;
+}
+
 .code-editor-shell {
   min-width: 0;
   min-height: 0;
@@ -1307,14 +1345,19 @@ kbd {
   grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--terminal-background);
+  border: 1px solid transparent;
+}
+
+.code-editor-shell.active {
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--line-soft));
 }
 
 .code-editor-header {
   min-width: 0;
   min-height: 44px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 220px) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 7px 10px 7px 14px;
   border-bottom: 1px solid var(--line-soft);
@@ -1342,8 +1385,28 @@ kbd {
   font-size: 11px;
 }
 
-.code-editor-header button {
+.code-editor-header select {
+  min-width: 0;
   height: 28px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  background: var(--surface-root);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.code-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-editor-actions button {
+  height: 28px;
+  min-width: 28px;
+  justify-content: center;
+  padding: 0 8px;
   color: var(--text-strong);
   background: var(--surface-active);
   border: 1px solid var(--line-soft);

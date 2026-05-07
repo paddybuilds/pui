@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   createLoadedCodeTab,
   createLoadingCodeTab,
+  collectCodeEditorGroups,
+  createCodeEditorGroup,
   markCodeTabSaved,
   nextActiveCodeTabPath,
+  removeCodeEditorGroup,
+  resizeAdjacentCodeSplitSizes,
+  splitCodeEditorGroup,
   updateCodeTabContents,
   upsertCodeTab
 } from "./codeWorkspace";
@@ -49,5 +54,26 @@ describe("code workspace tab helpers", () => {
     expect(nextActiveCodeTabPath(tabs, "/repo/b.ts", "/repo/b.ts")).toBe("/repo/a.ts");
     expect(nextActiveCodeTabPath(tabs, "/repo/b.ts", "/repo/c.ts")).toBe("/repo/c.ts");
     expect(nextActiveCodeTabPath([tabs[0]], "/repo/a.ts", "/repo/a.ts")).toBeUndefined();
+  });
+
+  it("splits, resizes, and removes editor groups", () => {
+    const root = createCodeEditorGroup("group-a", "/repo/a.ts");
+    const split = splitCodeEditorGroup(
+      root,
+      "group-a",
+      "right",
+      { splitId: "split-a", groupId: "group-b" },
+      "/repo/a.ts"
+    );
+
+    expect(collectCodeEditorGroups(split).map((group) => group.id)).toEqual(["group-a", "group-b"]);
+    expect(split).toMatchObject({
+      type: "split",
+      direction: "right",
+      sizes: [0.5, 0.5]
+    });
+
+    expect(resizeAdjacentCodeSplitSizes([0.5, 0.5], 0, 20, 100)).toEqual([0.7, 0.3]);
+    expect(removeCodeEditorGroup(split, "group-b")).toEqual(root);
   });
 });

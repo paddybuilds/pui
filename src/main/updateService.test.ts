@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AppUpdateService,
   compareReleaseVersions,
+  normalizeCommitSha,
   parseGitHubRepository,
   repositoryUrlFromMetadata
 } from "./updateService";
@@ -24,16 +25,30 @@ describe("update service helpers", () => {
     expect(compareReleaseVersions("1.0.0", "1.0")).toBe(0);
     expect(compareReleaseVersions("2.0.0", "1.9.9")).toBe(1);
   });
+
+  it("normalizes commit hashes for display", () => {
+    expect(normalizeCommitSha(" 3c127fdaadd9867414b3179028cb3edb8434196b\n")).toBe(
+      "3c127fdaadd9867414b3179028cb3edb8434196b"
+    );
+    expect(normalizeCommitSha("3c127fd")).toBe("3c127fd");
+    expect(normalizeCommitSha("not-a-commit")).toBeUndefined();
+  });
 });
 
 describe("AppUpdateService", () => {
   it("returns an unavailable status when release metadata is not configured", async () => {
     const service = new AppUpdateService({
       getVersion: () => "0.1.0",
+      getCommitSha: () => "3c127fdaadd9867414b3179028cb3edb8434196b",
       packageMetadata: { name: "pui" },
       now
     });
 
+    expect(service.getVersionInfo()).toMatchObject({
+      version: "0.1.0",
+      commitSha: "3c127fdaadd9867414b3179028cb3edb8434196b",
+      commitShortSha: "3c127fd"
+    });
     await expect(service.checkForUpdates()).resolves.toMatchObject({
       status: "unavailable",
       currentVersion: "0.1.0",

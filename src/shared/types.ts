@@ -80,6 +80,8 @@ export type GitOperationResult = {
 export type AppVersionInfo = {
   name: string;
   version: string;
+  commitSha?: string;
+  commitShortSha?: string;
   repositoryUrl?: string;
   updateCheckConfigured: boolean;
 };

@@ -169,7 +169,7 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
+  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {

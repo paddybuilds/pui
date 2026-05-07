@@ -32,7 +32,7 @@ function createWindow(): void {
           color: "#0b0f14",
           symbolColor: "#9ca3af",
           height: 44
-    },
+        },
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       nodeIntegration: false,

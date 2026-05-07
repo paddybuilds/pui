@@ -40,7 +40,9 @@ export function normalizeSplitSizes(sizes: number[] | undefined, childCount: num
     return Number.isFinite(value) && value && value > 0 ? value : 1;
   });
   const total = normalized.reduce((sum, value) => sum + value, 0);
-  return total > 0 ? normalized.map((value) => value / total) : Array.from({ length: childCount }, () => 1 / childCount);
+  return total > 0
+    ? normalized.map((value) => value / total)
+    : Array.from({ length: childCount }, () => 1 / childCount);
 }
 
 export function buildSplitTracks(sizes: number[], resizerSize: number): string {
@@ -107,7 +109,7 @@ export function remapProfileIds(root: WorkbenchNode, profileIdMap: Map<string, s
   if (root.type === "pane") {
     return {
       ...root,
-      profileId: root.profileId ? profileIdMap.get(root.profileId) ?? root.profileId : root.profileId
+      profileId: root.profileId ? (profileIdMap.get(root.profileId) ?? root.profileId) : root.profileId
     };
   }
   return {
@@ -161,7 +163,8 @@ export function normalizeLayoutRoot(
     return normalizeNode(layout.root, fallbackProfileId, validProfileIds, idFactory);
   }
 
-  const panes = layout.panes && layout.panes.length > 0 ? layout.panes : [{ id: idFactory(), profileId: fallbackProfileId }];
+  const panes =
+    layout.panes && layout.panes.length > 0 ? layout.panes : [{ id: idFactory(), profileId: fallbackProfileId }];
   const normalizedPanes = panes.map((pane) => ({
     type: "pane" as const,
     id: pane.id || idFactory(),
@@ -195,7 +198,9 @@ function normalizeNode(
     };
   }
 
-  const children = node.children.map((child) => normalizeNode(child, fallbackProfileId, validProfileIds, idFactory)).filter(Boolean);
+  const children = node.children
+    .map((child) => normalizeNode(child, fallbackProfileId, validProfileIds, idFactory))
+    .filter(Boolean);
   if (children.length === 1) {
     return children[0];
   }
@@ -251,5 +256,12 @@ export function removePane(root: WorkbenchNode, targetPaneId: string): Workbench
   if (children.length === 1) {
     return children[0];
   }
-  return { ...root, children, sizes: normalizeSplitSizes(retained.map((item) => item.size), children.length) };
+  return {
+    ...root,
+    children,
+    sizes: normalizeSplitSizes(
+      retained.map((item) => item.size),
+      children.length
+    )
+  };
 }

@@ -355,9 +355,7 @@ async function getGitCommits(workspace, limit = 16) {
 async function discardGitPaths(workspace, paths) {
   const status = await getGitStatus(workspace);
   const untracked = new Set(
-    status.files
-      .filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?")
-      .map((file) => file.path)
+    status.files.filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?").map((file) => file.path)
   );
   const untrackedPaths = paths.filter((targetPath) => untracked.has(targetPath));
   const trackedPaths = paths.filter((targetPath) => !untracked.has(targetPath));

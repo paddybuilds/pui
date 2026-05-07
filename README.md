@@ -20,7 +20,7 @@ developer work are welcome.
 ## Requirements
 
 - macOS for the primary app experience.
-- Node.js 20 or newer.
+- Node.js 22.12 or newer.
 - npm 10 or newer.
 - Xcode Command Line Tools, required by native dependencies such as `node-pty`.
 

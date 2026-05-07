@@ -23,7 +23,12 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { GitPanel } from "./components/DiffPanel";
 import { SettingsModal } from "./components/SettingsModal";
-import { disposeTerminalPane, disposeTerminalPanes, moveTerminalPaneRecord, TerminalPane } from "./components/TerminalPane";
+import {
+  disposeTerminalPane,
+  disposeTerminalPanes,
+  moveTerminalPaneRecord,
+  TerminalPane
+} from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
 import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
@@ -72,24 +77,65 @@ export function App() {
   const quickTerminals = workspaces.filter((workspace) => workspace.kind === "quick");
   const folderWorkspaces = workspaces.filter((workspace) => workspace.kind !== "quick");
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
-  const activeFolderTitle = activeWorkspace ? (activeWorkspace.kind === "quick" ? activeWorkspace.name : basename(activeWorkspace.path)) : "";
+  const activeFolderTitle = activeWorkspace
+    ? activeWorkspace.kind === "quick"
+      ? activeWorkspace.name
+      : basename(activeWorkspace.path)
+    : "";
   const activeFolderSubtitle =
     activeWorkspace?.kind === "quick"
       ? "Quick terminal"
       : activeWorkspace && activeWorkspace.name !== activeFolderTitle
-      ? `${activeWorkspace.name} · ${activeWorkspace.path}`
-      : activeWorkspace?.path ?? "";
-  const profiles = activeWorkspace?.profiles ?? [];
+        ? `${activeWorkspace.name} · ${activeWorkspace.path}`
+        : (activeWorkspace?.path ?? "");
+  const profiles = useMemo(() => activeWorkspace?.profiles ?? [], [activeWorkspace?.profiles]);
   const panes = useMemo(() => (layoutRoot ? collectPanes(layoutRoot) : []), [layoutRoot]);
-  const activeWorkspaceSessions = activeWorkspace ? sessionsByWorkspace[activeWorkspace.id] ?? {} : {};
+  const activeWorkspaceSessions = activeWorkspace ? (sessionsByWorkspace[activeWorkspace.id] ?? {}) : {};
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
   const gitSidebarVisible = Boolean(activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && gitSidebarOpen);
+
+  const refreshGit = useCallback(async (workspacePath: string) => {
+    const status = await pui.git.status(workspacePath);
+    setGitStatus(status);
+  }, []);
+
+  const refreshWorkspaceGit = useCallback(
+    async (workspacePath: string) => {
+      try {
+        await refreshGit(workspacePath);
+        await pui.git.watch(workspacePath);
+      } catch (error) {
+        console.error("Failed to refresh workspace Git state", error);
+        setGitStatus({
+          workspace: workspacePath,
+          isRepo: false,
+          files: [],
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    },
+    [refreshGit]
+  );
+
+  const hydrateWorkspace = useCallback((workspace: TerminalWorkspace) => {
+    const firstProfile = workspace.profiles[0];
+    const validProfileIds = new Set(workspace.profiles.map((profile) => profile.id));
+    const root = normalizeLayoutRoot(workspace.layout, firstProfile?.id, validProfileIds, newId);
+    const nextPanes = collectPanes(root);
+    setLayoutRoot(root);
+    setActivePaneId(
+      nextPanes.some((pane) => pane.id === workspace.layout.activePaneId)
+        ? workspace.layout.activePaneId
+        : nextPanes[0].id
+    );
+  }, []);
 
   useEffect(() => {
     void pui.settings.load().then(async (loaded) => {
       const normalized = normalizeSettings(loaded, pui.platform, newId);
       const initialWorkspace =
-        normalized.workspaces?.find((workspace) => workspace.id === normalized.activeWorkspaceId) ?? normalized.workspaces?.[0];
+        normalized.workspaces?.find((workspace) => workspace.id === normalized.activeWorkspaceId) ??
+        normalized.workspaces?.[0];
       setSettings(normalized);
       if (initialWorkspace) {
         hydrateWorkspace(initialWorkspace);
@@ -108,7 +154,7 @@ export function App() {
     return () => {
       offGit();
     };
-  }, []);
+  }, [hydrateWorkspace, refreshGit, refreshWorkspaceGit]);
 
   useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {
@@ -121,35 +167,6 @@ export function App() {
 
     return () => window.clearTimeout(timeout);
   }, [activePaneId, activeWorkspace, layoutRoot, settings]);
-
-  const refreshGit = useCallback(async (workspacePath: string) => {
-    const status = await pui.git.status(workspacePath);
-    setGitStatus(status);
-  }, []);
-
-  const refreshWorkspaceGit = useCallback(async (workspacePath: string) => {
-    try {
-      await refreshGit(workspacePath);
-      await pui.git.watch(workspacePath);
-    } catch (error) {
-      console.error("Failed to refresh workspace Git state", error);
-      setGitStatus({
-        workspace: workspacePath,
-        isRepo: false,
-        files: [],
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }, [refreshGit]);
-
-  const hydrateWorkspace = (workspace: TerminalWorkspace) => {
-    const firstProfile = workspace.profiles[0];
-    const validProfileIds = new Set(workspace.profiles.map((profile) => profile.id));
-    const root = normalizeLayoutRoot(workspace.layout, firstProfile?.id, validProfileIds, newId);
-    const nextPanes = collectPanes(root);
-    setLayoutRoot(root);
-    setActivePaneId(nextPanes.some((pane) => pane.id === workspace.layout.activePaneId) ? workspace.layout.activePaneId : nextPanes[0].id);
-  };
 
   const switchWorkspace = async (workspace: TerminalWorkspace) => {
     if (settings && activeWorkspace && layoutRoot) {
@@ -167,85 +184,111 @@ export function App() {
     closeContextMenu();
   };
 
-  const applyWorkspaceLayout = useCallback((root: WorkbenchNode, nextActivePaneId: string) => {
-    setLayoutRoot(root);
-    setActivePaneId(nextActivePaneId);
-    setSettings((current) =>
-      current && activeWorkspace
-        ? updateWorkspaceLayoutInSettings(current, activeWorkspace.id, root, nextActivePaneId)
-        : current
-    );
-  }, [activeWorkspace]);
+  const applyWorkspaceLayout = useCallback(
+    (root: WorkbenchNode, nextActivePaneId: string) => {
+      setLayoutRoot(root);
+      setActivePaneId(nextActivePaneId);
+      setSettings((current) =>
+        current && activeWorkspace
+          ? updateWorkspaceLayoutInSettings(current, activeWorkspace.id, root, nextActivePaneId)
+          : current
+      );
+    },
+    [activeWorkspace]
+  );
 
-  const splitPaneById = useCallback((paneIdToSplit: string, direction: "right" | "down" = "right") => {
-    if (!layoutRoot) {
-      return;
-    }
-    const paneId = newId();
-    const paneToSplit = panes.find((pane) => pane.id === paneIdToSplit);
-    const nextRoot = splitPane(layoutRoot, paneIdToSplit, direction, { id: paneId, profileId: paneToSplit?.profileId ?? profiles[0]?.id }, newId);
-    applyWorkspaceLayout(nextRoot, paneId);
-  }, [applyWorkspaceLayout, layoutRoot, panes, profiles]);
-
-  const splitActivePane = useCallback((direction: "right" | "down" = "right") => {
-    splitPaneById(activePaneId, direction);
-  }, [activePaneId, splitPaneById]);
-
-  const splitPaneWithProfile = useCallback((paneIdToSplit: string, direction: "right" | "down", profile: ConsoleProfile) => {
-    if (!layoutRoot || !activeWorkspace) {
-      return;
-    }
-    const paneId = newId();
-    const nextRoot = splitPane(layoutRoot, paneIdToSplit, direction, { id: paneId, profileId: profile.id }, newId);
-    const nextWorkspace = {
-      ...activeWorkspace,
-      profiles: [...activeWorkspace.profiles.filter((item) => item.id !== profile.id), profile],
-      layout: {
-        activePaneId: paneId,
-        root: nextRoot
+  const splitPaneById = useCallback(
+    (paneIdToSplit: string, direction: "right" | "down" = "right") => {
+      if (!layoutRoot) {
+        return;
       }
-    };
-    setSettings((current) =>
-      current
-        ? {
-            ...current,
-            workspaces: (current.workspaces ?? []).map((workspace) => (workspace.id === activeWorkspace.id ? nextWorkspace : workspace))
-          }
-        : current
-    );
-    setLayoutRoot(nextRoot);
-    setActivePaneId(paneId);
-  }, [activeWorkspace, layoutRoot]);
+      const paneId = newId();
+      const paneToSplit = panes.find((pane) => pane.id === paneIdToSplit);
+      const nextRoot = splitPane(
+        layoutRoot,
+        paneIdToSplit,
+        direction,
+        { id: paneId, profileId: paneToSplit?.profileId ?? profiles[0]?.id },
+        newId
+      );
+      applyWorkspaceLayout(nextRoot, paneId);
+    },
+    [applyWorkspaceLayout, layoutRoot, panes, profiles]
+  );
 
-  const closePane = useCallback((paneId: string) => {
-    if (!layoutRoot || panes.length <= 1) {
-      return;
-    }
-    const nextRoot = removePane(layoutRoot, paneId);
-    if (!nextRoot) {
-      return;
-    }
-    const nextPanes = collectPanes(nextRoot);
-    if (activeWorkspace) {
-      disposeTerminalPane(activeWorkspace.id, paneId);
-    }
-    const nextActivePaneId = paneId === activePaneId ? nextPanes[0].id : activePaneId;
-    applyWorkspaceLayout(nextRoot, nextActivePaneId);
-    if (activeWorkspace) {
-      setSessionsByWorkspace((current) => {
-        const workspaceSessions = { ...(current[activeWorkspace.id] ?? {}) };
-        delete workspaceSessions[paneId];
-        return { ...current, [activeWorkspace.id]: workspaceSessions };
-      });
-    }
-  }, [activePaneId, activeWorkspace, applyWorkspaceLayout, layoutRoot, panes.length]);
+  const splitActivePane = useCallback(
+    (direction: "right" | "down" = "right") => {
+      splitPaneById(activePaneId, direction);
+    },
+    [activePaneId, splitPaneById]
+  );
 
-  const resizeSplit = useCallback((splitId: string, sizes: number[]) => {
-    if (!layoutRoot) {
-      return;
-    }
-    applyWorkspaceLayout(updateSplitSizes(layoutRoot, splitId, sizes), activePaneId);
-  }, [activePaneId, applyWorkspaceLayout, layoutRoot]);
+  const splitPaneWithProfile = useCallback(
+    (paneIdToSplit: string, direction: "right" | "down", profile: ConsoleProfile) => {
+      if (!layoutRoot || !activeWorkspace) {
+        return;
+      }
+      const paneId = newId();
+      const nextRoot = splitPane(layoutRoot, paneIdToSplit, direction, { id: paneId, profileId: profile.id }, newId);
+      const nextWorkspace = {
+        ...activeWorkspace,
+        profiles: [...activeWorkspace.profiles.filter((item) => item.id !== profile.id), profile],
+        layout: {
+          activePaneId: paneId,
+          root: nextRoot
+        }
+      };
+      setSettings((current) =>
+        current
+          ? {
+              ...current,
+              workspaces: (current.workspaces ?? []).map((workspace) =>
+                workspace.id === activeWorkspace.id ? nextWorkspace : workspace
+              )
+            }
+          : current
+      );
+      setLayoutRoot(nextRoot);
+      setActivePaneId(paneId);
+    },
+    [activeWorkspace, layoutRoot]
+  );
+
+  const closePane = useCallback(
+    (paneId: string) => {
+      if (!layoutRoot || panes.length <= 1) {
+        return;
+      }
+      const nextRoot = removePane(layoutRoot, paneId);
+      if (!nextRoot) {
+        return;
+      }
+      const nextPanes = collectPanes(nextRoot);
+      if (activeWorkspace) {
+        disposeTerminalPane(activeWorkspace.id, paneId);
+      }
+      const nextActivePaneId = paneId === activePaneId ? nextPanes[0].id : activePaneId;
+      applyWorkspaceLayout(nextRoot, nextActivePaneId);
+      if (activeWorkspace) {
+        setSessionsByWorkspace((current) => {
+          const workspaceSessions = { ...(current[activeWorkspace.id] ?? {}) };
+          delete workspaceSessions[paneId];
+          return { ...current, [activeWorkspace.id]: workspaceSessions };
+        });
+      }
+    },
+    [activePaneId, activeWorkspace, applyWorkspaceLayout, layoutRoot, panes.length]
+  );
+
+  const resizeSplit = useCallback(
+    (splitId: string, sizes: number[]) => {
+      if (!layoutRoot) {
+        return;
+      }
+      applyWorkspaceLayout(updateSplitSizes(layoutRoot, splitId, sizes), activePaneId);
+    },
+    [activePaneId, applyWorkspaceLayout, layoutRoot]
+  );
 
   const startSidebarResize = (event: ReactPointerEvent<HTMLElement>) => {
     startPanelResize(event, {
@@ -307,7 +350,9 @@ export function App() {
       return;
     }
     try {
-      const path = await pui.dialog.openFolder(activeWorkspace?.defaultCwd || activeWorkspace?.path || settings.workspace);
+      const path = await pui.dialog.openFolder(
+        activeWorkspace?.defaultCwd || activeWorkspace?.path || settings.workspace
+      );
       if (path) {
         await createWorkspace({ path });
       }
@@ -448,18 +493,24 @@ export function App() {
       return;
     }
     const cloned = cloneWorkbenchNodeWithNewIds(preset.root, preset.activePaneId, newId);
-    disposeTerminalPanes(activeWorkspace.id, collectPanes(layoutRoot ?? activeWorkspace.layout.root).map((pane) => pane.id));
+    disposeTerminalPanes(
+      activeWorkspace.id,
+      collectPanes(layoutRoot ?? activeWorkspace.layout.root).map((pane) => pane.id)
+    );
     setSessionsByWorkspace((current) => ({ ...current, [activeWorkspace.id]: {} }));
     applyWorkspaceLayout(cloned.root, cloned.activePaneId);
   };
 
-  const runQuickCommand = useCallback((command: QuickCommand) => {
-    if (!activeWorkspace || activeWorkspace.kind === "quick") {
-      return;
-    }
-    const profile = createQuickCommandProfile(command, activeWorkspace, newId);
-    splitPaneWithProfile(activePaneId, command.splitDirection, profile);
-  }, [activePaneId, activeWorkspace, splitPaneWithProfile]);
+  const runQuickCommand = useCallback(
+    (command: QuickCommand) => {
+      if (!activeWorkspace || activeWorkspace.kind === "quick") {
+        return;
+      }
+      const profile = createQuickCommandProfile(command, activeWorkspace, newId);
+      splitPaneWithProfile(activePaneId, command.splitDirection, profile);
+    },
+    [activePaneId, activeWorkspace, splitPaneWithProfile]
+  );
 
   const deleteWorkspace = async (workspaceId: string) => {
     if (!settings) {
@@ -467,11 +518,19 @@ export function App() {
     }
     const workspace = workspaces.find((item) => item.id === workspaceId);
     const label = workspace?.kind === "quick" ? "quick terminal" : "folder";
-    if (!workspace || !window.confirm(`Remove ${label} "${workspace.name}" from Pui? Terminal sessions for this ${label} will be closed.`)) {
+    if (
+      !workspace ||
+      !window.confirm(
+        `Remove ${label} "${workspace.name}" from Pui? Terminal sessions for this ${label} will be closed.`
+      )
+    ) {
       return;
     }
 
-    disposeTerminalPanes(workspace.id, collectPanes(workspace.layout.root).map((pane) => pane.id));
+    disposeTerminalPanes(
+      workspace.id,
+      collectPanes(workspace.layout.root).map((pane) => pane.id)
+    );
     const remainingWorkspaces = workspaces.filter((item) => item.id !== workspace.id);
     const nextActiveWorkspace = workspace.id === activeWorkspace?.id ? remainingWorkspaces[0] : activeWorkspace;
     const nextSettings = {
@@ -509,7 +568,9 @@ export function App() {
     if (!settings || quickTerminalId === folderId) {
       return;
     }
-    const quickTerminal = workspaces.find((workspace) => workspace.id === quickTerminalId && workspace.kind === "quick");
+    const quickTerminal = workspaces.find(
+      (workspace) => workspace.id === quickTerminalId && workspace.kind === "quick"
+    );
     const folder = workspaces.find((workspace) => workspace.id === folderId && workspace.kind !== "quick");
     if (!quickTerminal || !folder) {
       return;
@@ -520,7 +581,9 @@ export function App() {
     const movedProfiles = quickTerminal.profiles.map((profile) =>
       folderProfileIds.has(profile.id) ? { ...profile, id: newId(), shortcut: "" } : { ...profile, shortcut: "" }
     );
-    const profileIdMap = new Map(quickTerminal.profiles.map((profile, index) => [profile.id, movedProfiles[index]?.id ?? profile.id]));
+    const profileIdMap = new Map(
+      quickTerminal.profiles.map((profile, index) => [profile.id, movedProfiles[index]?.id ?? profile.id])
+    );
     const movedRoot = remapProfileIds(quickTerminal.layout.root, profileIdMap);
     const nextRoot = appendWorkbenchNode(folder.layout.root, movedRoot, "down", newId);
     const nextFolder: TerminalWorkspace = {
@@ -670,7 +733,9 @@ export function App() {
                 key={terminal.id}
                 type="button"
                 draggable
-                className={terminal.id === activeWorkspace?.id ? "workspace-button quick active" : "workspace-button quick"}
+                className={
+                  terminal.id === activeWorkspace?.id ? "workspace-button quick active" : "workspace-button quick"
+                }
                 title="Drag onto a folder to group this terminal"
                 onClick={() => switchWorkspace(terminal)}
                 onDragStart={(event) => {
@@ -797,7 +862,12 @@ export function App() {
                 ) : null}
                 {activeWorkspace.kind !== "quick"
                   ? (activeWorkspace.quickCommands ?? []).map((command) => (
-                      <button key={command.id} type="button" title={command.name} onClick={() => runQuickCommand(command)}>
+                      <button
+                        key={command.id}
+                        type="button"
+                        title={command.name}
+                        onClick={() => runQuickCommand(command)}
+                      >
                         <Play size={14} />
                         <span>{command.name}</span>
                       </button>
@@ -818,38 +888,38 @@ export function App() {
         >
           {activeWorkspace && layoutRoot ? (
             <section className="terminal-grid">
-            <PaneTree
-              node={layoutRoot}
-              profilesById={profilesById}
-              fallbackProfile={profiles[0]}
-              workspaceName={activeFolderTitle}
-              terminalFontSize={activeWorkspace.terminalFontSize}
-              activePaneId={activePaneId}
-              workspaceId={activeWorkspace.id}
-              showHeaders={panes.length > 1}
-              canClosePanes={panes.length > 1}
-              sessionsByPane={activeWorkspaceSessions}
-              onFocus={setActivePaneId}
-              onClosePane={closePane}
-              onPaneContextMenu={openPaneContextMenu}
-              onSplitPane={splitPaneById}
-              onResizeSplit={resizeSplit}
-              onSession={(paneId, sessionId) =>
-                setSessionsByWorkspace((current) => {
-                  const workspaceSessions = current[activeWorkspace.id] ?? {};
-                  if (workspaceSessions[paneId] === sessionId) {
-                    return current;
-                  }
-                  return {
-                    ...current,
-                    [activeWorkspace.id]: {
-                      ...workspaceSessions,
-                      [paneId]: sessionId
+              <PaneTree
+                node={layoutRoot}
+                profilesById={profilesById}
+                fallbackProfile={profiles[0]}
+                workspaceName={activeFolderTitle}
+                terminalFontSize={activeWorkspace.terminalFontSize}
+                activePaneId={activePaneId}
+                workspaceId={activeWorkspace.id}
+                showHeaders={panes.length > 1}
+                canClosePanes={panes.length > 1}
+                sessionsByPane={activeWorkspaceSessions}
+                onFocus={setActivePaneId}
+                onClosePane={closePane}
+                onPaneContextMenu={openPaneContextMenu}
+                onSplitPane={splitPaneById}
+                onResizeSplit={resizeSplit}
+                onSession={(paneId, sessionId) =>
+                  setSessionsByWorkspace((current) => {
+                    const workspaceSessions = current[activeWorkspace.id] ?? {};
+                    if (workspaceSessions[paneId] === sessionId) {
+                      return current;
                     }
-                  };
-                })
-              }
-            />
+                    return {
+                      ...current,
+                      [activeWorkspace.id]: {
+                        ...workspaceSessions,
+                        [paneId]: sessionId
+                      }
+                    };
+                  })
+                }
+              />
             </section>
           ) : (
             <section className="empty-workbench">
@@ -865,16 +935,16 @@ export function App() {
 
           {activeWorkspace && gitSidebarVisible ? (
             <>
-            <div
-              className="app-resizer side-panel-resizer"
-              role="separator"
-              aria-orientation="vertical"
-              title="Resize Git panel"
-              onPointerDown={startGitPanelResize}
-            />
-            <aside className="workspace-side-panel">
-              <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
-            </aside>
+              <div
+                className="app-resizer side-panel-resizer"
+                role="separator"
+                aria-orientation="vertical"
+                title="Resize Git panel"
+                onPointerDown={startGitPanelResize}
+              />
+              <aside className="workspace-side-panel">
+                <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
+              </aside>
             </>
           ) : null}
         </div>
@@ -888,8 +958,8 @@ export function App() {
           onSplitRight={() => splitActivePane("right")}
           onSplitDown={() => splitActivePane("down")}
           platform={pui.platform}
-          layoutPresets={activeWorkspace?.kind !== "quick" ? activeWorkspace?.layoutPresets ?? [] : []}
-          quickCommands={activeWorkspace?.kind !== "quick" ? activeWorkspace?.quickCommands ?? [] : []}
+          layoutPresets={activeWorkspace?.kind !== "quick" ? (activeWorkspace?.layoutPresets ?? []) : []}
+          quickCommands={activeWorkspace?.kind !== "quick" ? (activeWorkspace?.quickCommands ?? []) : []}
           onSaveLayoutPreset={() => void saveCurrentLayoutPreset()}
           onApplyLayoutPreset={(preset) => void applyLayoutPreset(preset)}
           onRunQuickCommand={runQuickCommand}
@@ -908,7 +978,9 @@ export function App() {
         />
       ) : null}
 
-      {contextMenu ? <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={closeContextMenu} /> : null}
+      {contextMenu ? (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={closeContextMenu} />
+      ) : null}
     </div>
   );
 }
@@ -939,7 +1011,8 @@ function startPanelResize(
   const startY = event.clientY;
   const previousCursor = document.body.style.cursor;
   const previousUserSelect = document.body.style.userSelect;
-  document.body.style.cursor = event.currentTarget.getAttribute("aria-orientation") === "horizontal" ? "row-resize" : "col-resize";
+  document.body.style.cursor =
+    event.currentTarget.getAttribute("aria-orientation") === "horizontal" ? "row-resize" : "col-resize";
   document.body.style.userSelect = "none";
 
   const onMove = (moveEvent: PointerEvent) => {
@@ -1007,10 +1080,7 @@ function PaneTree({
   if (node.type === "split") {
     const sizes = normalizeSplitSizes(node.sizes, node.children.length);
     const tracks = buildSplitTracks(sizes, RESIZER_SIZE);
-    const gridStyle =
-      node.direction === "right"
-        ? { gridTemplateColumns: tracks }
-        : { gridTemplateRows: tracks };
+    const gridStyle = node.direction === "right" ? { gridTemplateColumns: tracks } : { gridTemplateRows: tracks };
 
     const startSplitResize = (event: ReactPointerEvent<HTMLElement>, boundaryIndex: number) => {
       const container = splitRef.current;
@@ -1032,7 +1102,11 @@ function PaneTree({
     };
 
     return (
-      <div ref={splitRef} className={`pane-split ${node.direction === "right" ? "horizontal" : "vertical"}`} style={gridStyle}>
+      <div
+        ref={splitRef}
+        className={`pane-split ${node.direction === "right" ? "horizontal" : "vertical"}`}
+        style={gridStyle}
+      >
         {node.children.map((child, index) => (
           <Fragment key={child.id}>
             <PaneTree

@@ -94,17 +94,19 @@ const browserPreviewApi: PuiApi = {
   },
   terminal: {
     create: (payload) =>
-      terminalBridge.create(payload as { profile: ConsoleProfile; paneId: string; cols: number; rows: number }).catch(() => {
-        const { profile, paneId } = payload as { profile: ConsoleProfile; paneId: string };
-        return {
-          id: crypto.randomUUID(),
-          profileId: profile.id,
-          cwd: profile.cwd,
-          paneId,
-          ptyProcessId: 0,
-          status: "running"
-        } satisfies TerminalSession;
-      }),
+      terminalBridge
+        .create(payload as { profile: ConsoleProfile; paneId: string; cols: number; rows: number })
+        .catch(() => {
+          const { profile, paneId } = payload as { profile: ConsoleProfile; paneId: string };
+          return {
+            id: crypto.randomUUID(),
+            profileId: profile.id,
+            cwd: profile.cwd,
+            paneId,
+            ptyProcessId: 0,
+            status: "running"
+          } satisfies TerminalSession;
+        }),
     write: (sessionId, data) => terminalBridge.write(sessionId, data),
     resize: (sessionId, cols, rows) => terminalBridge.resize(sessionId, cols, rows),
     kill: (sessionId) => terminalBridge.kill(sessionId),

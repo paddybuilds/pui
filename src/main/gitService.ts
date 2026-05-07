@@ -91,9 +91,7 @@ export class GitWorkspaceService {
   async discard(workspace: string, paths: string[]): Promise<GitStatus> {
     const status = await this.getStatus(workspace);
     const untracked = new Set(
-      status.files
-        .filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?")
-        .map((file) => file.path)
+      status.files.filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?").map((file) => file.path)
     );
     const untrackedPaths = paths.filter((path) => untracked.has(path));
     const trackedPaths = paths.filter((path) => !untracked.has(path));

@@ -16,7 +16,7 @@ users' terminals, folders, and Git repositories.
 Prerequisites:
 
 - macOS.
-- Node.js 20 or newer.
+- Node.js 22.12 or newer.
 - npm 10 or newer.
 - Xcode Command Line Tools for native modules.
 

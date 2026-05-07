@@ -30,7 +30,8 @@ export function normalizeSettings(
   }
 
   const path = settings.workspace;
-  const profiles = settings.profiles.length > 0 ? settings.profiles : [createShellProfile(path, "CmdOrCtrl+1", platform, idFactory)];
+  const profiles =
+    settings.profiles.length > 0 ? settings.profiles : [createShellProfile(path, "CmdOrCtrl+1", platform, idFactory)];
   const paneId = idFactory();
   const workspace: TerminalWorkspace = {
     id: "main-workspace",

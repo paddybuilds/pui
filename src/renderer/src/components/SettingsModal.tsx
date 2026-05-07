@@ -27,7 +27,13 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
 
   return (
     <div className="settings-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="settings-modal" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(event) => event.stopPropagation()}>
+      <section
+        className="settings-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <aside className="settings-sidebar">
           <header>
             <strong>Settings</strong>
@@ -56,7 +62,11 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
           </header>
           {section === "general" ? <GeneralSettings settings={settings} activeWorkspace={activeWorkspace} /> : null}
           {section === "workspaces" ? (
-            <WorkspaceSettings settings={settings} activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
+            <WorkspaceSettings
+              settings={settings}
+              activeWorkspace={activeWorkspace}
+              onWorkspaceChange={onWorkspaceChange}
+            />
           ) : null}
           {section === "terminal" ? (
             <TerminalSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
@@ -106,7 +116,10 @@ function WorkspaceSettings({
     const nextName = name.trim() || activeWorkspace.name;
     const nextPath = path.trim() || activeWorkspace.path;
     const previousDefaultCwd = activeWorkspace.defaultCwd || activeWorkspace.path;
-    const nextDefaultCwd = activeWorkspace.defaultCwd && activeWorkspace.defaultCwd !== activeWorkspace.path ? activeWorkspace.defaultCwd : nextPath;
+    const nextDefaultCwd =
+      activeWorkspace.defaultCwd && activeWorkspace.defaultCwd !== activeWorkspace.path
+        ? activeWorkspace.defaultCwd
+        : nextPath;
     setStatus("saving");
     await onWorkspaceChange({
       ...activeWorkspace,
@@ -114,7 +127,9 @@ function WorkspaceSettings({
       path: nextPath,
       defaultCwd: nextDefaultCwd,
       profiles: activeWorkspace.profiles.map((profile) =>
-        profile.cwd === activeWorkspace.path || profile.cwd === previousDefaultCwd ? { ...profile, cwd: nextDefaultCwd } : profile
+        profile.cwd === activeWorkspace.path || profile.cwd === previousDefaultCwd
+          ? { ...profile, cwd: nextDefaultCwd }
+          : profile
       )
     });
     setName(nextName);
@@ -154,7 +169,10 @@ function WorkspaceSettings({
       </form>
       <div className="settings-list">
         {(settings.workspaces ?? []).map((workspace) => (
-          <div key={workspace.id} className={workspace.id === activeWorkspace.id ? "settings-list-row active" : "settings-list-row"}>
+          <div
+            key={workspace.id}
+            className={workspace.id === activeWorkspace.id ? "settings-list-row active" : "settings-list-row"}
+          >
             <span>{workspace.name}</span>
             <code>{workspace.path}</code>
           </div>
@@ -341,8 +359,16 @@ function WorkflowSettings({
       <form className="settings-form" onSubmit={saveQuickCommand}>
         <label htmlFor="quick-command-name">Quick command</label>
         <div className="settings-inline-control">
-          <input id="quick-command-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" />
-          <select value={splitDirection} onChange={(event) => setSplitDirection(event.target.value as "right" | "down")}>
+          <input
+            id="quick-command-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Name"
+          />
+          <select
+            value={splitDirection}
+            onChange={(event) => setSplitDirection(event.target.value as "right" | "down")}
+          >
             <option value="down">Split down</option>
             <option value="right">Split right</option>
           </select>
@@ -350,7 +376,11 @@ function WorkflowSettings({
         <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Command, e.g. npm" />
         <input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="Args, e.g. run test" />
         <div className="settings-inline-control">
-          <input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder={activeWorkspace.defaultCwd || activeWorkspace.path} />
+          <input
+            value={cwd}
+            onChange={(event) => setCwd(event.target.value)}
+            placeholder={activeWorkspace.defaultCwd || activeWorkspace.path}
+          />
           <button type="submit" disabled={status === "saving" || !command.trim()}>
             {status === "saving" ? "Saving" : "Add"}
           </button>
@@ -364,7 +394,9 @@ function WorkflowSettings({
           <div key={item.id} className="settings-list-row">
             <span>{item.name}</span>
             <code>{[item.command, ...item.args].join(" ")}</code>
-            <button type="button" onClick={() => void deleteQuickCommand(item.id)}>Delete</button>
+            <button type="button" onClick={() => void deleteQuickCommand(item.id)}>
+              Delete
+            </button>
           </div>
         ))}
         {(activeWorkspace.quickCommands ?? []).length === 0 ? <p>No quick commands yet.</p> : null}
@@ -375,8 +407,12 @@ function WorkflowSettings({
           <div key={preset.id} className="settings-list-row">
             <span>{preset.name}</span>
             <code>{new Date(preset.updatedAt).toLocaleDateString()}</code>
-            <button type="button" onClick={() => void renamePreset(preset.id)}>Rename</button>
-            <button type="button" onClick={() => void deletePreset(preset.id)}>Delete</button>
+            <button type="button" onClick={() => void renamePreset(preset.id)}>
+              Rename
+            </button>
+            <button type="button" onClick={() => void deletePreset(preset.id)}>
+              Delete
+            </button>
           </div>
         ))}
         {(activeWorkspace.layoutPresets ?? []).length === 0 ? <p>No saved layouts yet.</p> : null}
@@ -406,7 +442,10 @@ function SettingGroup({ title, children }: { title: string; children: ReactNode 
 }
 
 function splitArgs(value: string): string[] {
-  return value.split(" ").map((item) => item.trim()).filter(Boolean);
+  return value
+    .split(" ")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function clampTerminalFontSize(value: number): number {

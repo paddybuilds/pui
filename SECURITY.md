@@ -5,9 +5,9 @@
 Pui is currently pre-1.0. Security fixes are prioritized on the default branch
 and included in the next available release or source update.
 
-| Version | Supported |
-| ------- | --------- |
-| main    | Yes       |
+| Version        | Supported   |
+| -------------- | ----------- |
+| main           | Yes         |
 | < 1.0 releases | Best effort |
 
 ## Reporting a Vulnerability

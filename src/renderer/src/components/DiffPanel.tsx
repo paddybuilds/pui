@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GitCommitHorizontal, RotateCcw, Upload } from "lucide-react";
 import type { GitCommit, GitDiff, GitFileStatus, GitStatus } from "../../../shared/types";
 import { splitDiff } from "../lib/diff";
@@ -20,9 +20,30 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [operationMessage, setOperationMessage] = useState("");
   const [committing, setCommitting] = useState(false);
-  const files = status?.files ?? [];
-  const stagedFiles = files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?");
-  const unstagedFiles = files.filter((file) => file.workingTreeStatus.trim());
+  const files = useMemo(() => status?.files ?? [], [status?.files]);
+  const fileKey = useMemo(() => files.map((file) => file.path).join("|"), [files]);
+  const stagedFiles = useMemo(
+    () => files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?"),
+    [files]
+  );
+  const unstagedFiles = useMemo(() => files.filter((file) => file.workingTreeStatus.trim()), [files]);
+
+  const loadCommits = useCallback(async () => {
+    setCommits(await pui.git.commits(workspace, 16));
+  }, [workspace]);
+
+  const loadDiff = useCallback(
+    async (file: string) => {
+      setSelectedFile(file);
+      const unstaged = await pui.git.diff(workspace, file, false);
+      if (unstaged.text.trim()) {
+        setDiff(unstaged);
+        return;
+      }
+      setDiff(await pui.git.diff(workspace, file, true));
+    },
+    [workspace]
+  );
 
   useEffect(() => {
     if (!status?.isRepo) {
@@ -40,21 +61,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
       setDiff(null);
     }
     void loadCommits();
-  }, [status?.files.map((file) => file.path).join("|")]);
-
-  const loadCommits = async () => {
-    setCommits(await pui.git.commits(workspace, 16));
-  };
-
-  const loadDiff = async (file: string) => {
-    setSelectedFile(file);
-    const unstaged = await pui.git.diff(workspace, file, false);
-    if (unstaged.text.trim()) {
-      setDiff(unstaged);
-      return;
-    }
-    setDiff(await pui.git.diff(workspace, file, true));
-  };
+  }, [fileKey, files, loadCommits, loadDiff, selectedFile, status?.isRepo]);
 
   const stage = async (file: string) => {
     onStatus(await pui.git.stage(workspace, [file]));
@@ -211,10 +218,18 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
                 placeholder="Commit message"
               />
               <div className="file-action-buttons">
-                <button type="button" disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()} onClick={() => void commit(false)}>
+                <button
+                  type="button"
+                  disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()}
+                  onClick={() => void commit(false)}
+                >
                   Commit
                 </button>
-                <button type="button" disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()} onClick={() => void commit(true)}>
+                <button
+                  type="button"
+                  disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()}
+                  onClick={() => void commit(true)}
+                >
                   Commit & Push
                 </button>
               </div>
@@ -245,15 +260,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   );
 }
 
-function FileButton({
-  file,
-  active,
-  onClick
-}: {
-  file: GitFileStatus;
-  active: boolean;
-  onClick: () => void;
-}) {
+function FileButton({ file, active, onClick }: { file: GitFileStatus; active: boolean; onClick: () => void }) {
   const staged = file.indexStatus.trim() || "-";
   const unstaged = file.workingTreeStatus.trim() || "-";
   const pathParts = file.path.split(/[\\/]/);

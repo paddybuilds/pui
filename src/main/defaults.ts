@@ -5,7 +5,6 @@ import {
   type ConsoleProfile,
   type TerminalWorkspace
 } from "../shared/types";
-import { defaultCodexAddonPreferences } from "../shared/codexAddon";
 import { defaultShell } from "./shell";
 
 export function defaultProfiles(workspace: string): ConsoleProfile[] {
@@ -22,19 +21,6 @@ export function defaultProfiles(workspace: string): ConsoleProfile[] {
       appearance: {
         color: "#9ca3af",
         icon: "terminal"
-      }
-    },
-    {
-      id: "codex-interactive",
-      name: "Codex",
-      cwd: workspace,
-      command: "codex",
-      args: [],
-      env: {},
-      shortcut: "CmdOrCtrl+2",
-      appearance: {
-        color: "#9ca3af",
-        icon: "sparkles"
       }
     }
   ];
@@ -65,7 +51,6 @@ export function defaultSettings(): AppSettings {
     recentWorkspaces: [workspace],
     appPreferences: {
       ...DEFAULT_APP_PREFERENCES,
-      codexAddon: defaultCodexAddonPreferences(),
       defaultTerminalProfileId: profiles[0]?.id
     },
     activeWorkspaceId: defaultWorkspace.id,

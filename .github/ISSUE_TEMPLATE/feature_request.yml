@@ -36,7 +36,6 @@ body:
       label: Area
       options:
         - Terminal workspace
-        - Codex integration
         - Git sidebar and diffs
         - Settings and persistence
         - Developer tooling

@@ -1,7 +1,7 @@
 # Pui
 
 Pui is a macOS-focused Electron workspace for working across project folders with
-PTY-backed terminals, Git context, and Codex CLI workflows close at hand.
+PTY-backed terminals and Git context close at hand.
 
 The project is early, but it is being prepared for open-source collaboration.
 Contributions that keep the app focused, local-first, and pleasant for day-to-day
@@ -12,7 +12,6 @@ developer work are welcome.
 - PTY-backed folder terminals with split panes.
 - Folder-specific terminal setups.
 - Command palette with `Cmd+K`.
-- Interactive Codex use through normal terminal profiles.
 - Persistent Git sidebar when the active folder is inside a Git repo.
 - Live Git status and diff panel with recent commits, stage, unstage, and confirmed discard actions.
 - Local app settings persisted through Electron app data.

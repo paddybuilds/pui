@@ -9,7 +9,6 @@ import {
   type TerminalWorkspace,
   type ThemePreset
 } from "../../../shared/types";
-import { normalizeCodexAddonPreferences, normalizeCodexWorkspacePreferences } from "../../../shared/codexAddon";
 import { normalizeWorkspaceWorkflow } from "../../../shared/workflow";
 
 export type IdFactory = () => string;
@@ -21,7 +20,6 @@ export type InitialWorkspaceOptions = {
   path: string;
   defaultCwd: string;
   terminalFontSize?: number;
-  includeCodexProfile?: boolean;
   defaultTerminalProfileId?: string;
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
   onboardingCompletedVersion?: string;
@@ -43,9 +41,6 @@ export function normalizeSettings(
         kind: workspace.kind ?? ("folder" as const),
         defaultCwd: workspace.defaultCwd || workspace.path,
         terminalFontSize: normalizeTerminalFontSize(workspace.terminalFontSize || appPreferences.terminalFontSize),
-        ...(normalizeCodexWorkspacePreferences(workspace.codexAddon)
-          ? { codexAddon: normalizeCodexWorkspacePreferences(workspace.codexAddon) }
-          : {}),
         profiles: workspace.profiles.map((profile) => ({
           ...profile,
           cwd: profile.cwd || workspace.defaultCwd || workspace.path
@@ -108,17 +103,6 @@ export function normalizeAppPreferences(
   const onboardingCompletedVersion = normalizeOptionalString(
     preferences?.onboardingCompletedVersion ?? defaults.onboardingCompletedVersion
   );
-  const codexProfileEnabled =
-    typeof preferences?.codexProfileEnabled === "boolean"
-      ? preferences.codexProfileEnabled
-      : typeof defaults.codexProfileEnabled === "boolean"
-        ? defaults.codexProfileEnabled
-        : DEFAULT_APP_PREFERENCES.codexProfileEnabled;
-  const codexAddonInput = preferences?.codexAddon ?? defaults.codexAddon;
-  const codexAddon = codexAddonInput
-    ? normalizeCodexAddonPreferences(codexAddonInput)
-    : undefined;
-
   return {
     themePreset: normalizeThemePreset(preferences?.themePreset ?? defaults.themePreset),
     density: normalizeAppDensity(preferences?.density ?? defaults.density),
@@ -127,7 +111,6 @@ export function normalizeAppPreferences(
     ),
     ...(defaultTerminalProfileId ? { defaultTerminalProfileId } : {}),
     ...(defaultTerminalProfileTemplate ? { defaultTerminalProfileTemplate } : {}),
-    codexProfileEnabled,
     gitPanelDefault: normalizeGitPanelDefault(preferences?.gitPanelDefault ?? defaults.gitPanelDefault),
     updateChecksEnabled:
       typeof preferences?.updateChecksEnabled === "boolean"
@@ -135,7 +118,6 @@ export function normalizeAppPreferences(
         : typeof defaults.updateChecksEnabled === "boolean"
           ? defaults.updateChecksEnabled
           : DEFAULT_APP_PREFERENCES.updateChecksEnabled,
-    ...(codexAddon ? { codexAddon } : {}),
     ...(onboardingCompletedVersion ? { onboardingCompletedVersion } : {})
   };
 }
@@ -162,26 +144,6 @@ export function createShellProfile(
   idFactory: IdFactory = createWorkspaceSettingsId
 ): ConsoleProfile {
   return createTerminalProfileFromTemplate(defaultShellProfileTemplate(platform), path, shortcut, idFactory);
-}
-
-export function createCodexProfile(
-  path: string,
-  shortcut: string,
-  idFactory: IdFactory = createWorkspaceSettingsId
-): ConsoleProfile {
-  return {
-    id: idFactory(),
-    name: "Codex",
-    cwd: path,
-    command: "codex",
-    args: [],
-    env: {},
-    shortcut,
-    appearance: {
-      color: "#9ca3af",
-      icon: "sparkles"
-    }
-  };
 }
 
 export function defaultShellProfileTemplate(platform: string): TerminalProfileTemplate {
@@ -262,7 +224,6 @@ export function createInitialWorkspaceSettings(
       defaultTerminalProfileId: options.defaultTerminalProfileId ?? settings.appPreferences?.defaultTerminalProfileId,
       defaultTerminalProfileTemplate:
         options.defaultTerminalProfileTemplate ?? settings.appPreferences?.defaultTerminalProfileTemplate,
-      codexProfileEnabled: options.includeCodexProfile ?? settings.appPreferences?.codexProfileEnabled,
       onboardingCompletedVersion:
         options.onboardingCompletedVersion ?? settings.appPreferences?.onboardingCompletedVersion
     },
@@ -274,9 +235,7 @@ export function createInitialWorkspaceSettings(
     "CmdOrCtrl+1",
     idFactory
   );
-  const profiles = appPreferences.codexProfileEnabled
-    ? [shellProfile, createCodexProfile(defaultCwd, "CmdOrCtrl+2", idFactory)]
-    : [shellProfile];
+  const profiles = [shellProfile];
   const paneId = idFactory();
   const workspace: TerminalWorkspace = normalizeWorkspaceWorkflow({
     id: idFactory(),

@@ -164,11 +164,10 @@ describe("workspace settings helpers", () => {
           name: "Pui",
           path: "/repo/pui",
           defaultCwd: "/repo/pui/app",
-          terminalFontSize: 15,
-          includeCodexProfile: true
+          terminalFontSize: 15
         },
         "darwin",
-        idFactory(["shell-profile", "codex-profile", "pane-a", "workspace-a"])
+        idFactory(["shell-profile", "pane-a", "workspace-a"])
       )
     ).toEqual({
       workspace: "/repo/pui",
@@ -185,26 +184,12 @@ describe("workspace settings helpers", () => {
             color: "#9ca3af",
             icon: "terminal"
           }
-        },
-        {
-          id: "codex-profile",
-          name: "Codex",
-          cwd: "/repo/pui/app",
-          command: "codex",
-          args: [],
-          env: {},
-          shortcut: "CmdOrCtrl+2",
-          appearance: {
-            color: "#9ca3af",
-            icon: "sparkles"
-          }
         }
       ],
       recentWorkspaces: ["/repo/pui", "/default"],
       appPreferences: {
         ...DEFAULT_APP_PREFERENCES,
-        terminalFontSize: 15,
-        codexProfileEnabled: true
+        terminalFontSize: 15
       },
       activeWorkspaceId: "workspace-a",
       workspaces: [
@@ -228,19 +213,6 @@ describe("workspace settings helpers", () => {
                 color: "#9ca3af",
                 icon: "terminal"
               }
-            },
-            {
-              id: "codex-profile",
-              name: "Codex",
-              cwd: "/repo/pui/app",
-              command: "codex",
-              args: [],
-              env: {},
-              shortcut: "CmdOrCtrl+2",
-              appearance: {
-                color: "#9ca3af",
-                icon: "sparkles"
-              }
             }
           ],
           layout: {
@@ -263,7 +235,6 @@ describe("workspace settings helpers", () => {
         density: "compact",
         terminalFontSize: 16,
         defaultTerminalProfileId: "profile-a",
-        codexProfileEnabled: false,
         gitPanelDefault: "closed",
         updateChecksEnabled: false,
         onboardingCompletedVersion: "0.2.0"
@@ -273,7 +244,6 @@ describe("workspace settings helpers", () => {
       density: "compact",
       terminalFontSize: 16,
       defaultTerminalProfileId: "profile-a",
-      codexProfileEnabled: false,
       gitPanelDefault: "closed",
       updateChecksEnabled: false,
       onboardingCompletedVersion: "0.2.0"
@@ -295,8 +265,7 @@ describe("workspace settings helpers", () => {
           args: ["--login"],
           env: { PUI_SHELL: "fish" },
           appearance: { color: "#14b8a6", icon: "terminal" }
-        },
-        codexProfileEnabled: false
+        }
       }
     };
 
@@ -327,8 +296,7 @@ describe("workspace settings helpers", () => {
       ],
       appPreferences: {
         ...settings.appPreferences,
-        terminalFontSize: 16,
-        codexProfileEnabled: false
+        terminalFontSize: 16
       },
       workspaces: [
         {
@@ -382,12 +350,11 @@ describe("workspace settings helpers", () => {
       ]
     };
 
-    expect(updateAppPreferences(settings, { terminalFontSize: 18, codexProfileEnabled: false }, "darwin")).toEqual({
+    expect(updateAppPreferences(settings, { terminalFontSize: 18 }, "darwin")).toEqual({
       ...settings,
       appPreferences: {
         ...DEFAULT_APP_PREFERENCES,
-        terminalFontSize: 18,
-        codexProfileEnabled: false
+        terminalFontSize: 18
       },
       workspaces: [
         {

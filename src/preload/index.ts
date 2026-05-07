@@ -1,12 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { CodexRunCommandOptions } from "../shared/codexCommand";
 import { ipc } from "../shared/ipc";
 import type {
   AppSettings,
   AppUpdateCheckResult,
   AppVersionInfo,
-  CodexRun,
-  CodexStatus,
   GitCommit,
   GitDiff,
   GitOperationResult,
@@ -64,26 +61,6 @@ const api = {
       ipcRenderer.on(ipc.terminal.exit, listener);
       return () => {
         ipcRenderer.removeListener(ipc.terminal.exit, listener);
-      };
-    }
-  },
-  codex: {
-    run: (prompt: string, workspace: string, options?: CodexRunCommandOptions) =>
-      ipcRenderer.invoke(ipc.codex.run, { prompt, workspace, options }) as Promise<CodexRun>,
-    cancel: (runId: string) => ipcRenderer.invoke(ipc.codex.cancel, runId),
-    status: () => ipcRenderer.invoke(ipc.codex.status) as Promise<CodexStatus>,
-    onEvent: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
-      ipcRenderer.on(ipc.codex.event, listener);
-      return () => {
-        ipcRenderer.removeListener(ipc.codex.event, listener);
-      };
-    },
-    onUpdate: (callback: (run: CodexRun) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, run: CodexRun) => callback(run);
-      ipcRenderer.on(ipc.codex.update, listener);
-      return () => {
-        ipcRenderer.removeListener(ipc.codex.update, listener);
       };
     }
   },

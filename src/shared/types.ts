@@ -21,51 +21,6 @@ export type TerminalSession = {
   status: "running" | "exited";
 };
 
-export type CodexRunStatus = "running" | "completed" | "failed" | "cancelled";
-
-export type CodexEvent = {
-  timestamp: string;
-  type: string;
-  message: string;
-  raw: unknown;
-};
-
-export type CodexRun = {
-  id: string;
-  workspace: string;
-  prompt: string;
-  status: CodexRunStatus;
-  startedAt: string;
-  endedAt?: string;
-  events: CodexEvent[];
-  exitCode?: number | null;
-};
-
-export type CodexSandboxMode = "read-only" | "workspace-write" | "danger-full-access";
-
-export type CodexPromptTemplate = {
-  id: string;
-  name: string;
-  prompt: string;
-};
-
-export type CodexAddonPreferences = {
-  enabled: boolean;
-  defaultModel: string;
-  defaultSandbox: CodexSandboxMode;
-  interactiveProfileEnabled: boolean;
-  defaultPromptTemplates: CodexPromptTemplate[];
-};
-
-export type CodexWorkspacePreferences = Partial<CodexAddonPreferences>;
-
-export type CodexStatus = {
-  available: boolean;
-  command: string;
-  resolvedPath?: string;
-  error?: string;
-};
-
 export type GitFileStatus = {
   path: string;
   indexStatus: string;
@@ -144,8 +99,6 @@ export type AppPreferences = {
   terminalFontSize: number;
   defaultTerminalProfileId?: string;
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
-  codexProfileEnabled: boolean;
-  codexAddon?: CodexAddonPreferences;
   gitPanelDefault: GitPanelDefault;
   updateChecksEnabled: boolean;
   onboardingCompletedVersion?: string;
@@ -155,7 +108,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   themePreset: "system",
   density: "comfortable",
   terminalFontSize: 13,
-  codexProfileEnabled: true,
   gitPanelDefault: "open",
   updateChecksEnabled: true
 };
@@ -233,5 +185,4 @@ export type TerminalWorkspace = {
   layout: WorkbenchLayout;
   layoutPresets?: LayoutPreset[];
   quickCommands?: QuickCommand[];
-  codexAddon?: CodexWorkspacePreferences;
 };

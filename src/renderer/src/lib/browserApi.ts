@@ -1,11 +1,9 @@
 import type { PuiApi, ShellCandidate } from "../../../preload";
-import { defaultCodexAddonPreferences } from "../../../shared/codexAddon";
 import { DEFAULT_APP_PREFERENCES } from "../../../shared/types";
 import type {
   AppSettings,
   AppUpdateCheckResult,
   AppVersionInfo,
-  CodexRun,
   ConsoleProfile,
   GitCommit,
   GitDiff,
@@ -32,16 +30,6 @@ const defaultProfiles: ConsoleProfile[] = [
     env: {},
     shortcut: "CmdOrCtrl+1",
     appearance: { color: "#9ca3af", icon: "terminal" }
-  },
-  {
-    id: "preview-codex",
-    name: "Codex",
-    cwd: workspace,
-    command: "codex",
-    args: [],
-    env: {},
-    shortcut: "CmdOrCtrl+2",
-    appearance: { color: "#9ca3af", icon: "sparkles" }
   }
 ];
 
@@ -50,9 +38,7 @@ let settings: AppSettings = {
   profiles: defaultProfiles,
   recentWorkspaces: [workspace],
   appPreferences: {
-    ...DEFAULT_APP_PREFERENCES,
-    codexProfileEnabled: true,
-    codexAddon: defaultCodexAddonPreferences()
+    ...DEFAULT_APP_PREFERENCES
   },
   activeWorkspaceId: "preview-workspace",
   workspaces: [
@@ -69,8 +55,7 @@ let settings: AppSettings = {
         root: { type: "pane", id: "preview-pane", profileId: defaultProfiles[0]?.id }
       },
       layoutPresets: [],
-      quickCommands: [],
-      codexAddon: {}
+      quickCommands: []
     }
   ]
 };
@@ -143,30 +128,6 @@ const browserPreviewApi: PuiApi = {
     kill: (sessionId) => terminalBridge.kill(sessionId),
     onData: (callback) => terminalBridge.onData(callback),
     onExit: (callback) => terminalBridge.onExit(callback)
-  },
-  codex: {
-    run: async (prompt, runWorkspace) =>
-      ({
-        id: crypto.randomUUID(),
-        workspace: runWorkspace,
-        prompt,
-        status: "completed",
-        startedAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
-        events: [
-          {
-            timestamp: new Date().toISOString(),
-            type: "preview",
-            message: "Codex runs are available in the Electron app window.",
-            raw: null
-          }
-        ],
-        exitCode: 0
-      }) satisfies CodexRun,
-    cancel: async () => undefined,
-    status: async () => ({ available: false, command: "codex", error: "Preview mode" }),
-    onEvent: () => noopUnsubscribe,
-    onUpdate: () => noopUnsubscribe
   },
   git: {
     status: (gitWorkspace) => bridgeGet<GitStatus>("/git/status", { workspace: gitWorkspace }),

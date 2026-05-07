@@ -1,7 +1,7 @@
 {
   "name": "pui",
   "version": "0.1.0",
-  "description": "A macOS terminal folder workspace with Codex CLI integration.",
+  "description": "A macOS terminal folder workspace for project-focused development.",
   "repository": {
     "type": "git",
     "url": "https://github.com/paddybuilds/pui.git"

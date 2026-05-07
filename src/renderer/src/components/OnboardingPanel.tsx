@@ -49,7 +49,6 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
   const [workspaceName, setWorkspaceName] = useState(basename(initialPath) || "workspace");
   const [defaultCwd, setDefaultCwd] = useState(initialPath);
   const [fontSize, setFontSize] = useState(String(preferences.terminalFontSize));
-  const [includeCodexProfile, setIncludeCodexProfile] = useState(preferences.codexProfileEnabled);
   const [themePreset, setThemePreset] = useState<ThemePreset>(preferences.themePreset);
   const [density, setDensity] = useState<AppDensity>(preferences.density);
   const [gitPanelDefault, setGitPanelDefault] = useState<GitPanelDefault>(preferences.gitPanelDefault);
@@ -146,7 +145,6 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
               density,
               terminalFontSize: normalizeTerminalFontSize(Number(fontSize)),
               defaultTerminalProfileTemplate: shellTemplate,
-              codexProfileEnabled: includeCodexProfile,
               gitPanelDefault,
               updateChecksEnabled,
               onboardingCompletedVersion: ONBOARDING_VERSION
@@ -157,7 +155,6 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
             path: workspacePath,
             defaultCwd,
             terminalFontSize: normalizeTerminalFontSize(Number(fontSize)),
-            includeCodexProfile,
             defaultTerminalProfileTemplate: shellTemplate,
             onboardingCompletedVersion: ONBOARDING_VERSION
           },
@@ -315,14 +312,6 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
               <label className="settings-check-row">
                 <input
                   type="checkbox"
-                  checked={includeCodexProfile}
-                  onChange={(event) => setIncludeCodexProfile(event.target.checked)}
-                />
-                <span>Add Codex profile</span>
-              </label>
-              <label className="settings-check-row">
-                <input
-                  type="checkbox"
                   checked={gitPanelDefault === "open"}
                   onChange={(event) => setGitPanelDefault(event.target.checked ? "open" : "closed")}
                 />
@@ -345,7 +334,7 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
               <SettingPreview label="Folder" value={workspacePath} />
               <SettingPreview label="Terminal" value={shellTemplate.name} />
               <SettingPreview label="Appearance" value={`${themePreset}, ${density}`} />
-              <SettingPreview label="Profiles" value={includeCodexProfile ? "Shell, Codex" : "Shell"} />
+              <SettingPreview label="Profiles" value="Shell" />
             </div>
           ) : null}
 

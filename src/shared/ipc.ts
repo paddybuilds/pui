@@ -22,13 +22,6 @@ export const ipc = {
     data: "terminal:data",
     exit: "terminal:exit"
   },
-  codex: {
-    run: "codex:run",
-    cancel: "codex:cancel",
-    status: "codex:status",
-    event: "codex:event",
-    update: "codex:update"
-  },
   git: {
     status: "git:status",
     diff: "git:diff",

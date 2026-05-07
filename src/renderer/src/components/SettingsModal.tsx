@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Keyboard, Monitor, Settings, TerminalSquare, X } from "lucide-react";
-import type { AppSettings, TerminalWorkspace } from "../../../shared/types";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { Keyboard, Monitor, Play, Settings, TerminalSquare, X } from "lucide-react";
+import type { AppSettings, QuickCommand, TerminalWorkspace } from "../../../shared/types";
 
-type SettingsSection = "general" | "workspaces" | "terminal" | "shortcuts";
+type SettingsSection = "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
@@ -15,6 +15,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }>
   { id: "general", label: "General", icon: <Settings size={15} /> },
   { id: "workspaces", label: "Folders", icon: <Monitor size={15} /> },
   { id: "terminal", label: "Terminal", icon: <TerminalSquare size={15} /> },
+  { id: "workflow", label: "Workflow", icon: <Play size={15} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={15} /> }
 ];
 
@@ -57,6 +58,9 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, on
           ) : null}
           {section === "terminal" ? (
             <TerminalSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
+          ) : null}
+          {section === "workflow" ? (
+            <WorkflowSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
           ) : null}
           {section === "shortcuts" ? <ShortcutSettings /> : null}
         </main>
@@ -255,6 +259,130 @@ function TerminalSettings({
   );
 }
 
+function WorkflowSettings({
+  activeWorkspace,
+  onWorkspaceChange
+}: {
+  activeWorkspace: TerminalWorkspace;
+  onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [command, setCommand] = useState("");
+  const [args, setArgs] = useState("");
+  const [cwd, setCwd] = useState("");
+  const [splitDirection, setSplitDirection] = useState<"right" | "down">("down");
+  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  useEffect(() => {
+    setStatus("idle");
+  }, [activeWorkspace.id]);
+
+  const saveQuickCommand = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedCommand = command.trim();
+    if (!trimmedCommand) {
+      return;
+    }
+    const quickCommand: QuickCommand = {
+      id: crypto.randomUUID(),
+      name: name.trim() || trimmedCommand,
+      command: trimmedCommand,
+      args: splitArgs(args),
+      cwd: cwd.trim() || undefined,
+      env: {},
+      shortcut: "",
+      splitDirection
+    };
+    setStatus("saving");
+    await onWorkspaceChange({
+      ...activeWorkspace,
+      quickCommands: [...(activeWorkspace.quickCommands ?? []), quickCommand]
+    });
+    setName("");
+    setCommand("");
+    setArgs("");
+    setCwd("");
+    setStatus("saved");
+    window.setTimeout(() => setStatus("idle"), 1200);
+  };
+
+  const deleteQuickCommand = async (id: string) => {
+    await onWorkspaceChange({
+      ...activeWorkspace,
+      quickCommands: (activeWorkspace.quickCommands ?? []).filter((item) => item.id !== id)
+    });
+  };
+
+  const renamePreset = async (id: string) => {
+    const preset = activeWorkspace.layoutPresets?.find((item) => item.id === id);
+    const nextName = window.prompt("Preset name", preset?.name)?.trim();
+    if (!preset || !nextName) {
+      return;
+    }
+    await onWorkspaceChange({
+      ...activeWorkspace,
+      layoutPresets: (activeWorkspace.layoutPresets ?? []).map((item) =>
+        item.id === id ? { ...item, name: nextName, updatedAt: new Date().toISOString() } : item
+      )
+    });
+  };
+
+  const deletePreset = async (id: string) => {
+    await onWorkspaceChange({
+      ...activeWorkspace,
+      layoutPresets: (activeWorkspace.layoutPresets ?? []).filter((item) => item.id !== id)
+    });
+  };
+
+  return (
+    <div className="settings-page">
+      <form className="settings-form" onSubmit={saveQuickCommand}>
+        <label htmlFor="quick-command-name">Quick command</label>
+        <div className="settings-inline-control">
+          <input id="quick-command-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" />
+          <select value={splitDirection} onChange={(event) => setSplitDirection(event.target.value as "right" | "down")}>
+            <option value="down">Split down</option>
+            <option value="right">Split right</option>
+          </select>
+        </div>
+        <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Command, e.g. npm" />
+        <input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="Args, e.g. run test" />
+        <div className="settings-inline-control">
+          <input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder={activeWorkspace.defaultCwd || activeWorkspace.path} />
+          <button type="submit" disabled={status === "saving" || !command.trim()}>
+            {status === "saving" ? "Saving" : "Add"}
+          </button>
+        </div>
+        <p>Commands run in a new split terminal. Empty cwd uses the folder default.</p>
+        {status === "saved" ? <span className="settings-save-state">Saved</span> : null}
+      </form>
+
+      <SettingGroup title="Quick commands">
+        {(activeWorkspace.quickCommands ?? []).map((item) => (
+          <div key={item.id} className="settings-list-row">
+            <span>{item.name}</span>
+            <code>{[item.command, ...item.args].join(" ")}</code>
+            <button type="button" onClick={() => void deleteQuickCommand(item.id)}>Delete</button>
+          </div>
+        ))}
+        {(activeWorkspace.quickCommands ?? []).length === 0 ? <p>No quick commands yet.</p> : null}
+      </SettingGroup>
+
+      <SettingGroup title="Layout presets">
+        {(activeWorkspace.layoutPresets ?? []).map((preset) => (
+          <div key={preset.id} className="settings-list-row">
+            <span>{preset.name}</span>
+            <code>{new Date(preset.updatedAt).toLocaleDateString()}</code>
+            <button type="button" onClick={() => void renamePreset(preset.id)}>Rename</button>
+            <button type="button" onClick={() => void deletePreset(preset.id)}>Delete</button>
+          </div>
+        ))}
+        {(activeWorkspace.layoutPresets ?? []).length === 0 ? <p>No saved layouts yet.</p> : null}
+      </SettingGroup>
+    </div>
+  );
+}
+
 function ShortcutSettings() {
   return (
     <div className="settings-page">
@@ -263,6 +391,19 @@ function ShortcutSettings() {
       <SettingRow label="Split down" value="Shift Cmd D" />
     </div>
   );
+}
+
+function SettingGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="settings-form">
+      <strong>{title}</strong>
+      <div className="settings-list">{children}</div>
+    </section>
+  );
+}
+
+function splitArgs(value: string): string[] {
+  return value.split(" ").map((item) => item.trim()).filter(Boolean);
 }
 
 function clampTerminalFontSize(value: number): number {

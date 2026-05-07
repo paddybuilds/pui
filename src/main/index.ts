@@ -122,5 +122,9 @@ function registerIpc(): void {
   ipcMain.handle(ipc.git.discard, (_event, payload: { workspace: string; paths: string[] }) => {
     return gitService?.discard(payload.workspace, payload.paths);
   });
+  ipcMain.handle(ipc.git.commit, (_event, payload: { workspace: string; message: string }) => {
+    return gitService?.commit(payload.workspace, payload.message);
+  });
+  ipcMain.handle(ipc.git.push, (_event, workspace: string) => gitService?.push(workspace));
   ipcMain.handle(ipc.git.watch, (_event, workspace: string) => gitService?.watch(workspace));
 }

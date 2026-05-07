@@ -27,6 +27,8 @@ export const ipc = {
     stage: "git:stage",
     unstage: "git:unstage",
     discard: "git:discard",
+    commit: "git:commit",
+    push: "git:push",
     watch: "git:watch",
     changed: "git:changed"
   }

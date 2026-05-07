@@ -8,15 +8,18 @@ import {
   useRef,
   useState
 } from "react";
-import { Edit3, GitCompare, PanelRight, PanelTop, Plus, Settings, TerminalSquare, Trash2, X } from "lucide-react";
+import { Edit3, GitCompare, PanelRight, PanelTop, Play, Plus, Save, Settings, TerminalSquare, Trash2, X } from "lucide-react";
 import type {
   AppSettings,
   ConsoleProfile,
   GitStatus,
+  LayoutPreset,
+  QuickCommand,
   TerminalWorkspace,
   WorkbenchNode,
   WorkbenchPane
 } from "../../shared/types";
+import { createQuickCommandProfile, normalizeWorkspaceWorkflow } from "../../shared/workflow";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { GitPanel } from "./components/DiffPanel";
@@ -130,11 +133,9 @@ export function App() {
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
       setGitStatus(null);
-      setGitSidebarOpen(false);
     } else {
       await refreshGit(workspace.path);
       await pui.git.watch(workspace.path);
-      setGitSidebarOpen(true);
     }
     setPaletteOpen(false);
     closeContextMenu();
@@ -163,6 +164,32 @@ export function App() {
   const splitActivePane = useCallback((direction: "right" | "down" = "right") => {
     splitPaneById(activePaneId, direction);
   }, [activePaneId, splitPaneById]);
+
+  const splitPaneWithProfile = useCallback((paneIdToSplit: string, direction: "right" | "down", profile: ConsoleProfile) => {
+    if (!layoutRoot || !activeWorkspace) {
+      return;
+    }
+    const paneId = newId();
+    const nextRoot = splitPane(layoutRoot, paneIdToSplit, direction, { id: paneId, profileId: profile.id });
+    const nextWorkspace = {
+      ...activeWorkspace,
+      profiles: [...activeWorkspace.profiles.filter((item) => item.id !== profile.id), profile],
+      layout: {
+        activePaneId: paneId,
+        root: nextRoot
+      }
+    };
+    setSettings((current) =>
+      current
+        ? {
+            ...current,
+            workspaces: (current.workspaces ?? []).map((workspace) => (workspace.id === activeWorkspace.id ? nextWorkspace : workspace))
+          }
+        : current
+    );
+    setLayoutRoot(nextRoot);
+    setActivePaneId(paneId);
+  }, [activeWorkspace, layoutRoot]);
 
   const closePane = useCallback((paneId: string) => {
     if (!layoutRoot || panes.length <= 1) {
@@ -271,7 +298,9 @@ export function App() {
       layout: {
         activePaneId: paneId,
         root: { type: "pane", id: paneId, profileId: profile.id }
-      }
+      },
+      layoutPresets: [],
+      quickCommands: []
     };
 
     const nextSettings = {
@@ -284,7 +313,6 @@ export function App() {
     setActiveWorkspaceId(quickTerminal.id);
     hydrateWorkspace(quickTerminal);
     setGitStatus(null);
-    setGitSidebarOpen(false);
   };
 
   const createWorkspace = async ({ name, path }: { name?: string; path: string }) => {
@@ -306,7 +334,9 @@ export function App() {
       layout: {
         activePaneId: paneId,
         root: { type: "pane", id: paneId, profileId: profile.id }
-      }
+      },
+      layoutPresets: [],
+      quickCommands: []
     };
 
     const nextSettings = {
@@ -350,6 +380,50 @@ export function App() {
     closeContextMenu();
   };
 
+  const saveCurrentLayoutPreset = async () => {
+    if (!settings || !activeWorkspace || activeWorkspace.kind === "quick" || !layoutRoot) {
+      return;
+    }
+    const name = window.prompt("Preset name", `Layout ${(activeWorkspace.layoutPresets ?? []).length + 1}`)?.trim();
+    if (!name) {
+      return;
+    }
+    const now = new Date().toISOString();
+    const existing = activeWorkspace.layoutPresets?.find((preset) => preset.name.toLowerCase() === name.toLowerCase());
+    const preset: LayoutPreset = {
+      id: existing?.id ?? newId(),
+      name,
+      description: existing?.description,
+      root: cloneWorkbenchNode(layoutRoot),
+      activePaneId,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    const nextWorkspace = {
+      ...activeWorkspace,
+      layoutPresets: [...(activeWorkspace.layoutPresets ?? []).filter((item) => item.id !== preset.id), preset]
+    };
+    await updateActiveWorkspace(nextWorkspace);
+  };
+
+  const applyLayoutPreset = async (preset: LayoutPreset) => {
+    if (!activeWorkspace) {
+      return;
+    }
+    const cloned = cloneWorkbenchNodeWithNewIds(preset.root, preset.activePaneId);
+    disposeTerminalPanes(activeWorkspace.id, collectPanes(layoutRoot ?? activeWorkspace.layout.root).map((pane) => pane.id));
+    setSessionsByWorkspace((current) => ({ ...current, [activeWorkspace.id]: {} }));
+    applyWorkspaceLayout(cloned.root, cloned.activePaneId);
+  };
+
+  const runQuickCommand = useCallback((command: QuickCommand) => {
+    if (!activeWorkspace || activeWorkspace.kind === "quick") {
+      return;
+    }
+    const profile = createQuickCommandProfile(command, activeWorkspace, newId);
+    splitPaneWithProfile(activePaneId, command.splitDirection, profile);
+  }, [activePaneId, activeWorkspace, splitPaneWithProfile]);
+
   const deleteWorkspace = async (workspaceId: string) => {
     if (!settings) {
       return;
@@ -381,7 +455,6 @@ export function App() {
       hydrateWorkspace(nextActiveWorkspace);
       if (nextActiveWorkspace.kind === "quick") {
         setGitStatus(null);
-        setGitSidebarOpen(false);
       } else {
         await refreshGit(nextActiveWorkspace.path);
         await pui.git.watch(nextActiveWorkspace.path);
@@ -446,7 +519,6 @@ export function App() {
     hydrateWorkspace(nextFolder);
     await refreshGit(folder.path);
     await pui.git.watch(folder.path);
-    setGitSidebarOpen(true);
   };
 
   const updateActiveWorkspace = async (workspace: TerminalWorkspace) => {
@@ -466,7 +538,6 @@ export function App() {
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
       setGitStatus(null);
-      setGitSidebarOpen(false);
     } else {
       await refreshGit(workspace.path);
       await pui.git.watch(workspace.path);
@@ -690,6 +761,20 @@ export function App() {
                     {gitStatus.files.length ? <small>{gitStatus.files.length}</small> : null}
                   </button>
                 ) : null}
+                {activeWorkspace.kind !== "quick" ? (
+                  <>
+                    <button type="button" title="Save layout preset" onClick={() => void saveCurrentLayoutPreset()}>
+                      <Save size={14} />
+                      <span>Save layout</span>
+                    </button>
+                    {(activeWorkspace.quickCommands ?? []).map((command) => (
+                      <button key={command.id} type="button" title={command.name} onClick={() => runQuickCommand(command)}>
+                        <Play size={14} />
+                        <span>{command.name}</span>
+                      </button>
+                    ))}
+                  </>
+                ) : null}
               </>
             ) : null}
             <button type="button" className={settingsOpen ? "active" : ""} title="Settings" onClick={() => setSettingsOpen(true)}>
@@ -776,6 +861,11 @@ export function App() {
           onOpenWorkspace={switchWorkspace}
           onSplitRight={() => splitActivePane("right")}
           onSplitDown={() => splitActivePane("down")}
+          layoutPresets={activeWorkspace?.kind !== "quick" ? activeWorkspace?.layoutPresets ?? [] : []}
+          quickCommands={activeWorkspace?.kind !== "quick" ? activeWorkspace?.quickCommands ?? [] : []}
+          onSaveLayoutPreset={() => void saveCurrentLayoutPreset()}
+          onApplyLayoutPreset={(preset) => void applyLayoutPreset(preset)}
+          onRunQuickCommand={runQuickCommand}
           showGit={Boolean(activeWorkspace && gitStatus?.isRepo)}
           onShowGit={() => setGitSidebarOpen(true)}
         />
@@ -951,9 +1041,40 @@ function remapProfileIds(root: WorkbenchNode, profileIdMap: Map<string, string>)
   };
 }
 
+function cloneWorkbenchNode(root: WorkbenchNode): WorkbenchNode {
+  if (root.type === "pane") {
+    return { ...root };
+  }
+  return {
+    ...root,
+    sizes: root.sizes ? [...root.sizes] : undefined,
+    children: root.children.map(cloneWorkbenchNode)
+  };
+}
+
+function cloneWorkbenchNodeWithNewIds(root: WorkbenchNode, activePaneId: string): { root: WorkbenchNode; activePaneId: string } {
+  const idMap = new Map<string, string>();
+  const clone = (node: WorkbenchNode): WorkbenchNode => {
+    const id = newId();
+    idMap.set(node.id, id);
+    if (node.type === "pane") {
+      return { ...node, id };
+    }
+    return {
+      ...node,
+      id,
+      sizes: node.sizes ? [...node.sizes] : undefined,
+      children: node.children.map(clone)
+    };
+  };
+  const clonedRoot = clone(root);
+  const firstPane = collectPanes(clonedRoot)[0]?.id ?? clonedRoot.id;
+  return { root: clonedRoot, activePaneId: idMap.get(activePaneId) ?? firstPane };
+}
+
 function normalizeSettings(settings: AppSettings): AppSettings {
   if (settings.workspaces) {
-    const workspaces = settings.workspaces.map((workspace) => ({
+    const workspaces = settings.workspaces.map((workspace) => normalizeWorkspaceWorkflow({
       ...workspace,
       kind: workspace.kind ?? ("folder" as const),
       defaultCwd: workspace.defaultCwd || workspace.path,
@@ -983,7 +1104,9 @@ function normalizeSettings(settings: AppSettings): AppSettings {
     layout: {
       activePaneId: paneId,
       root: { type: "pane", id: paneId, profileId: profiles[0]?.id }
-    }
+    },
+    layoutPresets: [],
+    quickCommands: []
   };
 
   return {

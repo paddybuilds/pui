@@ -46,7 +46,9 @@ export function defaultSettings(): AppSettings {
     layout: {
       activePaneId: "main-pane",
       root: { type: "pane", id: "main-pane", profileId: profiles[0]?.id }
-    }
+    },
+    layoutPresets: [],
+    quickCommands: []
   };
 
   return {

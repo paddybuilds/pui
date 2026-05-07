@@ -4,7 +4,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { BrowserWindow } from "electron";
 import { parseGitStatus } from "../shared/gitStatus";
 import { ipc } from "../shared/ipc";
-import type { GitCommit, GitDiff, GitStatus } from "../shared/types";
+import type { GitCommit, GitDiff, GitOperationResult, GitStatus } from "../shared/types";
 
 const execFileAsync = promisify(execFile);
 
@@ -106,6 +106,14 @@ export class GitWorkspaceService {
     return this.getStatus(workspace);
   }
 
+  async commit(workspace: string, message: string): Promise<GitOperationResult> {
+    return this.gitOperation(workspace, ["commit", "-m", message]);
+  }
+
+  async push(workspace: string): Promise<GitOperationResult> {
+    return this.gitOperation(workspace, ["push"]);
+  }
+
   watch(workspace: string): void {
     if (this.watchers.has(workspace)) {
       return;
@@ -141,6 +149,21 @@ export class GitWorkspaceService {
       stdout: result.stdout,
       stderr: result.stderr
     };
+  }
+
+  private async gitOperation(workspace: string, args: string[]): Promise<GitOperationResult> {
+    try {
+      const result = await this.git(workspace, args);
+      return { ok: true, stdout: result.stdout, stderr: result.stderr };
+    } catch (error) {
+      const execError = error as { stdout?: string; stderr?: string; message?: string };
+      return {
+        ok: false,
+        stdout: execError.stdout ?? "",
+        stderr: execError.stderr ?? "",
+        error: execError.stderr || execError.message || String(error)
+      };
+    }
   }
 }
 

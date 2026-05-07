@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, CodexRun, GitCommit, GitDiff, GitStatus, TerminalSession } from "../shared/types";
+import type { AppSettings, CodexRun, GitCommit, GitDiff, GitOperationResult, GitStatus, TerminalSession } from "../shared/types";
 
 const api = {
   platform: process.platform,
@@ -66,6 +66,9 @@ const api = {
       ipcRenderer.invoke(ipc.git.unstage, { workspace, paths }) as Promise<GitStatus>,
     discard: (workspace: string, paths: string[]) =>
       ipcRenderer.invoke(ipc.git.discard, { workspace, paths }) as Promise<GitStatus>,
+    commit: (workspace: string, message: string) =>
+      ipcRenderer.invoke(ipc.git.commit, { workspace, message }) as Promise<GitOperationResult>,
+    push: (workspace: string) => ipcRenderer.invoke(ipc.git.push, workspace) as Promise<GitOperationResult>,
     watch: (workspace: string) => ipcRenderer.invoke(ipc.git.watch, workspace),
     onChanged: (callback: (payload: { workspace: string }) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { workspace: string }) => callback(payload);

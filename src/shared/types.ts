@@ -70,6 +70,13 @@ export type GitCommit = {
   subject: string;
 };
 
+export type GitOperationResult = {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  error?: string;
+};
+
 export type AppSettings = {
   workspace: string;
   profiles: ConsoleProfile[];
@@ -105,6 +112,27 @@ export type WorkbenchNode =
       sizes?: number[];
     };
 
+export type LayoutPreset = {
+  id: string;
+  name: string;
+  description?: string;
+  root: WorkbenchNode;
+  activePaneId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type QuickCommand = {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  shortcut?: string;
+  splitDirection: "right" | "down";
+};
+
 export type TerminalWorkspace = {
   id: string;
   name: string;
@@ -114,4 +142,6 @@ export type TerminalWorkspace = {
   terminalFontSize?: number;
   profiles: ConsoleProfile[];
   layout: WorkbenchLayout;
+  layoutPresets?: LayoutPreset[];
+  quickCommands?: QuickCommand[];
 };

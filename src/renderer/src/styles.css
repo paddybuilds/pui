@@ -61,7 +61,8 @@ button:disabled {
 }
 
 input,
-textarea {
+textarea,
+select {
   color: var(--text);
   background: #0b0f14;
   border: 1px solid rgba(148, 163, 184, 0.16);
@@ -76,7 +77,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: rgba(203, 213, 225, 0.42);
 }
 
@@ -606,7 +608,7 @@ kbd {
 }
 
 .git-panel {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .diff-toolbar,
@@ -656,7 +658,8 @@ kbd {
 }
 
 .commit-section,
-.changes-section {
+.changes-section,
+.commit-composer {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -668,7 +671,8 @@ kbd {
 }
 
 .commit-section header,
-.changes-section header {
+.changes-section header,
+.commit-composer header {
   height: 34px;
   display: flex;
   align-items: center;
@@ -683,10 +687,35 @@ kbd {
   justify-content: flex-start;
 }
 
-.changes-section header small {
+.changes-section header small,
+.commit-composer header small {
   color: var(--text-faint);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.commit-composer {
+  border-top: 1px solid var(--line-soft);
+}
+
+.commit-form {
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.commit-form textarea {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+}
+
+.git-operation-message {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 .commit-list {
@@ -1138,7 +1167,8 @@ kbd {
   align-items: center;
 }
 
-.settings-inline-control input {
+.settings-inline-control input,
+.settings-inline-control select {
   width: 100%;
 }
 
@@ -1158,6 +1188,10 @@ kbd {
   padding: 0 10px;
   border-radius: 6px;
   background: rgba(148, 163, 184, 0.04);
+}
+
+.settings-list-row:has(button) {
+  grid-template-columns: 140px minmax(0, 1fr) auto auto;
 }
 
 .settings-row span,

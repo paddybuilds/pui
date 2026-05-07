@@ -1,5 +1,14 @@
 import type { PuiApi } from "../../../preload";
-import type { AppSettings, CodexRun, ConsoleProfile, GitCommit, GitDiff, GitStatus, TerminalSession } from "../../../shared/types";
+import type {
+  AppSettings,
+  CodexRun,
+  ConsoleProfile,
+  GitCommit,
+  GitDiff,
+  GitOperationResult,
+  GitStatus,
+  TerminalSession
+} from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
 
 const workspace = "/Users/paddy/Documents/GitHub/pui";
@@ -44,7 +53,9 @@ let settings: AppSettings = {
       layout: {
         activePaneId: "preview-pane",
         root: { type: "pane", id: "preview-pane", profileId: defaultProfiles[0]?.id }
-      }
+      },
+      layoutPresets: [],
+      quickCommands: []
     }
   ]
 };
@@ -125,6 +136,20 @@ const browserPreviewApi: PuiApi = {
     stage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/stage", { workspace: gitWorkspace, paths }),
     unstage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/unstage", { workspace: gitWorkspace, paths }),
     discard: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/discard", { workspace: gitWorkspace, paths }),
+    commit: (gitWorkspace, message) =>
+      bridgePost<GitOperationResult>("/git/commit", { workspace: gitWorkspace, message }).catch((error) => ({
+        ok: false,
+        stdout: "",
+        stderr: "",
+        error: error instanceof Error ? error.message : String(error)
+      })),
+    push: (gitWorkspace) =>
+      bridgePost<GitOperationResult>("/git/push", { workspace: gitWorkspace }).catch((error) => ({
+        ok: false,
+        stdout: "",
+        stderr: "",
+        error: error instanceof Error ? error.message : String(error)
+      })),
     watch: async () => undefined,
     onChanged: () => noopUnsubscribe
   }

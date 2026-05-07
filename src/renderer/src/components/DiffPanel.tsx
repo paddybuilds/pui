@@ -13,7 +13,11 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [selectedFile, setSelectedFile] = useState<string | undefined>();
   const [diff, setDiff] = useState<GitDiff | null>(null);
   const [commits, setCommits] = useState<GitCommit[]>([]);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [operationMessage, setOperationMessage] = useState("");
+  const [committing, setCommitting] = useState(false);
   const files = status?.files ?? [];
+  const stagedFiles = files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?");
 
   useEffect(() => {
     if (!status?.isRepo) {
@@ -68,6 +72,41 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     if (confirmed) {
       onStatus(await window.pui.git.discard(workspace, [file]));
     }
+  };
+
+  const commit = async (pushAfterCommit = false) => {
+    const message = commitMessage.trim();
+    if (!message || stagedFiles.length === 0) {
+      return;
+    }
+
+    setCommitting(true);
+    setOperationMessage("");
+    const commitResult = await window.pui.git.commit(workspace, message);
+    if (!commitResult.ok) {
+      setOperationMessage(commitResult.error || commitResult.stderr || "Commit failed.");
+      setCommitting(false);
+      return;
+    }
+
+    if (pushAfterCommit) {
+      const pushResult = await window.pui.git.push(workspace);
+      if (!pushResult.ok) {
+        setOperationMessage(pushResult.error || pushResult.stderr || "Commit succeeded, but push failed.");
+        setCommitting(false);
+        onStatus(await window.pui.git.status(workspace));
+        await loadCommits();
+        return;
+      }
+      setOperationMessage(pushResult.stdout || pushResult.stderr || "Committed and pushed.");
+    } else {
+      setOperationMessage(commitResult.stdout || commitResult.stderr || "Committed.");
+    }
+
+    setCommitMessage("");
+    onStatus(await window.pui.git.status(workspace));
+    await loadCommits();
+    setCommitting(false);
   };
 
   return (
@@ -150,6 +189,32 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
               )}
             </pre>
           </div>
+        </div>
+      </section>
+
+      <section className="commit-composer">
+        <header>
+          <span>Commit</span>
+          <small>{stagedFiles.length} staged</small>
+        </header>
+        <div className="commit-form">
+          <textarea
+            value={commitMessage}
+            onChange={(event) => {
+              setCommitMessage(event.target.value);
+              setOperationMessage("");
+            }}
+            placeholder="Commit message"
+          />
+          <div className="file-action-buttons">
+            <button type="button" disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()} onClick={() => void commit(false)}>
+              Commit
+            </button>
+            <button type="button" disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()} onClick={() => void commit(true)}>
+              Commit & Push
+            </button>
+          </div>
+          {operationMessage ? <p className="git-operation-message">{operationMessage}</p> : null}
         </div>
       </section>
     </div>

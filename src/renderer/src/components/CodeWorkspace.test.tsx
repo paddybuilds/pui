@@ -28,6 +28,7 @@ describe("CodeWorkspace", () => {
 
     render(
       <CodeWorkspace
+        platform="win32"
         tabs={[{ ...tab, contents: "after", dirty: true }]}
         activePath={tab.path}
         onActivate={vi.fn()}
@@ -49,6 +50,7 @@ describe("CodeWorkspace", () => {
 
     render(
       <CodeWorkspace
+        platform="win32"
         tabs={[{ ...tab, dirty: true }]}
         activePath={tab.path}
         onActivate={vi.fn()}
@@ -62,5 +64,31 @@ describe("CodeWorkspace", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     expect(onClose).toHaveBeenCalledWith(tab.path);
+  });
+
+  it("opens a code pane context menu with save and split actions", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <CodeWorkspace
+        platform="win32"
+        tabs={[{ ...tab, dirty: true }]}
+        activePath={tab.path}
+        onActivate={vi.fn()}
+        onChange={vi.fn()}
+        onSave={onSave}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.contextMenu(screen.getByText("src/App.tsx"));
+    expect(screen.getByRole("menu", { name: "Code editor context menu" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Save file" }));
+    expect(onSave).toHaveBeenCalledWith(tab.path);
+
+    fireEvent.contextMenu(screen.getByText("src/App.tsx"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Split right" }));
+    expect(screen.getAllByText("src/App.tsx")).toHaveLength(2);
   });
 });

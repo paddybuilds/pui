@@ -1212,6 +1212,7 @@ export function App() {
               {activeWorkspace.kind !== "quick" ? (
                 <div className={activeWorkspaceView === "code" ? "code-grid" : "code-grid hidden-view"}>
                   <CodeWorkspace
+                    platform={pui.platform}
                     tabs={activeCodeTabs}
                     activePath={activeCodePath}
                     onActivate={(path) =>

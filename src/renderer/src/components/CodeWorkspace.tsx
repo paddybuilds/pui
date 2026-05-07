@@ -1,6 +1,7 @@
 import {
   Fragment,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
@@ -15,7 +16,9 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { X } from "lucide-react";
+import { PanelRight, PanelTop, Save, X } from "lucide-react";
+import { ContextMenu } from "./ContextMenu";
+import { useContextMenu } from "./useContextMenu";
 import {
   type CodeEditorGroup,
   type CodeEditorNode,
@@ -29,8 +32,10 @@ import {
   splitCodeEditorGroup,
   updateCodeSplitSizes
 } from "../lib/codeWorkspace";
+import { shortcutLabel } from "../lib/shortcuts";
 
 type CodeWorkspaceProps = {
+  platform: string;
   tabs: CodeFileTab[];
   activePath?: string;
   onActivate: (path: string) => void;
@@ -39,10 +44,19 @@ type CodeWorkspaceProps = {
   onClose: (path: string) => void;
 };
 
-export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, onClose }: CodeWorkspaceProps) {
+export function CodeWorkspace({
+  platform,
+  tabs,
+  activePath,
+  onActivate,
+  onChange,
+  onSave,
+  onClose
+}: CodeWorkspaceProps) {
   const [closeRequest, setCloseRequest] = useState<CodeFileTab | null>(null);
   const [layoutRoot, setLayoutRoot] = useState<CodeEditorNode>(() => createCodeEditorGroup(crypto.randomUUID()));
   const [activeGroupId, setActiveGroupId] = useState(() => collectCodeEditorGroups(layoutRoot)[0]?.id ?? "");
+  const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
   const groups = useMemo(() => collectCodeEditorGroups(layoutRoot), [layoutRoot]);
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0];
   const activeGroupPath = activeGroup?.activePath ?? activePath;
@@ -120,6 +134,43 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
     const nextGroups = collectCodeEditorGroups(nextRoot);
     setLayoutRoot(nextRoot);
     setActiveGroupId((current) => (current === groupId ? (nextGroups[0]?.id ?? "") : current));
+  };
+
+  const openEditorContextMenu = (event: MouseEvent, group: CodeEditorGroup, tab: CodeFileTab) => {
+    setActiveGroupId(group.id);
+    openContextMenu(event, [
+      {
+        id: "save-file",
+        label: tab.dirty ? "Save file" : "File saved",
+        shortcut: shortcutLabel("CmdOrCtrl+S", platform),
+        icon: <Save size={14} />,
+        disabled: tab.loading || !tab.dirty,
+        onSelect: () => void onSave(tab.path)
+      },
+      {
+        id: "split-right",
+        label: "Split right",
+        shortcut: shortcutLabel("CmdOrCtrl+D", platform),
+        icon: <PanelRight size={14} />,
+        onSelect: () => splitGroup(group.id, "right")
+      },
+      {
+        id: "split-down",
+        label: "Split down",
+        shortcut: shortcutLabel("CmdOrCtrl+Shift+D", platform),
+        icon: <PanelTop size={14} />,
+        onSelect: () => splitGroup(group.id, "down")
+      },
+      {
+        id: "close-split",
+        label: groups.length <= 1 ? "Cannot close last split" : "Close split",
+        shortcut: shortcutLabel("CmdOrCtrl+W", platform),
+        icon: <X size={14} />,
+        destructive: true,
+        disabled: groups.length <= 1,
+        onSelect: () => closeGroup(group.id)
+      }
+    ]);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -206,6 +257,7 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
             onSave={onSave}
             onSplit={splitGroup}
             onCloseGroup={closeGroup}
+            onOpenContextMenu={openEditorContextMenu}
             onResizeSplit={(splitId, sizes) =>
               setLayoutRoot((current) => updateCodeSplitSizes(current, splitId, sizes))
             }
@@ -256,6 +308,16 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
           </section>
         </div>
       ) : null}
+
+      {contextMenu ? (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={closeContextMenu}
+          ariaLabel="Code editor context menu"
+        />
+      ) : null}
     </section>
   );
 }
@@ -271,6 +333,7 @@ function CodeEditorTree({
   onSave,
   onSplit,
   onCloseGroup,
+  onOpenContextMenu,
   onResizeSplit,
   canCloseGroups
 }: {
@@ -284,6 +347,7 @@ function CodeEditorTree({
   onSave: (path: string) => Promise<void>;
   onSplit: (groupId: string, direction: "right" | "down") => void;
   onCloseGroup: (groupId: string) => void;
+  onOpenContextMenu: (event: MouseEvent, group: CodeEditorGroup, tab: CodeFileTab) => void;
   onResizeSplit: (splitId: string, sizes: number[]) => void;
   canCloseGroups: boolean;
 }) {
@@ -337,6 +401,7 @@ function CodeEditorTree({
               onSave={onSave}
               onSplit={onSplit}
               onCloseGroup={onCloseGroup}
+              onOpenContextMenu={onOpenContextMenu}
               onResizeSplit={onResizeSplit}
               canCloseGroups={canCloseGroups}
             />
@@ -364,6 +429,7 @@ function CodeEditorTree({
       onFocus={() => onFocusGroup(node.id)}
       onActivatePath={(path) => onActivatePath(node.id, path)}
       onChange={onChange}
+      onOpenContextMenu={(event, tab) => onOpenContextMenu(event, node, tab)}
       onCloseGroup={() => onCloseGroup(node.id)}
       canCloseGroup={canCloseGroups}
     />
@@ -378,6 +444,7 @@ function CodeEditorGroupView({
   onFocus,
   onActivatePath,
   onChange,
+  onOpenContextMenu,
   onCloseGroup,
   canCloseGroup
 }: {
@@ -388,6 +455,7 @@ function CodeEditorGroupView({
   onFocus: () => void;
   onActivatePath: (path: string) => void;
   onChange: (path: string, contents: string) => void;
+  onOpenContextMenu: (event: MouseEvent, tab: CodeFileTab) => void;
   onCloseGroup: () => void;
   canCloseGroup: boolean;
 }) {
@@ -405,7 +473,11 @@ function CodeEditorGroupView({
   }
 
   return (
-    <div className={active ? "code-editor-shell active" : "code-editor-shell"} onMouseDown={onFocus}>
+    <div
+      className={active ? "code-editor-shell active" : "code-editor-shell"}
+      onMouseDown={onFocus}
+      onContextMenu={(event) => onOpenContextMenu(event, activeTab)}
+    >
       <header className="code-editor-header">
         <span
           className="profile-dot"

@@ -379,7 +379,7 @@ export function App() {
     }
     const workspace = activeWorkspace;
     const tab = (codeTabsByWorkspace[workspace.id] ?? []).find((item) => item.path === path);
-    if (!tab) {
+    if (!tab || tab.kind !== "text") {
       return;
     }
     try {

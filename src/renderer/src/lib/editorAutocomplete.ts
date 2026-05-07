@@ -62,7 +62,7 @@ export function codeCompletionSource(
 export function buildWordCompletions(tabs: CodeFileTab[]): Completion[] {
   const seen = new Set<string>();
   const options: Completion[] = [];
-  for (const tab of tabs) {
+  for (const tab of tabs.filter((item) => item.kind === "text")) {
     for (const match of tab.contents.matchAll(WORD_PATTERN)) {
       const word = match[0];
       if (word.length < MIN_WORD_LENGTH || seen.has(word)) {

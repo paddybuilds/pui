@@ -103,6 +103,9 @@ export function CodeWorkspace({
 
   const saveActive = async () => {
     if (activeTab && !activeTab.loading) {
+      if (activeTab.kind !== "text") {
+        return;
+      }
       await onSave(activeTab.path);
     }
   };
@@ -146,10 +149,10 @@ export function CodeWorkspace({
     openContextMenu(event, [
       {
         id: "save-file",
-        label: tab.dirty ? "Save file" : "File saved",
+        label: tab.kind !== "text" ? "Preview only" : tab.dirty ? "Save file" : "File saved",
         shortcut: shortcutLabel("CmdOrCtrl+S", platform),
         icon: <Save size={14} />,
-        disabled: tab.loading || !tab.dirty,
+        disabled: tab.kind !== "text" || tab.loading || !tab.dirty,
         onSelect: () => void onSave(tab.path)
       },
       {
@@ -487,7 +490,7 @@ function CodeEditorGroupView({
       return [];
     }
     const baseExtensions = editorExtensionsForPath(activeTab.path);
-    return autocompleteEnabled
+    return activeTab.kind === "text" && autocompleteEnabled
       ? [...baseExtensions, codeAutocompleteExtension(allTabs, workspaceFilePaths)]
       : baseExtensions;
   }, [activeTab, allTabs, autocompleteEnabled, workspaceFilePaths]);
@@ -516,7 +519,7 @@ function CodeEditorGroupView({
         />
         <div>
           <strong title={activeTab.path}>{activeTab.relativePath}</strong>
-          <span>{activeTab.loading ? "Loading" : activeTab.dirty ? "Unsaved changes" : "Saved"}</span>
+          <span>{fileStatusLabel(activeTab)}</span>
         </div>
         {canCloseGroup ? (
           <button
@@ -535,25 +538,62 @@ function CodeEditorGroupView({
         ) : null}
       </header>
       {activeTab.error ? <div className="code-error">{activeTab.error}</div> : null}
-      <div className="code-editor-host">
-        <CodeMirror
-          value={activeTab.contents}
-          height="100%"
-          theme={oneDark}
-          extensions={extensions}
-          editable={!activeTab.loading}
-          basicSetup={{
-            foldGutter: true,
-            highlightActiveLine: true,
-            lineNumbers: true,
-            searchKeymap: true
-          }}
-          onFocus={onFocus}
-          onChange={(value) => onChange(activeTab.path, value)}
-        />
-      </div>
+      {activeTab.kind === "text" ? (
+        <div className="code-editor-host">
+          <CodeMirror
+            value={activeTab.contents}
+            height="100%"
+            theme={oneDark}
+            extensions={extensions}
+            editable={!activeTab.loading}
+            basicSetup={{
+              foldGutter: true,
+              highlightActiveLine: true,
+              lineNumbers: true,
+              searchKeymap: true
+            }}
+            onFocus={onFocus}
+            onChange={(value) => onChange(activeTab.path, value)}
+          />
+        </div>
+      ) : (
+        <CodeFilePreview tab={activeTab} />
+      )}
     </div>
   );
+}
+
+function CodeFilePreview({ tab }: { tab: CodeFileTab }) {
+  if (!tab.dataUrl) {
+    return (
+      <div className="code-preview empty">
+        <strong>Preview unavailable</strong>
+        <span>{tab.name}</span>
+      </div>
+    );
+  }
+  if (tab.kind === "image") {
+    return (
+      <div className="code-preview image-preview">
+        <img src={tab.dataUrl} alt={tab.name} />
+      </div>
+    );
+  }
+  return (
+    <div className="code-preview pdf-preview">
+      <iframe title={tab.name} src={tab.dataUrl} />
+    </div>
+  );
+}
+
+function fileStatusLabel(tab: CodeFileTab): string {
+  if (tab.loading) {
+    return "Loading";
+  }
+  if (tab.kind !== "text") {
+    return `${tab.kind === "pdf" ? "PDF" : "Image"} preview`;
+  }
+  return tab.dirty ? "Unsaved changes" : "Saved";
 }
 
 function buildCodeSplitTracks(sizes: number[]): string {

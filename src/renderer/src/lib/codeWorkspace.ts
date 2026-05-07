@@ -3,11 +3,14 @@ import type { FileReadResult } from "../../../shared/types";
 export type WorkspaceView = "terminal" | "code";
 
 export type CodeFileTab = {
+  kind: FileReadResult["kind"];
   path: string;
   relativePath: string;
   name: string;
   contents: string;
   savedContents: string;
+  mimeType?: string;
+  dataUrl?: string;
   dirty: boolean;
   loading: boolean;
   error?: string;
@@ -35,6 +38,7 @@ export function createLoadingCodeTab(path: string): CodeFileTab {
   const name = path.split(/[\\/]/).pop() || path;
   return {
     path,
+    kind: "text",
     relativePath: name,
     name,
     contents: "",
@@ -47,10 +51,13 @@ export function createLoadingCodeTab(path: string): CodeFileTab {
 export function createLoadedCodeTab(file: FileReadResult): CodeFileTab {
   return {
     path: file.path,
+    kind: file.kind,
     relativePath: file.relativePath,
     name: file.name,
     contents: file.contents,
     savedContents: file.contents,
+    mimeType: file.mimeType,
+    dataUrl: file.dataUrl,
     dirty: false,
     loading: false,
     size: file.size,

@@ -4,8 +4,21 @@ import type { FilePathListResult, FileReadResult, FileSystemEntry, FileWriteResu
 
 const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "out", "dist", "release"]);
 const MAX_TEXT_FILE_BYTES = 1024 * 1024;
+const MAX_PREVIEW_FILE_BYTES = 25 * 1024 * 1024;
 const BINARY_SAMPLE_BYTES = 4096;
 const DEFAULT_FILE_PATH_LIMIT = 2000;
+const PREVIEW_MIME_TYPES = new Map<string, { kind: "image" | "pdf"; mimeType: string }>([
+  [".avif", { kind: "image", mimeType: "image/avif" }],
+  [".bmp", { kind: "image", mimeType: "image/bmp" }],
+  [".gif", { kind: "image", mimeType: "image/gif" }],
+  [".ico", { kind: "image", mimeType: "image/x-icon" }],
+  [".jpeg", { kind: "image", mimeType: "image/jpeg" }],
+  [".jpg", { kind: "image", mimeType: "image/jpeg" }],
+  [".pdf", { kind: "pdf", mimeType: "application/pdf" }],
+  [".png", { kind: "image", mimeType: "image/png" }],
+  [".svg", { kind: "image", mimeType: "image/svg+xml" }],
+  [".webp", { kind: "image", mimeType: "image/webp" }]
+]);
 
 type FileExplorerServiceOptions = {
   filePathLimit?: number;
@@ -63,6 +76,26 @@ export class FileExplorerService {
     if (!fileStat.isFile()) {
       throw new Error("Only files can be opened in the code view.");
     }
+
+    const previewType = PREVIEW_MIME_TYPES.get(path.extname(targetPath).toLowerCase());
+    if (previewType) {
+      if (fileStat.size > MAX_PREVIEW_FILE_BYTES) {
+        throw new Error("File is too large to preview in the code view.");
+      }
+      const buffer = await readFile(targetPath);
+      return {
+        kind: previewType.kind,
+        path: targetPath,
+        relativePath: path.relative(workspaceRoot, targetPath),
+        name: path.basename(targetPath),
+        contents: "",
+        mimeType: previewType.mimeType,
+        dataUrl: `data:${previewType.mimeType};base64,${buffer.toString("base64")}`,
+        size: fileStat.size,
+        modifiedAt: fileStat.mtime.toISOString()
+      };
+    }
+
     if (fileStat.size > MAX_TEXT_FILE_BYTES) {
       throw new Error("File is too large to open in the code view.");
     }
@@ -73,10 +106,12 @@ export class FileExplorerService {
     }
 
     return {
+      kind: "text",
       path: targetPath,
       relativePath: path.relative(workspaceRoot, targetPath),
       name: path.basename(targetPath),
       contents: buffer.toString("utf8"),
+      mimeType: "text/plain",
       size: fileStat.size,
       modifiedAt: fileStat.mtime.toISOString()
     };

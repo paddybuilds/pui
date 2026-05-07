@@ -5,6 +5,7 @@ import { codeCompletionSource } from "./editorAutocomplete";
 import type { CodeFileTab } from "./codeWorkspace";
 
 const tab: CodeFileTab = {
+  kind: "text",
   path: "/repo/src/App.tsx",
   relativePath: "src/App.tsx",
   name: "App.tsx",

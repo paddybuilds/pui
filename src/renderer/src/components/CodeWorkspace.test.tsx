@@ -23,6 +23,7 @@ vi.mock("@uiw/react-codemirror", () => ({
 }));
 
 const tab: CodeFileTab = {
+  kind: "text",
   path: "/repo/src/App.tsx",
   relativePath: "src/App.tsx",
   name: "App.tsx",
@@ -144,5 +145,37 @@ describe("CodeWorkspace", () => {
     expect(Number(screen.getByLabelText("Code editor").getAttribute("data-extension-count"))).toBeGreaterThan(
       disabledCount
     );
+  });
+
+  it("renders images as read-only previews", () => {
+    render(
+      <CodeWorkspace
+        platform="win32"
+        autocompleteEnabled
+        workspaceFilePaths={["assets/logo.png"]}
+        tabs={[
+          {
+            ...tab,
+            kind: "image",
+            path: "/repo/assets/logo.png",
+            relativePath: "assets/logo.png",
+            name: "logo.png",
+            contents: "",
+            savedContents: "",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,iVBORw=="
+          }
+        ]}
+        activePath="/repo/assets/logo.png"
+        onActivate={vi.fn()}
+        onChange={vi.fn()}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("img", { name: "logo.png" })).toHaveAttribute("src", "data:image/png;base64,iVBORw==");
+    expect(screen.queryByLabelText("Code editor")).not.toBeInTheDocument();
+    expect(screen.getByText("Image preview")).toBeInTheDocument();
   });
 });

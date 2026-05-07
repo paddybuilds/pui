@@ -84,10 +84,13 @@ export type FileSystemEntry = {
 };
 
 export type FileReadResult = {
+  kind: "text" | "image" | "pdf";
   path: string;
   relativePath: string;
   name: string;
   contents: string;
+  mimeType: string;
+  dataUrl?: string;
   size: number;
   modifiedAt: string;
 };

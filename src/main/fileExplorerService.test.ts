@@ -44,11 +44,37 @@ describe("FileExplorerService", () => {
     const service = new FileExplorerService();
 
     await expect(service.readFile(workspace, filePath)).resolves.toMatchObject({
+      kind: "text",
       name: "README.md",
       path: filePath,
       relativePath: "README.md",
       contents: "# Hello",
+      mimeType: "text/plain",
       size: 7
+    });
+  });
+
+  it("reads previewable image and PDF files", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
+    const imagePath = path.join(workspace, "pixel.png");
+    const pdfPath = path.join(workspace, "doc.pdf");
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await writeFile(pdfPath, Buffer.from("%PDF-1.7"));
+    const service = new FileExplorerService();
+
+    await expect(service.readFile(workspace, imagePath)).resolves.toMatchObject({
+      kind: "image",
+      name: "pixel.png",
+      mimeType: "image/png",
+      dataUrl: "data:image/png;base64,iVBORw==",
+      contents: ""
+    });
+    await expect(service.readFile(workspace, pdfPath)).resolves.toMatchObject({
+      kind: "pdf",
+      name: "doc.pdf",
+      mimeType: "application/pdf",
+      dataUrl: "data:application/pdf;base64,JVBERi0xLjc=",
+      contents: ""
     });
   });
 

@@ -178,10 +178,12 @@ const browserPreviewApi: PuiApi = {
         throw new Error("Preview file not found.");
       }
       return {
+        kind: "text",
         path: filePath,
         relativePath,
         name: relativePath.split(/[\\/]/).pop() ?? relativePath,
         contents,
+        mimeType: "text/plain",
         size: contents.length,
         modifiedAt: new Date().toISOString()
       };

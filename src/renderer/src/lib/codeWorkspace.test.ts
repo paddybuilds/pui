@@ -16,10 +16,12 @@ import {
 describe("code workspace tab helpers", () => {
   it("creates and updates dirty tabs", () => {
     const loaded = createLoadedCodeTab({
+      kind: "text",
       path: "/repo/src/App.tsx",
       relativePath: "src/App.tsx",
       name: "App.tsx",
       contents: "before",
+      mimeType: "text/plain",
       size: 6,
       modifiedAt: "2026-05-07T22:00:00.000Z"
     });
@@ -36,10 +38,12 @@ describe("code workspace tab helpers", () => {
   it("upserts loading and loaded tabs by path", () => {
     const loading = createLoadingCodeTab("/repo/README.md");
     const loaded = createLoadedCodeTab({
+      kind: "text",
       path: "/repo/README.md",
       relativePath: "README.md",
       name: "README.md",
       contents: "readme",
+      mimeType: "text/plain",
       size: 6,
       modifiedAt: "now"
     });

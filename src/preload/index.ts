@@ -23,9 +23,14 @@ const api = {
   },
   terminal: {
     create: (payload: unknown) => ipcRenderer.invoke(ipc.terminal.create, payload) as Promise<TerminalSession>,
-    write: (sessionId: string, data: string) => ipcRenderer.invoke(ipc.terminal.write, { sessionId, data }),
-    resize: (sessionId: string, cols: number, rows: number) =>
-      ipcRenderer.invoke(ipc.terminal.resize, { sessionId, cols, rows }),
+    write: (sessionId: string, data: string) => {
+      ipcRenderer.send(ipc.terminal.write, { sessionId, data });
+      return Promise.resolve();
+    },
+    resize: (sessionId: string, cols: number, rows: number) => {
+      ipcRenderer.send(ipc.terminal.resize, { sessionId, cols, rows });
+      return Promise.resolve();
+    },
     kill: (sessionId: string) => ipcRenderer.invoke(ipc.terminal.kill, sessionId),
     onData: (callback: (payload: { sessionId: string; data: string }) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { sessionId: string; data: string }) =>

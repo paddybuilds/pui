@@ -14,6 +14,7 @@ class TerminalBridge {
   private pending = new Map<string, PendingRequest>();
   private dataCallbacks = new Set<DataCallback>();
   private exitCallbacks = new Set<ExitCallback>();
+  private lastResize = new Map<string, { cols: number; rows: number }>();
 
   create(payload: { profile: ConsoleProfile; paneId: string; cols: number; rows: number }): Promise<TerminalSession> {
     return this.connect().then(
@@ -31,10 +32,16 @@ class TerminalBridge {
   }
 
   async resize(sessionId: string, cols: number, rows: number): Promise<void> {
+    const previous = this.lastResize.get(sessionId);
+    if (previous?.cols === cols && previous.rows === rows) {
+      return;
+    }
+    this.lastResize.set(sessionId, { cols, rows });
     this.send({ type: "resize", sessionId, cols, rows });
   }
 
   async kill(sessionId: string): Promise<void> {
+    this.lastResize.delete(sessionId);
     this.send({ type: "kill", sessionId });
   }
 
@@ -53,9 +60,17 @@ class TerminalBridge {
   }
 
   private send(payload: unknown): void {
-    void this.connect().then((socket) => {
-      socket.send(JSON.stringify(payload));
-    });
+    const encoded = JSON.stringify(payload);
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(encoded);
+      return;
+    }
+
+    void this.connect()
+      .then((socket) => {
+        socket.send(encoded);
+      })
+      .catch(() => undefined);
   }
 
   private connect(): Promise<WebSocket> {

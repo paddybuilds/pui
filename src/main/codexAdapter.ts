@@ -15,6 +15,7 @@ type ActiveRun = {
   child: ChildProcessWithoutNullStreams;
   stdoutBuffer: string;
   stderrBuffer: string;
+  updateTimer?: ReturnType<typeof setTimeout>;
 };
 
 export class CodexCliAdapter implements CodexAdapter {
@@ -51,13 +52,13 @@ export class CodexCliAdapter implements CodexAdapter {
 
     child.stdout.on("data", (chunk: Buffer) => {
       active.stdoutBuffer = this.consumeLines(active.stdoutBuffer + chunk.toString(), (line) => {
-        this.recordEvent(run, parseCodexLine(line));
+        this.recordEvent(active, parseCodexLine(line));
       });
     });
 
     child.stderr.on("data", (chunk: Buffer) => {
       active.stderrBuffer = this.consumeLines(active.stderrBuffer + chunk.toString(), (line) => {
-        this.recordEvent(run, {
+        this.recordEvent(active, {
           timestamp: new Date().toISOString(),
           type: "stderr",
           message: line,
@@ -69,22 +70,22 @@ export class CodexCliAdapter implements CodexAdapter {
     child.on("error", (error) => {
       run.status = "failed";
       run.endedAt = new Date().toISOString();
-      this.recordEvent(run, {
+      this.recordEvent(active, {
         timestamp: new Date().toISOString(),
         type: "error",
         message: error.message,
         raw: { message: error.message }
       });
-      this.window.webContents.send(ipc.codex.update, run);
+      this.flushRunUpdate(active);
       this.activeRuns.delete(id);
     });
 
     child.on("close", (exitCode) => {
       if (active.stdoutBuffer.trim()) {
-        this.recordEvent(run, parseCodexLine(active.stdoutBuffer.trim()));
+        this.recordEvent(active, parseCodexLine(active.stdoutBuffer.trim()));
       }
       if (active.stderrBuffer.trim()) {
-        this.recordEvent(run, {
+        this.recordEvent(active, {
           timestamp: new Date().toISOString(),
           type: "stderr",
           message: active.stderrBuffer.trim(),
@@ -95,11 +96,11 @@ export class CodexCliAdapter implements CodexAdapter {
       run.exitCode = exitCode;
       run.status = run.status === "cancelled" ? "cancelled" : exitCode === 0 ? "completed" : "failed";
       run.endedAt = new Date().toISOString();
-      this.window.webContents.send(ipc.codex.update, run);
+      this.flushRunUpdate(active);
       this.activeRuns.delete(id);
     });
 
-    this.window.webContents.send(ipc.codex.update, run);
+    this.sendRunUpdate(run);
     return run;
   }
 
@@ -110,7 +111,7 @@ export class CodexCliAdapter implements CodexAdapter {
     }
     active.run.status = "cancelled";
     active.child.kill("SIGTERM");
-    this.window.webContents.send(ipc.codex.update, active.run);
+    this.flushRunUpdate(active);
   }
 
   private consumeLines(buffer: string, onLine: (line: string) => void): string {
@@ -124,9 +125,46 @@ export class CodexCliAdapter implements CodexAdapter {
     return remainder;
   }
 
-  private recordEvent(run: CodexRun, event: CodexEvent): void {
-    run.events.push(event);
-    this.window.webContents.send(ipc.codex.event, { runId: run.id, event });
-    this.window.webContents.send(ipc.codex.update, run);
+  private recordEvent(active: ActiveRun, event: CodexEvent): void {
+    active.run.events.push(event);
+    this.sendCodexEvent(active.run.id, event);
+    this.queueRunUpdate(active);
+  }
+
+  private queueRunUpdate(active: ActiveRun): void {
+    if (active.updateTimer) {
+      return;
+    }
+
+    active.updateTimer = setTimeout(() => {
+      active.updateTimer = undefined;
+      this.sendRunUpdate(active.run);
+    }, 100);
+  }
+
+  private flushRunUpdate(active: ActiveRun): void {
+    if (active.updateTimer) {
+      clearTimeout(active.updateTimer);
+      active.updateTimer = undefined;
+    }
+    this.sendRunUpdate(active.run);
+  }
+
+  private sendRunUpdate(run: CodexRun): void {
+    this.send(ipc.codex.update, run);
+  }
+
+  private sendCodexEvent(runId: string, event: CodexEvent): void {
+    this.send(ipc.codex.event, { runId, event });
+  }
+
+  private send(channel: string, payload: unknown): void {
+    if (!this.window.isDestroyed() && !this.window.webContents.isDestroyed()) {
+      try {
+        this.window.webContents.send(channel, payload);
+      } catch {
+        // The renderer can disappear while a Codex child process is still flushing output.
+      }
+    }
   }
 }

@@ -99,12 +99,22 @@ function registerIpc(): void {
       return terminalService?.create(payload.profile, payload.paneId, payload.cols, payload.rows);
     }
   );
-  ipcMain.handle(ipc.terminal.write, (_event, payload: { sessionId: string; data: string }) => {
+
+  const writeTerminal = (payload: { sessionId: string; data: string }) => {
     terminalService?.write(payload.sessionId, payload.data);
-  });
-  ipcMain.handle(ipc.terminal.resize, (_event, payload: { sessionId: string; cols: number; rows: number }) => {
+  };
+  const resizeTerminal = (payload: { sessionId: string; cols: number; rows: number }) => {
     terminalService?.resize(payload.sessionId, payload.cols, payload.rows);
-  });
+  };
+
+  ipcMain.handle(ipc.terminal.write, (_event, payload: { sessionId: string; data: string }) => writeTerminal(payload));
+  ipcMain.on(ipc.terminal.write, (_event, payload: { sessionId: string; data: string }) => writeTerminal(payload));
+  ipcMain.handle(ipc.terminal.resize, (_event, payload: { sessionId: string; cols: number; rows: number }) =>
+    resizeTerminal(payload)
+  );
+  ipcMain.on(ipc.terminal.resize, (_event, payload: { sessionId: string; cols: number; rows: number }) =>
+    resizeTerminal(payload)
+  );
   ipcMain.handle(ipc.terminal.kill, (_event, sessionId: string) => terminalService?.kill(sessionId));
 
   ipcMain.handle(ipc.codex.run, (_event, payload: { prompt: string; workspace: string; options?: CodexRunCommandOptions }) => {

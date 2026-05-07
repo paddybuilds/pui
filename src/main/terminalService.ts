@@ -8,6 +8,10 @@ import { defaultShell, resolveProfileShell } from "./shell";
 type SessionRecord = {
   session: TerminalSession;
   pty: IPty;
+  pendingData: string;
+  flushScheduled: boolean;
+  lastCols: number;
+  lastRows: number;
 };
 
 export class TerminalService {
@@ -45,7 +49,7 @@ export class TerminalService {
     };
 
     child.onData((data) => {
-      this.send(ipc.terminal.data, { sessionId, data });
+      this.queueData(sessionId, data);
     });
 
     child.onExit(({ exitCode, signal }) => {
@@ -53,12 +57,13 @@ export class TerminalService {
       if (!record) {
         return;
       }
+      this.flushData(sessionId, record);
       record.session.status = "exited";
       this.send(ipc.terminal.exit, { sessionId, exitCode, signal });
       this.sessions.delete(sessionId);
     });
 
-    this.sessions.set(sessionId, { session, pty: child });
+    this.sessions.set(sessionId, { session, pty: child, pendingData: "", flushScheduled: false, lastCols: cols, lastRows: rows });
     return session;
   }
 
@@ -68,7 +73,13 @@ export class TerminalService {
 
   resize(sessionId: string, cols: number, rows: number): void {
     if (cols > 0 && rows > 0) {
-      this.sessions.get(sessionId)?.pty.resize(cols, rows);
+      const record = this.sessions.get(sessionId);
+      if (!record || (record.lastCols === cols && record.lastRows === rows)) {
+        return;
+      }
+      record.lastCols = cols;
+      record.lastRows = rows;
+      record.pty.resize(cols, rows);
     }
   }
 
@@ -81,6 +92,35 @@ export class TerminalService {
     for (const id of this.sessions.keys()) {
       this.kill(id);
     }
+  }
+
+  private queueData(sessionId: string, data: string): void {
+    const record = this.sessions.get(sessionId);
+    if (!record) {
+      return;
+    }
+
+    record.pendingData += data;
+    if (record.flushScheduled) {
+      return;
+    }
+
+    record.flushScheduled = true;
+    setImmediate(() => {
+      this.flushData(sessionId, record);
+    });
+  }
+
+  private flushData(sessionId: string, record: SessionRecord): void {
+    record.flushScheduled = false;
+    const data = record.pendingData;
+    if (!data || this.sessions.get(sessionId) !== record) {
+      record.pendingData = "";
+      return;
+    }
+
+    record.pendingData = "";
+    this.send(ipc.terminal.data, { sessionId, data });
   }
 
   private send(channel: string, payload: unknown): void {

@@ -46,6 +46,11 @@ server.on("connection", (socket) => {
     if (message.type === "resize") {
       const cols = Math.max(1, Number(message.cols || 80));
       const rows = Math.max(1, Number(message.rows || 24));
+      if (record.lastCols === cols && record.lastRows === rows) {
+        return;
+      }
+      record.lastCols = cols;
+      record.lastRows = rows;
       record.pty.resize(cols, rows);
       return;
     }
@@ -103,13 +108,24 @@ function createSession(socket, message) {
     }
   });
 
-  sessions.set(sessionId, { pty: child, socket });
+  sessions.set(sessionId, {
+    pty: child,
+    socket,
+    pendingData: "",
+    flushScheduled: false,
+    lastCols: Math.max(1, Number(message.cols || 80)),
+    lastRows: Math.max(1, Number(message.rows || 24))
+  });
 
   child.onData((data) => {
-    send(socket, { type: "data", sessionId, data });
+    queueData(sessionId, data);
   });
 
   child.onExit(({ exitCode, signal }) => {
+    const record = sessions.get(sessionId);
+    if (record) {
+      flushData(sessionId, record);
+    }
     send(socket, { type: "exit", sessionId, exitCode, signal });
     sessions.delete(sessionId);
   });
@@ -147,6 +163,35 @@ function send(socket, payload) {
   if (socket.readyState === socket.OPEN) {
     socket.send(JSON.stringify(payload));
   }
+}
+
+function queueData(sessionId, data) {
+  const record = sessions.get(sessionId);
+  if (!record) {
+    return;
+  }
+
+  record.pendingData += data;
+  if (record.flushScheduled) {
+    return;
+  }
+
+  record.flushScheduled = true;
+  setImmediate(() => {
+    flushData(sessionId, record);
+  });
+}
+
+function flushData(sessionId, record) {
+  record.flushScheduled = false;
+  const data = record.pendingData;
+  if (!data || sessions.get(sessionId) !== record) {
+    record.pendingData = "";
+    return;
+  }
+
+  record.pendingData = "";
+  send(record.socket, { type: "data", sessionId, data });
 }
 
 async function handleHttpRequest(request, response) {

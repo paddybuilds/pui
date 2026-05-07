@@ -41,6 +41,31 @@ export type CodexRun = {
   exitCode?: number | null;
 };
 
+export type CodexSandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+
+export type CodexPromptTemplate = {
+  id: string;
+  name: string;
+  prompt: string;
+};
+
+export type CodexAddonPreferences = {
+  enabled: boolean;
+  defaultModel: string;
+  defaultSandbox: CodexSandboxMode;
+  interactiveProfileEnabled: boolean;
+  defaultPromptTemplates: CodexPromptTemplate[];
+};
+
+export type CodexWorkspacePreferences = Partial<CodexAddonPreferences>;
+
+export type CodexStatus = {
+  available: boolean;
+  command: string;
+  resolvedPath?: string;
+  error?: string;
+};
+
 export type GitFileStatus = {
   path: string;
   indexStatus: string;
@@ -120,6 +145,7 @@ export type AppPreferences = {
   defaultTerminalProfileId?: string;
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
   codexProfileEnabled: boolean;
+  codexAddon?: CodexAddonPreferences;
   gitPanelDefault: GitPanelDefault;
   updateChecksEnabled: boolean;
   onboardingCompletedVersion?: string;
@@ -207,4 +233,5 @@ export type TerminalWorkspace = {
   layout: WorkbenchLayout;
   layoutPresets?: LayoutPreset[];
   quickCommands?: QuickCommand[];
+  codexAddon?: CodexWorkspacePreferences;
 };

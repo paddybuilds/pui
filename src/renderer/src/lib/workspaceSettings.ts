@@ -9,6 +9,7 @@ import {
   type TerminalWorkspace,
   type ThemePreset
 } from "../../../shared/types";
+import { normalizeCodexAddonPreferences, normalizeCodexWorkspacePreferences } from "../../../shared/codexAddon";
 import { normalizeWorkspaceWorkflow } from "../../../shared/workflow";
 
 export type IdFactory = () => string;
@@ -42,6 +43,9 @@ export function normalizeSettings(
         kind: workspace.kind ?? ("folder" as const),
         defaultCwd: workspace.defaultCwd || workspace.path,
         terminalFontSize: normalizeTerminalFontSize(workspace.terminalFontSize || appPreferences.terminalFontSize),
+        ...(normalizeCodexWorkspacePreferences(workspace.codexAddon)
+          ? { codexAddon: normalizeCodexWorkspacePreferences(workspace.codexAddon) }
+          : {}),
         profiles: workspace.profiles.map((profile) => ({
           ...profile,
           cwd: profile.cwd || workspace.defaultCwd || workspace.path
@@ -104,6 +108,16 @@ export function normalizeAppPreferences(
   const onboardingCompletedVersion = normalizeOptionalString(
     preferences?.onboardingCompletedVersion ?? defaults.onboardingCompletedVersion
   );
+  const codexProfileEnabled =
+    typeof preferences?.codexProfileEnabled === "boolean"
+      ? preferences.codexProfileEnabled
+      : typeof defaults.codexProfileEnabled === "boolean"
+        ? defaults.codexProfileEnabled
+        : DEFAULT_APP_PREFERENCES.codexProfileEnabled;
+  const codexAddonInput = preferences?.codexAddon ?? defaults.codexAddon;
+  const codexAddon = codexAddonInput
+    ? normalizeCodexAddonPreferences(codexAddonInput)
+    : undefined;
 
   return {
     themePreset: normalizeThemePreset(preferences?.themePreset ?? defaults.themePreset),
@@ -113,12 +127,7 @@ export function normalizeAppPreferences(
     ),
     ...(defaultTerminalProfileId ? { defaultTerminalProfileId } : {}),
     ...(defaultTerminalProfileTemplate ? { defaultTerminalProfileTemplate } : {}),
-    codexProfileEnabled:
-      typeof preferences?.codexProfileEnabled === "boolean"
-        ? preferences.codexProfileEnabled
-        : typeof defaults.codexProfileEnabled === "boolean"
-          ? defaults.codexProfileEnabled
-          : DEFAULT_APP_PREFERENCES.codexProfileEnabled,
+    codexProfileEnabled,
     gitPanelDefault: normalizeGitPanelDefault(preferences?.gitPanelDefault ?? defaults.gitPanelDefault),
     updateChecksEnabled:
       typeof preferences?.updateChecksEnabled === "boolean"
@@ -126,6 +135,7 @@ export function normalizeAppPreferences(
         : typeof defaults.updateChecksEnabled === "boolean"
           ? defaults.updateChecksEnabled
           : DEFAULT_APP_PREFERENCES.updateChecksEnabled,
+    ...(codexAddon ? { codexAddon } : {}),
     ...(onboardingCompletedVersion ? { onboardingCompletedVersion } : {})
   };
 }

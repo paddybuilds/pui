@@ -1,4 +1,6 @@
 import type { PuiApi, ShellCandidate } from "../../../preload";
+import { defaultCodexAddonPreferences } from "../../../shared/codexAddon";
+import { DEFAULT_APP_PREFERENCES } from "../../../shared/types";
 import type {
   AppSettings,
   AppUpdateCheckResult,
@@ -47,6 +49,11 @@ let settings: AppSettings = {
   workspace,
   profiles: defaultProfiles,
   recentWorkspaces: [workspace],
+  appPreferences: {
+    ...DEFAULT_APP_PREFERENCES,
+    codexProfileEnabled: true,
+    codexAddon: defaultCodexAddonPreferences()
+  },
   activeWorkspaceId: "preview-workspace",
   workspaces: [
     {
@@ -62,7 +69,8 @@ let settings: AppSettings = {
         root: { type: "pane", id: "preview-pane", profileId: defaultProfiles[0]?.id }
       },
       layoutPresets: [],
-      quickCommands: []
+      quickCommands: [],
+      codexAddon: {}
     }
   ]
 };
@@ -156,6 +164,7 @@ const browserPreviewApi: PuiApi = {
         exitCode: 0
       }) satisfies CodexRun,
     cancel: async () => undefined,
+    status: async () => ({ available: false, command: "codex", error: "Preview mode" }),
     onEvent: () => noopUnsubscribe,
     onUpdate: () => noopUnsubscribe
   },

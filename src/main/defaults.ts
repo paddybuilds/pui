@@ -5,6 +5,7 @@ import {
   type ConsoleProfile,
   type TerminalWorkspace
 } from "../shared/types";
+import { defaultCodexAddonPreferences } from "../shared/codexAddon";
 import { defaultShell } from "./shell";
 
 export function defaultProfiles(workspace: string): ConsoleProfile[] {
@@ -64,6 +65,7 @@ export function defaultSettings(): AppSettings {
     recentWorkspaces: [workspace],
     appPreferences: {
       ...DEFAULT_APP_PREFERENCES,
+      codexAddon: defaultCodexAddonPreferences(),
       defaultTerminalProfileId: profiles[0]?.id
     },
     activeWorkspaceId: defaultWorkspace.id,

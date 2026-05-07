@@ -19,12 +19,14 @@ import type {
   AppSettings,
   AppUpdateCheckResult,
   AppVersionInfo,
+  CodexAddonPreferences,
   ConsoleProfile,
   GitPanelDefault,
   QuickCommand,
   TerminalWorkspace,
   ThemePreset
 } from "../../../shared/types";
+import { normalizeCodexAddonPreferences } from "../../../shared/codexAddon";
 import { getPuiApi } from "../lib/browserApi";
 import { shortcutLabel } from "../lib/shortcuts";
 import {
@@ -518,8 +520,16 @@ function CodexSettings({
   onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
 }) {
   const hasCodexProfile = activeWorkspace.profiles.some((profile) => profile.command === "codex");
+  const codexAddon = normalizeCodexAddonPreferences(preferences.codexAddon);
   const toggleCodex = async (enabled: boolean) => {
-    await onSave({ codexProfileEnabled: enabled });
+    await onSave({
+      codexProfileEnabled: enabled,
+      codexAddon: {
+        ...codexAddon,
+        enabled,
+        interactiveProfileEnabled: enabled
+      }
+    });
     if (enabled && !hasCodexProfile) {
       await onWorkspaceChange({
         ...activeWorkspace,
@@ -530,18 +540,50 @@ function CodexSettings({
       });
     }
   };
+  const saveCodexAddon = async (next: Partial<CodexAddonPreferences>) => {
+    await onSave({
+      codexAddon: {
+        ...codexAddon,
+        ...next
+      }
+    });
+  };
   return (
     <div className="settings-page">
-      <SettingGroup title="Codex profile">
+      <SettingGroup title="Codex Addon">
         <label className="settings-check-row">
           <input
             type="checkbox"
-            checked={preferences.codexProfileEnabled}
+            checked={codexAddon.enabled}
             onChange={(event) => void toggleCodex(event.target.checked)}
           />
-          <span>Add Codex profile to new workspaces</span>
+          <span>Enable Codex Addon for new workspaces</span>
         </label>
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={codexAddon.interactiveProfileEnabled}
+            onChange={(event) => void saveCodexAddon({ interactiveProfileEnabled: event.target.checked })}
+          />
+          <span>Add interactive Codex terminal profile</span>
+        </label>
+        <div className="settings-inline-control">
+          <input
+            value={codexAddon.defaultModel}
+            onChange={(event) => void saveCodexAddon({ defaultModel: event.target.value })}
+            placeholder="Default model, or leave blank for CLI default"
+          />
+          <select
+            value={codexAddon.defaultSandbox}
+            onChange={(event) => void saveCodexAddon({ defaultSandbox: event.target.value as CodexAddonPreferences["defaultSandbox"] })}
+          >
+            <option value="read-only">Read only</option>
+            <option value="workspace-write">Workspace write</option>
+            <option value="danger-full-access">Danger full access</option>
+          </select>
+        </div>
         <SettingRow label="Current workspace" value={hasCodexProfile ? "Codex profile present" : "No Codex profile"} />
+        <SettingRow label="Prompt templates" value={String(codexAddon.defaultPromptTemplates.length)} />
       </SettingGroup>
     </div>
   );

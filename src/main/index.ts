@@ -1,8 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import type { CodexRunCommandOptions } from "../shared/codexCommand";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, ConsoleProfile } from "../shared/types";
+import type { AppSettings, CodexStatus, ConsoleProfile } from "../shared/types";
 import { CodexCliAdapter } from "./codexAdapter";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
@@ -116,10 +118,11 @@ function registerIpc(): void {
   });
   ipcMain.handle(ipc.terminal.kill, (_event, sessionId: string) => terminalService?.kill(sessionId));
 
-  ipcMain.handle(ipc.codex.run, (_event, payload: { prompt: string; workspace: string }) => {
-    return codexAdapter?.run(payload.prompt, payload.workspace);
+  ipcMain.handle(ipc.codex.run, (_event, payload: { prompt: string; workspace: string; options?: CodexRunCommandOptions }) => {
+    return codexAdapter?.run(payload.prompt, payload.workspace, payload.options);
   });
   ipcMain.handle(ipc.codex.cancel, (_event, runId: string) => codexAdapter?.cancel(runId));
+  ipcMain.handle(ipc.codex.status, () => getCodexStatus());
 
   ipcMain.handle(ipc.git.status, (_event, workspace: string) => gitService?.getStatus(workspace));
   ipcMain.handle(ipc.git.diff, (_event, payload: { workspace: string; file?: string; cached?: boolean }) => {
@@ -142,4 +145,21 @@ function registerIpc(): void {
   });
   ipcMain.handle(ipc.git.push, (_event, workspace: string) => gitService?.push(workspace));
   ipcMain.handle(ipc.git.watch, (_event, workspace: string) => gitService?.watch(workspace));
+}
+
+async function getCodexStatus(): Promise<CodexStatus> {
+  const command = "codex";
+  const lookupCommand = process.platform === "win32" ? "where.exe" : "sh";
+  const args = process.platform === "win32" ? [command] : ["-lc", `command -v ${command}`];
+  return new Promise((resolve) => {
+    execFile(lookupCommand, args, { windowsHide: true }, (error, stdout, stderr) => {
+      const resolvedPath = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0];
+      resolve({
+        available: !error && Boolean(resolvedPath),
+        command,
+        resolvedPath,
+        error: error ? stderr.trim() || error.message : undefined
+      });
+    });
+  });
 }

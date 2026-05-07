@@ -33,13 +33,18 @@ type TerminalRecord = {
   fit: FitAddon;
   sessionId?: string;
   inputDisposable: { dispose: () => void };
-  offData: () => void;
-  offExit: () => void;
   shortcutHandler: { current: ((event: KeyboardEvent) => boolean) | undefined };
+  outputBuffer: string;
+  outputFlushFrame?: number;
+  fitFrame?: number;
+  lastResize?: { cols: number; rows: number };
   exited: boolean;
 };
 
 const terminalRecords = new Map<string, TerminalRecord>();
+const terminalRecordsBySession = new Map<string, TerminalRecord>();
+let offTerminalData: (() => void) | undefined;
+let offTerminalExit: (() => void) | undefined;
 
 export function terminalRecordKey(workspaceId: string, paneId: string): string {
   return `${workspaceId}:${paneId}`;
@@ -53,13 +58,14 @@ export function disposeTerminalPane(workspaceId: string, paneId: string): void {
   }
 
   record.inputDisposable.dispose();
-  record.offData();
-  record.offExit();
+  unregisterTerminalSession(record);
+  cancelPendingTerminalWork(record);
   if (record.sessionId && !record.exited) {
     void window.pui.terminal.kill(record.sessionId);
   }
   record.terminal.dispose();
   terminalRecords.delete(key);
+  maybeStopTerminalEventRouter();
 }
 
 export function disposeTerminalPanes(workspaceId: string, paneIds: string[]): void {
@@ -94,7 +100,6 @@ export function TerminalPane({
   onSession,
   onContextMenu
 }: TerminalPaneProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const xtermMountRef = useRef<HTMLDivElement | null>(null);
   const recordRef = useRef<TerminalRecord | null>(null);
   const onSessionRef = useRef(onSession);
@@ -145,17 +150,13 @@ export function TerminalPane({
     if (record.terminal.options.fontSize !== terminalFontSize) {
       record.terminal.options.fontSize = terminalFontSize;
     }
-    fitTerminal(record.fit);
+    scheduleFitAndResize(record);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
-      void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
     }
 
     const observer = new ResizeObserver(() => {
-      fitTerminal(record.fit);
-      if (record.sessionId) {
-        void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
-      }
+      scheduleFitAndResize(record);
     });
     observer.observe(xtermMountRef.current);
 
@@ -213,7 +214,7 @@ export function TerminalPane({
           ) : null}
         </div>
       ) : null}
-      <div className="terminal-host" ref={containerRef} onMouseDown={focusPane}>
+      <div className="terminal-host">
         <div className="xterm-mount" ref={xtermMountRef} />
       </div>
     </div>
@@ -231,12 +232,13 @@ function getOrCreateTerminalRecord(
   const key = terminalRecordKey(workspaceId, paneId);
   const existing = terminalRecords.get(key);
   if (existing) {
-    if (existingSessionId && !existing.sessionId) {
-      existing.sessionId = existingSessionId;
+    if (existingSessionId && existing.sessionId !== existingSessionId) {
+      assignTerminalSession(existing, existingSessionId);
     }
     return existing;
   }
 
+  ensureTerminalEventRouter();
   const terminal = new Terminal({
     cursorBlink: active,
     convertEol: true,
@@ -255,32 +257,24 @@ function getOrCreateTerminalRecord(
   const shortcutHandler: TerminalRecord["shortcutHandler"] = { current: undefined };
   terminal.attachCustomKeyEventHandler((event) => shortcutHandler.current?.(event) ?? true);
 
-  const record: TerminalRecord = {
+  let record: TerminalRecord;
+  record = {
     terminal,
     fit,
-    sessionId: existingSessionId,
     shortcutHandler,
     inputDisposable: terminal.onData((data) => {
       if (record.sessionId) {
         void window.pui.terminal.write(record.sessionId, data);
       }
     }),
-    offData: window.pui.terminal.onData(({ sessionId, data }) => {
-      if (sessionId === record.sessionId) {
-        record.terminal.write(data);
-      }
-    }),
-    offExit: window.pui.terminal.onExit(({ sessionId, exitCode }) => {
-      if (sessionId === record.sessionId && !record.exited) {
-        record.exited = true;
-        record.terminal.writeln("");
-        record.terminal.writeln(`[process exited with code ${exitCode}]`);
-      }
-    }),
+    outputBuffer: "",
     exited: false
   };
 
   terminalRecords.set(key, record);
+  if (existingSessionId) {
+    assignTerminalSession(record, existingSessionId);
+  }
 
   if (!record.sessionId) {
     void window.pui.terminal
@@ -295,8 +289,9 @@ function getOrCreateTerminalRecord(
           void window.pui.terminal.kill(session.id);
           return;
         }
-        record.sessionId = session.id;
+        assignTerminalSession(record, session.id);
         onSession(session.id);
+        scheduleFitAndResize(record);
         if (session.ptyProcessId === 0) {
           terminal.writeln("terminal bridge unavailable");
         }
@@ -326,12 +321,104 @@ function detachTerminalElement(terminal: Terminal, mount: HTMLDivElement): void 
   }
 }
 
-function fitTerminal(fit: FitAddon): void {
-  window.requestAnimationFrame(() => {
+function ensureTerminalEventRouter(): void {
+  if (offTerminalData) {
+    return;
+  }
+
+  offTerminalData = window.pui.terminal.onData(({ sessionId, data }) => {
+    const record = terminalRecordsBySession.get(sessionId);
+    if (record) {
+      queueTerminalOutput(record, data);
+    }
+  });
+  offTerminalExit = window.pui.terminal.onExit(({ sessionId, exitCode }) => {
+    const record = terminalRecordsBySession.get(sessionId);
+    if (record && !record.exited) {
+      record.exited = true;
+      queueTerminalOutput(record, `\r\n[process exited with code ${exitCode}]\r\n`);
+    }
+  });
+}
+
+function maybeStopTerminalEventRouter(): void {
+  if (terminalRecords.size > 0) {
+    return;
+  }
+
+  offTerminalData?.();
+  offTerminalExit?.();
+  offTerminalData = undefined;
+  offTerminalExit = undefined;
+}
+
+function assignTerminalSession(record: TerminalRecord, sessionId: string): void {
+  unregisterTerminalSession(record);
+  record.sessionId = sessionId;
+  record.exited = false;
+  terminalRecordsBySession.set(sessionId, record);
+}
+
+function unregisterTerminalSession(record: TerminalRecord): void {
+  if (record.sessionId && terminalRecordsBySession.get(record.sessionId) === record) {
+    terminalRecordsBySession.delete(record.sessionId);
+  }
+}
+
+function cancelPendingTerminalWork(record: TerminalRecord): void {
+  if (record.outputFlushFrame !== undefined) {
+    window.cancelAnimationFrame(record.outputFlushFrame);
+    record.outputFlushFrame = undefined;
+  }
+  if (record.fitFrame !== undefined) {
+    window.cancelAnimationFrame(record.fitFrame);
+    record.fitFrame = undefined;
+  }
+}
+
+function queueTerminalOutput(record: TerminalRecord, data: string): void {
+  record.outputBuffer += data;
+  if (record.outputFlushFrame !== undefined) {
+    return;
+  }
+
+  record.outputFlushFrame = window.requestAnimationFrame(() => {
+    record.outputFlushFrame = undefined;
+    const output = record.outputBuffer;
+    record.outputBuffer = "";
+    if (output) {
+      record.terminal.write(output);
+    }
+  });
+}
+
+function scheduleFitAndResize(record: TerminalRecord): void {
+  if (record.fitFrame !== undefined) {
+    return;
+  }
+
+  record.fitFrame = window.requestAnimationFrame(() => {
+    record.fitFrame = undefined;
     try {
-      fit.fit();
+      record.fit.fit();
     } catch {
       // xterm can report incomplete dimensions during first layout in browser preview.
     }
+    resizeTerminalIfNeeded(record);
   });
+}
+
+function resizeTerminalIfNeeded(record: TerminalRecord): void {
+  if (!record.sessionId || record.terminal.cols <= 0 || record.terminal.rows <= 0) {
+    return;
+  }
+
+  const cols = record.terminal.cols;
+  const rows = record.terminal.rows;
+  if (record.lastResize?.cols === cols && record.lastResize.rows === rows) {
+    return;
+  }
+
+  record.lastResize = { cols, rows };
+  void window.pui.terminal.resize(record.sessionId, cols, rows);
 }

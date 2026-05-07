@@ -61,6 +61,8 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber(SIDEBAR_WIDTH_KEY, 224));
   const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 360));
   const didHydrateRef = useRef(false);
+  const activeGitWorkspaceRef = useRef<string | null>(null);
+  const gitRefreshRequestRef = useRef(0);
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
 
   const workspaces = settings?.workspaces ?? [];
@@ -91,9 +93,14 @@ export function App() {
         normalized.workspaces?.find((workspace) => workspace.id === normalized.activeWorkspaceId) ?? normalized.workspaces?.[0];
       setSettings(normalized);
       if (initialWorkspace) {
+        activeGitWorkspaceRef.current = initialWorkspace.kind === "quick" ? null : initialWorkspace.path;
         hydrateWorkspace(initialWorkspace);
         setActiveWorkspaceId(initialWorkspace.id);
-        void refreshWorkspaceGit(initialWorkspace.path);
+        if (initialWorkspace.kind === "quick") {
+          setGitStatus(null);
+        } else {
+          void refreshWorkspaceGit(initialWorkspace.path);
+        }
       }
       didHydrateRef.current = true;
       if (!loaded.workspaces) {
@@ -114,6 +121,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    activeGitWorkspaceRef.current = activeWorkspace?.kind === "quick" ? null : activeWorkspace?.path ?? null;
+  }, [activeWorkspace?.kind, activeWorkspace?.path]);
+
+  useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {
       return;
     }
@@ -126,8 +137,18 @@ export function App() {
   }, [activePaneId, activeWorkspace, layoutRoot, settings]);
 
   const refreshGit = useCallback(async (workspacePath: string) => {
+    const activeGitWorkspace = activeGitWorkspaceRef.current;
+    if (activeGitWorkspace !== workspacePath) {
+      return;
+    }
+
+    const requestId = ++gitRefreshRequestRef.current;
     const status = await pui.git.status(workspacePath);
-    setGitStatus(status);
+    const nextActiveGitWorkspace = activeGitWorkspaceRef.current;
+    if (nextActiveGitWorkspace !== workspacePath || requestId !== gitRefreshRequestRef.current) {
+      return;
+    }
+    setGitStatus((current) => (areGitStatusesEqual(current, status) ? current : status));
   }, []);
 
   const refreshWorkspaceGit = useCallback(async (workspacePath: string) => {
@@ -136,12 +157,16 @@ export function App() {
       await pui.git.watch(workspacePath);
     } catch (error) {
       console.error("Failed to refresh workspace Git state", error);
-      setGitStatus({
+      if (activeGitWorkspaceRef.current !== workspacePath) {
+        return;
+      }
+      const status = {
         workspace: workspacePath,
         isRepo: false,
         files: [],
         error: error instanceof Error ? error.message : String(error)
-      });
+      };
+      setGitStatus((current) => (areGitStatusesEqual(current, status) ? current : status));
     }
   }, [refreshGit]);
 
@@ -159,6 +184,7 @@ export function App() {
       const saved = await persistWorkspaceLayout(settings, activeWorkspace.id, layoutRoot, activePaneId);
       setSettings(saved);
     }
+    activeGitWorkspaceRef.current = workspace.kind === "quick" ? null : workspace.path;
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
@@ -352,6 +378,7 @@ export function App() {
     };
     const saved = await pui.settings.save(nextSettings);
     setSettings(normalizeSettings(saved));
+    activeGitWorkspaceRef.current = null;
     setActiveWorkspaceId(quickTerminal.id);
     hydrateWorkspace(quickTerminal);
     setGitStatus(null);
@@ -396,6 +423,7 @@ export function App() {
 
     const saved = await pui.settings.save(nextSettings);
     setSettings(normalizeSettings(saved));
+    activeGitWorkspaceRef.current = workspace.path;
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
     void refreshWorkspaceGit(defaultCwd);
@@ -539,6 +567,7 @@ export function App() {
       return next;
     });
     if (nextActiveWorkspace) {
+      activeGitWorkspaceRef.current = nextActiveWorkspace.kind === "quick" ? null : nextActiveWorkspace.path;
       setActiveWorkspaceId(nextActiveWorkspace.id);
       hydrateWorkspace(nextActiveWorkspace);
       if (nextActiveWorkspace.kind === "quick") {
@@ -548,6 +577,7 @@ export function App() {
         await refreshWorkspaceGit(nextActiveWorkspace.path);
       }
     } else {
+      activeGitWorkspaceRef.current = null;
       setActiveWorkspaceId("");
       setLayoutRoot(null);
       setActivePaneId("");
@@ -604,6 +634,7 @@ export function App() {
 
     const saved = await pui.settings.save(nextSettings);
     setSettings(normalizeSettings(saved));
+    activeGitWorkspaceRef.current = folder.path;
     setActiveWorkspaceId(folder.id);
     hydrateWorkspace(nextFolder);
     await refreshWorkspaceGit(folder.path);
@@ -622,6 +653,7 @@ export function App() {
     const saved = await pui.settings.save(nextSettings);
     const normalized = normalizeSettings(saved);
     setSettings(normalized);
+    activeGitWorkspaceRef.current = workspace.kind === "quick" ? null : workspace.path;
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
     if (workspace.kind === "quick") {
@@ -1514,6 +1546,34 @@ function isCodexProfile(command: string): boolean {
 
 function upsertCodexRun(runs: CodexRun[], run: CodexRun): CodexRun[] {
   return [run, ...runs.filter((item) => item.id !== run.id)].slice(0, 20);
+}
+
+function areGitStatusesEqual(left: GitStatus | null, right: GitStatus | null): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  if (
+    left.workspace !== right.workspace ||
+    left.isRepo !== right.isRepo ||
+    left.branch !== right.branch ||
+    left.error !== right.error ||
+    left.files.length !== right.files.length
+  ) {
+    return false;
+  }
+
+  return left.files.every((file, index) => {
+    const other = right.files[index];
+    return (
+      other &&
+      file.path === other.path &&
+      file.indexStatus === other.indexStatus &&
+      file.workingTreeStatus === other.workingTreeStatus
+    );
+  });
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {

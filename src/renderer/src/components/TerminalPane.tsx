@@ -139,7 +139,8 @@ export function TerminalPane({
       }
       return true;
     };
-    attachTerminalElement(record.terminal, xtermMountRef.current);
+    const mount = xtermMountRef.current;
+    attachTerminalElement(record.terminal, mount);
     record.terminal.options.cursorBlink = active;
     if (record.terminal.options.fontSize !== terminalFontSize) {
       record.terminal.options.fontSize = terminalFontSize;
@@ -163,6 +164,7 @@ export function TerminalPane({
       if (recordRef.current === record) {
         record.shortcutHandler.current = undefined;
       }
+      detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
   }, [pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
@@ -308,13 +310,20 @@ function getOrCreateTerminalRecord(
 
 function attachTerminalElement(terminal: Terminal, mount: HTMLDivElement): void {
   if (terminal.element) {
-    if (terminal.element.parentElement !== mount) {
-      mount.appendChild(terminal.element);
+    if (terminal.element.parentElement !== mount || mount.children.length !== 1) {
+      mount.replaceChildren(terminal.element);
     }
     return;
   }
 
+  mount.replaceChildren();
   terminal.open(mount);
+}
+
+function detachTerminalElement(terminal: Terminal, mount: HTMLDivElement): void {
+  if (terminal.element?.parentElement === mount) {
+    terminal.element.remove();
+  }
 }
 
 function fitTerminal(fit: FitAddon): void {

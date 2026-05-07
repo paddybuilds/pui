@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { X } from "lucide-react";
 import type { ConsoleProfile } from "../../../shared/types";
+import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
 
 type Pane = {
@@ -40,6 +41,7 @@ type TerminalRecord = {
 };
 
 const terminalRecords = new Map<string, TerminalRecord>();
+const pui = getPuiApi();
 
 export function terminalRecordKey(workspaceId: string, paneId: string): string {
   return `${workspaceId}:${paneId}`;
@@ -56,7 +58,7 @@ export function disposeTerminalPane(workspaceId: string, paneId: string): void {
   record.offData();
   record.offExit();
   if (record.sessionId && !record.exited) {
-    void window.pui.terminal.kill(record.sessionId);
+    void pui.terminal.kill(record.sessionId);
   }
   record.terminal.dispose();
   terminalRecords.delete(key);
@@ -148,13 +150,13 @@ export function TerminalPane({
     fitTerminal(record.fit);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
-      void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
+      void pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
     }
 
     const observer = new ResizeObserver(() => {
       fitTerminal(record.fit);
       if (record.sessionId) {
-        void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
+        void pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
       }
     });
     observer.observe(xtermMountRef.current);
@@ -262,15 +264,15 @@ function getOrCreateTerminalRecord(
     shortcutHandler,
     inputDisposable: terminal.onData((data) => {
       if (record.sessionId) {
-        void window.pui.terminal.write(record.sessionId, data);
+        void pui.terminal.write(record.sessionId, data);
       }
     }),
-    offData: window.pui.terminal.onData(({ sessionId, data }) => {
+    offData: pui.terminal.onData(({ sessionId, data }) => {
       if (sessionId === record.sessionId) {
         record.terminal.write(data);
       }
     }),
-    offExit: window.pui.terminal.onExit(({ sessionId, exitCode }) => {
+    offExit: pui.terminal.onExit(({ sessionId, exitCode }) => {
       if (sessionId === record.sessionId && !record.exited) {
         record.exited = true;
         record.terminal.writeln("");
@@ -283,7 +285,7 @@ function getOrCreateTerminalRecord(
   terminalRecords.set(key, record);
 
   if (!record.sessionId) {
-    void window.pui.terminal
+    void pui.terminal
       .create({
         profile,
         paneId,
@@ -292,7 +294,7 @@ function getOrCreateTerminalRecord(
       })
       .then((session) => {
         if (!terminalRecords.has(key)) {
-          void window.pui.terminal.kill(session.id);
+          void pui.terminal.kill(session.id);
           return;
         }
         record.sessionId = session.id;

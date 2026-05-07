@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { GitCommitHorizontal, RotateCcw, Upload } from "lucide-react";
 import type { GitCommit, GitDiff, GitFileStatus, GitStatus } from "../../../shared/types";
 import { splitDiff } from "../lib/diff";
+import { getPuiApi } from "../lib/browserApi";
 
 type GitPanelProps = {
   workspace: string;
   status: GitStatus | null;
   onStatus: (status: GitStatus) => void;
 };
+
+const pui = getPuiApi();
 
 export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [activeTab, setActiveTab] = useState<"changes" | "commits">("changes");
@@ -40,31 +43,31 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   }, [status?.files.map((file) => file.path).join("|")]);
 
   const loadCommits = async () => {
-    setCommits(await window.pui.git.commits(workspace, 16));
+    setCommits(await pui.git.commits(workspace, 16));
   };
 
   const loadDiff = async (file: string) => {
     setSelectedFile(file);
-    const unstaged = await window.pui.git.diff(workspace, file, false);
+    const unstaged = await pui.git.diff(workspace, file, false);
     if (unstaged.text.trim()) {
       setDiff(unstaged);
       return;
     }
-    setDiff(await window.pui.git.diff(workspace, file, true));
+    setDiff(await pui.git.diff(workspace, file, true));
   };
 
   const stage = async (file: string) => {
-    onStatus(await window.pui.git.stage(workspace, [file]));
+    onStatus(await pui.git.stage(workspace, [file]));
   };
 
   const unstage = async (file: string) => {
-    onStatus(await window.pui.git.unstage(workspace, [file]));
+    onStatus(await pui.git.unstage(workspace, [file]));
   };
 
   const discard = async (file: string) => {
     const confirmed = window.confirm(`Discard working tree changes in ${file}? This cannot be undone.`);
     if (confirmed) {
-      onStatus(await window.pui.git.discard(workspace, [file]));
+      onStatus(await pui.git.discard(workspace, [file]));
     }
   };
 
@@ -76,7 +79,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
 
     setCommitting(true);
     setOperationMessage("");
-    const commitResult = await window.pui.git.commit(workspace, message);
+    const commitResult = await pui.git.commit(workspace, message);
     if (!commitResult.ok) {
       setOperationMessage(commitResult.error || commitResult.stderr || "Commit failed.");
       setCommitting(false);
@@ -84,11 +87,11 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     }
 
     if (pushAfterCommit) {
-      const pushResult = await window.pui.git.push(workspace);
+      const pushResult = await pui.git.push(workspace);
       if (!pushResult.ok) {
         setOperationMessage(pushResult.error || pushResult.stderr || "Commit succeeded, but push failed.");
         setCommitting(false);
-        onStatus(await window.pui.git.status(workspace));
+        onStatus(await pui.git.status(workspace));
         await loadCommits();
         return;
       }
@@ -98,7 +101,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     }
 
     setCommitMessage("");
-    onStatus(await window.pui.git.status(workspace));
+    onStatus(await pui.git.status(workspace));
     await loadCommits();
     setCommitting(false);
   };

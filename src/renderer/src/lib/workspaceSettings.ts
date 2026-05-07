@@ -5,6 +5,14 @@ export type IdFactory = () => string;
 
 export const createWorkspaceSettingsId: IdFactory = () => crypto.randomUUID();
 
+export type InitialWorkspaceOptions = {
+  name: string;
+  path: string;
+  defaultCwd: string;
+  terminalFontSize: number;
+  includeCodexProfile: boolean;
+};
+
 export function normalizeSettings(
   settings: AppSettings,
   platform: string,
@@ -78,11 +86,79 @@ export function createShellProfile(
   };
 }
 
+export function createCodexProfile(
+  path: string,
+  shortcut: string,
+  idFactory: IdFactory = createWorkspaceSettingsId
+): ConsoleProfile {
+  return {
+    id: idFactory(),
+    name: "Codex",
+    cwd: path,
+    command: "codex",
+    args: [],
+    env: {},
+    shortcut,
+    appearance: {
+      color: "#9ca3af",
+      icon: "sparkles"
+    }
+  };
+}
+
+export function createInitialWorkspaceSettings(
+  settings: AppSettings,
+  options: InitialWorkspaceOptions,
+  platform: string,
+  idFactory: IdFactory = createWorkspaceSettingsId
+): AppSettings {
+  const path = options.path.trim() || settings.workspace;
+  const defaultCwd = options.defaultCwd.trim() || path;
+  const name = options.name.trim() || basename(path) || "workspace";
+  const shellProfile = createShellProfile(defaultCwd, "CmdOrCtrl+1", platform, idFactory);
+  const profiles = options.includeCodexProfile
+    ? [shellProfile, createCodexProfile(defaultCwd, "CmdOrCtrl+2", idFactory)]
+    : [shellProfile];
+  const paneId = idFactory();
+  const workspace: TerminalWorkspace = normalizeWorkspaceWorkflow({
+    id: idFactory(),
+    name,
+    kind: "folder",
+    path,
+    defaultCwd,
+    terminalFontSize: normalizeTerminalFontSize(options.terminalFontSize),
+    profiles,
+    layout: {
+      activePaneId: paneId,
+      root: { type: "pane", id: paneId, profileId: shellProfile.id }
+    },
+    layoutPresets: [],
+    quickCommands: []
+  });
+
+  return {
+    ...settings,
+    workspace: path,
+    profiles,
+    recentWorkspaces: Array.from(new Set([path, ...settings.recentWorkspaces].filter(Boolean))).slice(0, 12),
+    activeWorkspaceId: workspace.id,
+    workspaces: [workspace],
+    layout: undefined
+  };
+}
+
 export function defaultShellProfile(platform: string): { name: string; command: string; args: string[] } {
   if (platform === "win32") {
     return { name: "PowerShell", command: "powershell.exe", args: ["-NoLogo"] };
   }
   return { name: "zsh", command: "/bin/zsh", args: [] };
+}
+
+export function normalizeTerminalFontSize(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 13;
+  }
+  return Math.min(24, Math.max(10, Math.round(value)));
 }
 
 export function basename(path: string): string {

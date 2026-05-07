@@ -1,7 +1,16 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { Keyboard, Monitor, Play, Settings, TerminalSquare, X } from "lucide-react";
-import type { AppSettings, QuickCommand, TerminalWorkspace } from "../../../shared/types";
+import { Keyboard, Monitor, Play, RefreshCw, Settings, TerminalSquare, X } from "lucide-react";
+import type {
+  AppSettings,
+  AppUpdateCheckResult,
+  AppVersionInfo,
+  QuickCommand,
+  TerminalWorkspace
+} from "../../../shared/types";
+import { getPuiApi } from "../lib/browserApi";
 import { shortcutLabel } from "../lib/shortcuts";
+
+const pui = getPuiApi();
 
 type SettingsSection = "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
 
@@ -82,12 +91,93 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
 }
 
 function GeneralSettings({ settings, activeWorkspace }: { settings: AppSettings; activeWorkspace: TerminalWorkspace }) {
+  const [versionInfo, setVersionInfo] = useState<AppVersionInfo>();
+  const [versionError, setVersionError] = useState<string>();
+  const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult>();
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking">("idle");
+
+  useEffect(() => {
+    let mounted = true;
+    void pui.app
+      .getVersionInfo()
+      .then((info) => {
+        if (mounted) {
+          setVersionInfo(info);
+          setVersionError(undefined);
+        }
+      })
+      .catch((error: unknown) => {
+        if (mounted) {
+          setVersionError(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const checkForUpdates = async () => {
+    setUpdateStatus("checking");
+    setUpdateCheck(undefined);
+    try {
+      const result = await pui.app.checkForUpdates();
+      setUpdateCheck(result);
+      setVersionError(undefined);
+    } catch (error) {
+      setUpdateCheck({
+        status: "error",
+        currentVersion: versionInfo?.version ?? "unknown",
+        checkedAt: new Date().toISOString(),
+        message: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setUpdateStatus("idle");
+    }
+  };
+
+  const updateMessage =
+    updateStatus === "checking"
+      ? "Checking GitHub releases..."
+      : updateCheck
+        ? updateCheckMessage(updateCheck)
+        : versionError;
+  const updateStatusClass =
+    updateStatus === "checking"
+      ? "settings-update-status"
+      : updateCheck
+        ? `settings-update-status ${updateCheckTone(updateCheck)}`
+        : versionError
+          ? "settings-update-status error"
+          : "settings-update-status";
+
   return (
     <div className="settings-page">
       <SettingRow label="Folder label" value={activeWorkspace.name} />
       <SettingRow label="Open folder" value={basename(activeWorkspace.path)} />
       <SettingRow label="Folder path" value={activeWorkspace.path} />
       <SettingRow label="Recent folders" value={String(settings.recentWorkspaces.length)} />
+      <SettingGroup title="Pui">
+        <SettingRow
+          label="Current version"
+          value={versionInfo?.version ?? (versionError ? "Unavailable" : "Loading")}
+        />
+        <div className="settings-action-row">
+          <button
+            type="button"
+            onClick={() => void checkForUpdates()}
+            disabled={!versionInfo || updateStatus === "checking"}
+          >
+            <RefreshCw size={14} className={updateStatus === "checking" ? "settings-spin" : undefined} />
+            <span>{updateStatus === "checking" ? "Checking" : "Check for updates"}</span>
+          </button>
+          {updateMessage ? (
+            <span className={updateStatusClass} role="status" aria-live="polite">
+              {updateMessage}
+            </span>
+          ) : null}
+        </div>
+      </SettingGroup>
     </div>
   );
 }
@@ -453,6 +543,20 @@ function clampTerminalFontSize(value: number): number {
     return 13;
   }
   return Math.min(24, Math.max(10, Math.round(value)));
+}
+
+function updateCheckMessage(result: AppUpdateCheckResult): string {
+  return result.message;
+}
+
+function updateCheckTone(result: AppUpdateCheckResult): "success" | "notice" | "error" {
+  if (result.status === "error") {
+    return "error";
+  }
+  if (result.status === "unavailable") {
+    return "notice";
+  }
+  return "success";
 }
 
 function SettingRow({ label, value }: { label: string; value: string }) {

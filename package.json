@@ -2,6 +2,14 @@
   "name": "pui",
   "version": "0.1.0",
   "description": "A macOS terminal folder workspace with Codex CLI integration.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paddybuilds/pui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/paddybuilds/pui/issues"
+  },
+  "homepage": "https://github.com/paddybuilds/pui#readme",
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {

@@ -7,6 +7,7 @@ import { CodexCliAdapter } from "./codexAdapter";
 import { GitWorkspaceService } from "./gitService";
 import { StoreService } from "./store";
 import { TerminalService } from "./terminalService";
+import { AppUpdateService } from "./updateService";
 
 let mainWindow: BrowserWindow | undefined;
 let terminalService: TerminalService | undefined;
@@ -14,6 +15,9 @@ let codexAdapter: CodexCliAdapter | undefined;
 let gitService: GitWorkspaceService | undefined;
 
 const storeService = new StoreService();
+const appUpdateService = new AppUpdateService({
+  getVersion: () => app.getVersion()
+});
 
 function createWindow(): void {
   const isMac = process.platform === "darwin";
@@ -74,6 +78,9 @@ app.on("window-all-closed", () => {
 });
 
 function registerIpc(): void {
+  ipcMain.handle(ipc.app.versionInfo, () => appUpdateService.getVersionInfo());
+  ipcMain.handle(ipc.app.checkForUpdates, () => appUpdateService.checkForUpdates());
+
   ipcMain.handle(ipc.dialog.openFolder, async (_event, defaultPath?: string) => {
     if (!mainWindow) {
       return undefined;
@@ -88,6 +95,7 @@ function registerIpc(): void {
     return result.canceled ? undefined : result.filePaths[0];
   });
 
+  ipcMain.handle(ipc.settings.loadState, () => storeService.loadSettingsState());
   ipcMain.handle(ipc.settings.load, () => storeService.loadSettings());
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
 

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { AppSettings } from "../../../shared/types";
-import { basename, createShellProfile, defaultShellProfile, normalizeSettings } from "./workspaceSettings";
+import {
+  basename,
+  createInitialWorkspaceSettings,
+  createShellProfile,
+  defaultShellProfile,
+  normalizeSettings,
+  normalizeTerminalFontSize
+} from "./workspaceSettings";
 
 function idFactory(ids: string[]) {
   let index = 0;
@@ -123,6 +130,113 @@ describe("workspace settings helpers", () => {
         icon: "terminal"
       }
     });
+  });
+
+  it("creates first-launch workspace settings without changing the persisted settings contract", () => {
+    const settings: AppSettings = {
+      workspace: "/default",
+      profiles: [],
+      recentWorkspaces: ["/default"]
+    };
+
+    expect(
+      createInitialWorkspaceSettings(
+        settings,
+        {
+          name: "Pui",
+          path: "/repo/pui",
+          defaultCwd: "/repo/pui/app",
+          terminalFontSize: 15,
+          includeCodexProfile: true
+        },
+        "darwin",
+        idFactory(["shell-profile", "codex-profile", "pane-a", "workspace-a"])
+      )
+    ).toEqual({
+      workspace: "/repo/pui",
+      profiles: [
+        {
+          id: "shell-profile",
+          name: "zsh",
+          cwd: "/repo/pui/app",
+          command: "/bin/zsh",
+          args: [],
+          env: {},
+          shortcut: "CmdOrCtrl+1",
+          appearance: {
+            color: "#9ca3af",
+            icon: "terminal"
+          }
+        },
+        {
+          id: "codex-profile",
+          name: "Codex",
+          cwd: "/repo/pui/app",
+          command: "codex",
+          args: [],
+          env: {},
+          shortcut: "CmdOrCtrl+2",
+          appearance: {
+            color: "#9ca3af",
+            icon: "sparkles"
+          }
+        }
+      ],
+      recentWorkspaces: ["/repo/pui", "/default"],
+      activeWorkspaceId: "workspace-a",
+      workspaces: [
+        {
+          id: "workspace-a",
+          name: "Pui",
+          kind: "folder",
+          path: "/repo/pui",
+          defaultCwd: "/repo/pui/app",
+          terminalFontSize: 15,
+          profiles: [
+            {
+              id: "shell-profile",
+              name: "zsh",
+              cwd: "/repo/pui/app",
+              command: "/bin/zsh",
+              args: [],
+              env: {},
+              shortcut: "CmdOrCtrl+1",
+              appearance: {
+                color: "#9ca3af",
+                icon: "terminal"
+              }
+            },
+            {
+              id: "codex-profile",
+              name: "Codex",
+              cwd: "/repo/pui/app",
+              command: "codex",
+              args: [],
+              env: {},
+              shortcut: "CmdOrCtrl+2",
+              appearance: {
+                color: "#9ca3af",
+                icon: "sparkles"
+              }
+            }
+          ],
+          layout: {
+            activePaneId: "pane-a",
+            root: { type: "pane", id: "pane-a", profileId: "shell-profile" }
+          },
+          layoutPresets: [],
+          quickCommands: []
+        }
+      ],
+      layout: undefined
+    });
+  });
+
+  it("normalizes terminal font size choices", () => {
+    expect(normalizeTerminalFontSize(Number.NaN)).toBe(13);
+    expect(normalizeTerminalFontSize(8)).toBe(10);
+    expect(normalizeTerminalFontSize(25)).toBe(24);
+    expect(normalizeTerminalFontSize(13.6)).toBe(14);
   });
 
   it("extracts a basename from Windows and POSIX paths", () => {

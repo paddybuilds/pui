@@ -2,21 +2,29 @@ import { contextBridge, ipcRenderer } from "electron";
 import { ipc } from "../shared/ipc";
 import type {
   AppSettings,
+  AppUpdateCheckResult,
+  AppVersionInfo,
   CodexRun,
   GitCommit,
   GitDiff,
   GitOperationResult,
   GitStatus,
+  SettingsLoadState,
   TerminalSession
 } from "../shared/types";
 
 const api = {
   platform: process.platform,
+  app: {
+    getVersionInfo: () => ipcRenderer.invoke(ipc.app.versionInfo) as Promise<AppVersionInfo>,
+    checkForUpdates: () => ipcRenderer.invoke(ipc.app.checkForUpdates) as Promise<AppUpdateCheckResult>
+  },
   dialog: {
     openFolder: (defaultPath?: string) =>
       ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
   },
   settings: {
+    loadState: () => ipcRenderer.invoke(ipc.settings.loadState) as Promise<SettingsLoadState>,
     load: () => ipcRenderer.invoke(ipc.settings.load) as Promise<AppSettings>,
     save: (settings: AppSettings) => ipcRenderer.invoke(ipc.settings.save, settings) as Promise<AppSettings>
   },

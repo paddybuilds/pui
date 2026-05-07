@@ -38,6 +38,7 @@ export function defaultSettings(): AppSettings {
   const defaultWorkspace: TerminalWorkspace = {
     id: "main-workspace",
     name: "pui",
+    kind: "folder",
     path: workspace,
     defaultCwd: workspace,
     terminalFontSize: 13,

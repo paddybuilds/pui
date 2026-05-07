@@ -36,6 +36,7 @@ let settings: AppSettings = {
     {
       id: "preview-workspace",
       name: "pui",
+      kind: "folder",
       path: workspace,
       defaultCwd: workspace,
       terminalFontSize: 13,
@@ -59,6 +60,7 @@ export function getPuiApi(): PuiApi {
 }
 
 const browserPreviewApi: PuiApi = {
+  platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : "linux",
   dialog: {
     openFolder: async (defaultPath) =>
       bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })

@@ -64,6 +64,16 @@ export function disposeTerminalPanes(workspaceId: string, paneIds: string[]): vo
   }
 }
 
+export function moveTerminalPaneRecord(fromWorkspaceId: string, toWorkspaceId: string, paneId: string): void {
+  const fromKey = terminalRecordKey(fromWorkspaceId, paneId);
+  const record = terminalRecords.get(fromKey);
+  if (!record) {
+    return;
+  }
+  terminalRecords.delete(fromKey);
+  terminalRecords.set(terminalRecordKey(toWorkspaceId, paneId), record);
+}
+
 export function TerminalPane({
   pane,
   workspaceId,

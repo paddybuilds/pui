@@ -8,7 +8,7 @@ import {
   useRef,
   useState
 } from "react";
-import { Edit3, GitCompare, PanelRight, PanelTop, Plus, Search, Settings, TerminalSquare, Trash2, X } from "lucide-react";
+import { Edit3, GitCompare, PanelRight, PanelTop, Plus, Settings, TerminalSquare, Trash2, X } from "lucide-react";
 import type {
   AppSettings,
   ConsoleProfile,
@@ -21,7 +21,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
 import { GitPanel } from "./components/DiffPanel";
 import { SettingsModal } from "./components/SettingsModal";
-import { disposeTerminalPane, disposeTerminalPanes, TerminalPane } from "./components/TerminalPane";
+import { disposeTerminalPane, disposeTerminalPanes, moveTerminalPaneRecord, TerminalPane } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
 
@@ -53,17 +53,21 @@ export function App() {
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
 
   const workspaces = settings?.workspaces ?? [];
+  const quickTerminals = workspaces.filter((workspace) => workspace.kind === "quick");
+  const folderWorkspaces = workspaces.filter((workspace) => workspace.kind !== "quick");
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
-  const activeFolderTitle = activeWorkspace ? basename(activeWorkspace.path) : "";
+  const activeFolderTitle = activeWorkspace ? (activeWorkspace.kind === "quick" ? activeWorkspace.name : basename(activeWorkspace.path)) : "";
   const activeFolderSubtitle =
-    activeWorkspace && activeWorkspace.name !== activeFolderTitle
+    activeWorkspace?.kind === "quick"
+      ? "Quick terminal"
+      : activeWorkspace && activeWorkspace.name !== activeFolderTitle
       ? `${activeWorkspace.name} · ${activeWorkspace.path}`
       : activeWorkspace?.path ?? "";
   const profiles = activeWorkspace?.profiles ?? [];
   const panes = useMemo(() => (layoutRoot ? collectPanes(layoutRoot) : []), [layoutRoot]);
   const activeWorkspaceSessions = activeWorkspace ? sessionsByWorkspace[activeWorkspace.id] ?? {} : {};
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
-  const gitSidebarVisible = Boolean(gitStatus?.isRepo && gitSidebarOpen);
+  const gitSidebarVisible = Boolean(activeWorkspace?.kind !== "quick" && gitStatus?.isRepo && gitSidebarOpen);
 
   useEffect(() => {
     void pui.settings.load().then(async (loaded) => {
@@ -124,9 +128,14 @@ export function App() {
     }
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
-    await refreshGit(workspace.path);
-    await pui.git.watch(workspace.path);
-    setGitSidebarOpen(true);
+    if (workspace.kind === "quick") {
+      setGitStatus(null);
+      setGitSidebarOpen(false);
+    } else {
+      await refreshGit(workspace.path);
+      await pui.git.watch(workspace.path);
+      setGitSidebarOpen(true);
+    }
     setPaletteOpen(false);
     closeContextMenu();
   };
@@ -243,6 +252,41 @@ export function App() {
     }
   };
 
+  const createQuickTerminal = async () => {
+    if (!settings) {
+      return;
+    }
+
+    const cwd = activeWorkspace?.defaultCwd || activeWorkspace?.path || settings.workspace;
+    const profile = createShellProfile(cwd, "");
+    const paneId = newId();
+    const quickTerminal: TerminalWorkspace = {
+      id: newId(),
+      name: `Terminal ${quickTerminals.length + 1}`,
+      kind: "quick",
+      path: cwd,
+      defaultCwd: cwd,
+      terminalFontSize: activeWorkspace?.terminalFontSize || 13,
+      profiles: [profile],
+      layout: {
+        activePaneId: paneId,
+        root: { type: "pane", id: paneId, profileId: profile.id }
+      }
+    };
+
+    const nextSettings = {
+      ...settings,
+      activeWorkspaceId: quickTerminal.id,
+      workspaces: [quickTerminal, ...(settings.workspaces ?? [])]
+    };
+    const saved = await pui.settings.save(nextSettings);
+    setSettings(normalizeSettings(saved));
+    setActiveWorkspaceId(quickTerminal.id);
+    hydrateWorkspace(quickTerminal);
+    setGitStatus(null);
+    setGitSidebarOpen(false);
+  };
+
   const createWorkspace = async ({ name, path }: { name?: string; path: string }) => {
     if (!settings) {
       return;
@@ -254,6 +298,7 @@ export function App() {
     const workspace: TerminalWorkspace = {
       id: newId(),
       name: name?.trim() || basename(defaultCwd),
+      kind: "folder",
       path: defaultCwd,
       defaultCwd,
       terminalFontSize: 13,
@@ -310,7 +355,8 @@ export function App() {
       return;
     }
     const workspace = workspaces.find((item) => item.id === workspaceId);
-    if (!workspace || !window.confirm(`Remove folder "${workspace.name}" from Pui? Terminal sessions for this folder will be closed.`)) {
+    const label = workspace?.kind === "quick" ? "quick terminal" : "folder";
+    if (!workspace || !window.confirm(`Remove ${label} "${workspace.name}" from Pui? Terminal sessions for this ${label} will be closed.`)) {
       return;
     }
 
@@ -333,8 +379,13 @@ export function App() {
     if (nextActiveWorkspace) {
       setActiveWorkspaceId(nextActiveWorkspace.id);
       hydrateWorkspace(nextActiveWorkspace);
-      await refreshGit(nextActiveWorkspace.path);
-      await pui.git.watch(nextActiveWorkspace.path);
+      if (nextActiveWorkspace.kind === "quick") {
+        setGitStatus(null);
+        setGitSidebarOpen(false);
+      } else {
+        await refreshGit(nextActiveWorkspace.path);
+        await pui.git.watch(nextActiveWorkspace.path);
+      }
     } else {
       setActiveWorkspaceId("");
       setLayoutRoot(null);
@@ -343,6 +394,59 @@ export function App() {
       setGitSidebarOpen(true);
     }
     closeContextMenu();
+  };
+
+  const attachQuickTerminalToFolder = async (quickTerminalId: string, folderId: string) => {
+    if (!settings || quickTerminalId === folderId) {
+      return;
+    }
+    const quickTerminal = workspaces.find((workspace) => workspace.id === quickTerminalId && workspace.kind === "quick");
+    const folder = workspaces.find((workspace) => workspace.id === folderId && workspace.kind !== "quick");
+    if (!quickTerminal || !folder) {
+      return;
+    }
+
+    const quickPanes = collectPanes(quickTerminal.layout.root);
+    const folderProfileIds = new Set(folder.profiles.map((profile) => profile.id));
+    const movedProfiles = quickTerminal.profiles.map((profile) =>
+      folderProfileIds.has(profile.id) ? { ...profile, id: newId(), shortcut: "" } : { ...profile, shortcut: "" }
+    );
+    const profileIdMap = new Map(quickTerminal.profiles.map((profile, index) => [profile.id, movedProfiles[index]?.id ?? profile.id]));
+    const movedRoot = remapProfileIds(quickTerminal.layout.root, profileIdMap);
+    const nextRoot = appendWorkbenchNode(folder.layout.root, movedRoot, "down");
+    const nextFolder: TerminalWorkspace = {
+      ...folder,
+      profiles: [...folder.profiles, ...movedProfiles],
+      layout: {
+        activePaneId: quickTerminal.layout.activePaneId,
+        root: nextRoot
+      }
+    };
+    const nextSettings = {
+      ...settings,
+      activeWorkspaceId: folder.id,
+      workspaces: workspaces
+        .filter((workspace) => workspace.id !== quickTerminal.id)
+        .map((workspace) => (workspace.id === folder.id ? nextFolder : workspace))
+    };
+
+    quickPanes.forEach((pane) => moveTerminalPaneRecord(quickTerminal.id, folder.id, pane.id));
+    setSessionsByWorkspace((current) => {
+      const quickSessions = current[quickTerminal.id] ?? {};
+      const folderSessions = current[folder.id] ?? {};
+      const next = { ...current };
+      delete next[quickTerminal.id];
+      next[folder.id] = { ...folderSessions, ...quickSessions };
+      return next;
+    });
+
+    const saved = await pui.settings.save(nextSettings);
+    setSettings(normalizeSettings(saved));
+    setActiveWorkspaceId(folder.id);
+    hydrateWorkspace(nextFolder);
+    await refreshGit(folder.path);
+    await pui.git.watch(folder.path);
+    setGitSidebarOpen(true);
   };
 
   const updateActiveWorkspace = async (workspace: TerminalWorkspace) => {
@@ -360,15 +464,20 @@ export function App() {
     setSettings(normalized);
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
-    await refreshGit(workspace.path);
-    await pui.git.watch(workspace.path);
+    if (workspace.kind === "quick") {
+      setGitStatus(null);
+      setGitSidebarOpen(false);
+    } else {
+      await refreshGit(workspace.path);
+      await pui.git.watch(workspace.path);
+    }
   };
 
   const openWorkspaceContextMenu = (event: MouseEvent, workspace: TerminalWorkspace) => {
     openContextMenu(event, [
       {
         id: "open-workspace",
-        label: "Open folder",
+        label: workspace.kind === "quick" ? "Open terminal" : "Open folder",
         onSelect: () => void switchWorkspace(workspace)
       },
       {
@@ -379,7 +488,7 @@ export function App() {
       },
       {
         id: "delete-workspace",
-        label: "Close folder",
+        label: workspace.kind === "quick" ? "Close terminal" : "Close folder",
         icon: <Trash2 size={14} />,
         destructive: true,
         onSelect: () => void deleteWorkspace(workspace.id)
@@ -428,25 +537,57 @@ export function App() {
           <span>Pui</span>
         </div>
 
-        <div className="sidebar-actions">
-          <button className="rail-button" type="button" title="Command palette" onClick={() => setPaletteOpen(true)}>
-            <Search size={16} />
-            <span>Search</span>
+        <div className="sidebar-label">Terminals</div>
+        <section className="workspace-list quick-terminal-list">
+          {quickTerminals.map((terminal) =>
+            terminal.id === editingWorkspaceId ? (
+              <div key={terminal.id} className="workspace-button quick active editing" title="Quick terminal">
+                <span>QT</span>
+                <input
+                  className="workspace-rename-input"
+                  autoFocus
+                  value={editingWorkspaceName}
+                  onChange={(event) => setEditingWorkspaceName(event.target.value)}
+                  onBlur={() => void renameWorkspace(terminal, editingWorkspaceName)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur();
+                    }
+                    if (event.key === "Escape") {
+                      setEditingWorkspaceId(null);
+                      setEditingWorkspaceName("");
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                key={terminal.id}
+                type="button"
+                draggable
+                className={terminal.id === activeWorkspace?.id ? "workspace-button quick active" : "workspace-button quick"}
+                title="Drag onto a folder to group this terminal"
+                onClick={() => switchWorkspace(terminal)}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData("application/x-pui-quick-terminal", terminal.id);
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                onContextMenu={(event) => openWorkspaceContextMenu(event, terminal)}
+              >
+                <span>QT</span>
+                <strong>{terminal.name}</strong>
+              </button>
+            )
+          )}
+          <button className="workspace-button quick-create" type="button" onClick={() => void createQuickTerminal()}>
+            <span>+</span>
+            <strong>Quick terminal</strong>
           </button>
-          <button
-            className={settingsOpen ? "rail-button active" : "rail-button"}
-            type="button"
-            title="Settings"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings size={16} />
-            <span>Settings</span>
-          </button>
-        </div>
+        </section>
 
         <div className="sidebar-label">Folders</div>
         <section className="workspace-list">
-          {workspaces.map((workspace) =>
+          {folderWorkspaces.map((workspace) =>
             workspace.id === editingWorkspaceId ? (
               <div key={workspace.id} className="workspace-button active editing" title={workspace.path}>
                 <span>{editingWorkspaceName.slice(0, 2).toUpperCase() || "FO"}</span>
@@ -471,10 +612,23 @@ export function App() {
               <button
                 key={workspace.id}
                 type="button"
-                className={workspace.id === activeWorkspace.id ? "workspace-button active" : "workspace-button"}
+                className={workspace.id === activeWorkspace?.id ? "workspace-button active" : "workspace-button"}
                 title={workspace.path}
                 onClick={() => switchWorkspace(workspace)}
                 onContextMenu={(event) => openWorkspaceContextMenu(event, workspace)}
+                onDragOver={(event) => {
+                  if (event.dataTransfer.types.includes("application/x-pui-quick-terminal")) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }
+                }}
+                onDrop={(event) => {
+                  const quickTerminalId = event.dataTransfer.getData("application/x-pui-quick-terminal");
+                  if (quickTerminalId) {
+                    event.preventDefault();
+                    void attachQuickTerminalToFolder(quickTerminalId, workspace.id);
+                  }
+                }}
               >
                 <span>{workspace.name.slice(0, 2).toUpperCase()}</span>
                 <strong>{workspace.name}</strong>
@@ -487,6 +641,15 @@ export function App() {
           <button type="button" onClick={() => void openFolder()}>
             <Plus size={14} />
             <span>Open folder</span>
+          </button>
+          <button
+            className={settingsOpen ? "active" : ""}
+            type="button"
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings size={14} />
+            <span>Settings</span>
           </button>
         </div>
       </aside>
@@ -515,7 +678,7 @@ export function App() {
                   <PanelRight size={14} />
                   <span>Split</span>
                 </button>
-                {gitStatus?.isRepo ? (
+                {activeWorkspace.kind !== "quick" && gitStatus?.isRepo ? (
                   <button
                     type="button"
                     className={gitSidebarVisible ? "active" : ""}
@@ -756,10 +919,43 @@ function updateSplitSizes(root: WorkbenchNode, splitId: string, sizes: number[])
   };
 }
 
+function appendWorkbenchNode(root: WorkbenchNode, child: WorkbenchNode, direction: "right" | "down"): WorkbenchNode {
+  if (root.type === "split" && root.direction === direction) {
+    const children = [...root.children, child];
+    return {
+      ...root,
+      children,
+      sizes: normalizeSplitSizes([...(root.sizes ?? []), 1], children.length)
+    };
+  }
+
+  return {
+    type: "split",
+    id: newId(),
+    direction,
+    children: [root, child],
+    sizes: [0.65, 0.35]
+  };
+}
+
+function remapProfileIds(root: WorkbenchNode, profileIdMap: Map<string, string>): WorkbenchNode {
+  if (root.type === "pane") {
+    return {
+      ...root,
+      profileId: root.profileId ? profileIdMap.get(root.profileId) ?? root.profileId : root.profileId
+    };
+  }
+  return {
+    ...root,
+    children: root.children.map((child) => remapProfileIds(child, profileIdMap))
+  };
+}
+
 function normalizeSettings(settings: AppSettings): AppSettings {
   if (settings.workspaces) {
     const workspaces = settings.workspaces.map((workspace) => ({
       ...workspace,
+      kind: workspace.kind ?? ("folder" as const),
       defaultCwd: workspace.defaultCwd || workspace.path,
       terminalFontSize: workspace.terminalFontSize || 13,
       profiles: workspace.profiles.map((profile) => ({
@@ -779,6 +975,7 @@ function normalizeSettings(settings: AppSettings): AppSettings {
   const workspace: TerminalWorkspace = {
     id: "main-workspace",
     name: basename(path) || "workspace",
+    kind: "folder",
     path,
     defaultCwd: path,
     terminalFontSize: 13,

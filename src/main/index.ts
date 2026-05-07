@@ -15,6 +15,7 @@ let gitService: GitWorkspaceService | undefined;
 const storeService = new StoreService();
 
 function createWindow(): void {
+  const isMac = process.platform === "darwin";
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -22,8 +23,15 @@ function createWindow(): void {
     minHeight: 720,
     title: "Pui",
     backgroundColor: "#111318",
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 18 },
+    titleBarStyle: isMac ? "hiddenInset" : "hidden",
+    trafficLightPosition: isMac ? { x: 20, y: 20 } : undefined,
+    titleBarOverlay: isMac
+      ? undefined
+      : {
+          color: "#0b0f14",
+          symbolColor: "#9ca3af",
+          height: 44
+        },
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       nodeIntegration: false,

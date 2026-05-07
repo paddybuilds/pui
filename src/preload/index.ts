@@ -3,6 +3,7 @@ import { ipc } from "../shared/ipc";
 import type { AppSettings, CodexRun, GitCommit, GitDiff, GitStatus, TerminalSession } from "../shared/types";
 
 const api = {
+  platform: process.platform,
   dialog: {
     openFolder: (defaultPath?: string) => ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
   },

@@ -108,6 +108,7 @@ export type WorkbenchNode =
 export type TerminalWorkspace = {
   id: string;
   name: string;
+  kind?: "folder" | "quick";
   path: string;
   defaultCwd?: string;
   terminalFontSize?: number;

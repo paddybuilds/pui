@@ -1,0 +1,89 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - generic [ref=e9]: Pui
+    - generic [ref=e10]:
+      - button "Search" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+        - generic [ref=e15]: Search
+      - button "Codex" [ref=e16] [cursor=pointer]:
+        - img [ref=e17]
+        - generic [ref=e19]: Codex
+      - button "Diffs" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e26]: Diffs
+      - button "Settings" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+        - generic [ref=e31]: Settings
+    - generic [ref=e32]: Folders
+    - button "PU pui" [ref=e34] [cursor=pointer]:
+      - generic [ref=e35]: PU
+      - strong [ref=e36]: pui
+    - button "Open folder" [ref=e38] [cursor=pointer]:
+      - img [ref=e39]
+      - generic [ref=e40]: Open folder
+  - main [ref=e41]:
+    - generic [ref=e42]:
+      - generic [ref=e43]:
+        - strong [ref=e44]: pui
+        - generic [ref=e45]: /Users/paddy/Documents/GitHub/pui
+      - generic [ref=e46]:
+        - button "Folder" [ref=e47] [cursor=pointer]:
+          - img [ref=e48]
+          - generic [ref=e49]: Folder
+        - button "Split" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+          - generic [ref=e53]: Split
+        - button "Codex" [ref=e54] [cursor=pointer]:
+          - img [ref=e55]
+          - generic [ref=e57]: Codex
+        - button "Diffs" [ref=e58] [cursor=pointer]:
+          - img [ref=e59]
+          - generic [ref=e64]: Diffs
+        - button "Settings" [active] [ref=e65] [cursor=pointer]:
+          - img [ref=e66]
+    - generic [ref=e71]:
+      - generic [ref=e72]:
+        - generic [ref=e74]: pui
+        - generic [ref=e75]: /Users/paddy/Documents/GitHub/pui
+      - generic [ref=e80]:
+        - textbox "Terminal input" [ref=e112]
+        - generic [ref=e113]: paddy@Paddys-MacBook-Air pui %
+  - dialog "Settings" [ref=e115]:
+    - complementary [ref=e116]:
+      - generic [ref=e117]:
+        - strong [ref=e118]: Settings
+        - button "Close settings" [ref=e119] [cursor=pointer]:
+          - img [ref=e120]
+      - navigation [ref=e123]:
+        - button "General" [ref=e124] [cursor=pointer]:
+          - img [ref=e125]
+          - generic [ref=e128]: General
+        - button "Folders" [ref=e129] [cursor=pointer]:
+          - img [ref=e130]
+          - generic [ref=e132]: Folders
+        - button "Terminal" [ref=e133] [cursor=pointer]:
+          - img [ref=e134]
+          - generic [ref=e137]: Terminal
+        - button "Codex" [ref=e138] [cursor=pointer]:
+          - img [ref=e139]
+          - generic [ref=e143]: Codex
+        - button "Shortcuts" [ref=e144] [cursor=pointer]:
+          - img [ref=e145]
+          - generic [ref=e147]: Shortcuts
+    - main [ref=e148]:
+      - heading "General" [level=2] [ref=e150]
+      - generic [ref=e151]:
+        - generic [ref=e152]:
+          - generic [ref=e153]: Folder label
+          - code [ref=e154]: pui
+        - generic [ref=e155]:
+          - generic [ref=e156]: Open folder
+          - code [ref=e157]: pui
+        - generic [ref=e158]:
+          - generic [ref=e159]: Folder path
+          - code [ref=e160]: /Users/paddy/Documents/GitHub/pui
+        - generic [ref=e161]:
+          - generic [ref=e162]: Recent folders
+          - code [ref=e163]: "1"

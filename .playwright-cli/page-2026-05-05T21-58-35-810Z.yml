@@ -1,0 +1,73 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - generic [ref=e9]: Pui
+    - generic [ref=e10]:
+      - button "Command palette" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+      - button "Codex" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+      - button "Diffs" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+      - button "Settings" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+    - button "PU pui" [ref=e29] [cursor=pointer]:
+      - generic [ref=e30]: PU
+      - strong [ref=e31]: pui
+    - group [ref=e32]:
+      - img [ref=e34] [cursor=pointer]
+  - main [ref=e35]:
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e41]: pui
+        - generic [ref=e42]: /Users/paddy/Documents/GitHub/pui
+      - generic [ref=e47]:
+        - textbox "Terminal input" [ref=e85]
+        - generic [ref=e143]: paddy@Paddys-MacBook-Air pui %
+  - dialog "Settings" [ref=e88]:
+    - complementary [ref=e89]:
+      - generic [ref=e90]:
+        - strong [ref=e91]: Settings
+        - button "Close settings" [ref=e92] [cursor=pointer]:
+          - img [ref=e93]
+      - navigation [ref=e96]:
+        - button "General" [ref=e97] [cursor=pointer]:
+          - img [ref=e98]
+          - generic [ref=e101]: General
+        - button "Workspaces" [ref=e102] [cursor=pointer]:
+          - img [ref=e103]
+          - generic [ref=e105]: Workspaces
+        - button "Terminal" [ref=e106] [cursor=pointer]:
+          - img [ref=e107]
+          - generic [ref=e110]: Terminal
+        - button "Codex" [ref=e111] [cursor=pointer]:
+          - img [ref=e112]
+          - generic [ref=e116]: Codex
+        - button "Shortcuts" [ref=e117] [cursor=pointer]:
+          - img [ref=e118]
+          - generic [ref=e120]: Shortcuts
+    - main [ref=e121]:
+      - heading "Terminal" [level=2] [ref=e123]
+      - generic [ref=e124]:
+        - generic [ref=e125]:
+          - generic [ref=e126]: Default working directory
+          - generic [ref=e127]:
+            - textbox "Default working directory" [ref=e128]:
+              - /placeholder: /Users/paddy/Documents/GitHub/pui
+              - text: /Users/paddy/Documents/GitHub/pui
+            - button "Save" [ref=e129] [cursor=pointer]
+          - paragraph [ref=e130]: New terminals in this workspace will start here. Existing profile cwd values are updated when you save.
+          - generic [ref=e146]: Saved
+        - generic [ref=e131]:
+          - generic [ref=e132]: Shell marker
+          - code [ref=e133]: Hidden
+        - generic [ref=e134]:
+          - generic [ref=e135]: Cursor
+          - code [ref=e136]: Focused pane only
+        - generic [ref=e137]:
+          - generic [ref=e138]: Font
+          - code [ref=e139]: SF Mono, 13px
+        - generic [ref=e140]:
+          - generic [ref=e141]: Splits
+          - code [ref=e142]: Warp-style shortcuts

@@ -1,0 +1,50 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e6]
+        - generic [ref=e9]: Pui
+      - generic [ref=e10]:
+        - button "Search" [ref=e11] [cursor=pointer]:
+          - img [ref=e12]
+          - generic [ref=e15]: Search
+        - button "Codex" [ref=e16] [cursor=pointer]:
+          - img [ref=e17]
+          - generic [ref=e19]: Codex
+        - button "Diffs" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e26]: Diffs
+        - button "Settings" [ref=e27] [cursor=pointer]:
+          - img [ref=e28]
+          - generic [ref=e31]: Settings
+      - generic [ref=e32]: Workspaces
+      - button "PU pui" [ref=e34] [cursor=pointer]:
+        - generic [ref=e35]: PU
+        - strong [ref=e36]: pui
+      - button "New workspace" [ref=e38] [cursor=pointer]:
+        - img [ref=e39]
+        - generic [ref=e40]: New workspace
+    - main [ref=e41]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e47]: pui
+          - generic [ref=e48]: /Users/paddy/Documents/GitHub/pui
+        - generic [ref=e53]:
+          - textbox "Terminal input" [active] [ref=e87]
+          - generic [ref=e54]:
+            - generic [ref=e100]: paddy@Paddys-MacBook-Air pui % echo WORKSPACE_SWITCH_KEEP
+            - generic [ref=e101]: WORKSPACE_SWITCH_KEEP
+            - generic [ref=e102]: paddy@Paddys-MacBook-Air pui %
+  - menu "Context menu" [ref=e104]:
+    - menuitem "Split right" [ref=e105] [cursor=pointer]:
+      - img [ref=e107]
+      - generic [ref=e109]: Split right
+      - generic [ref=e110]: Cmd D
+    - menuitem "Split down" [ref=e111] [cursor=pointer]:
+      - img [ref=e113]
+      - generic [ref=e115]: Split down
+      - generic [ref=e116]: Shift Cmd D
+    - menuitem "Cannot close last pane" [disabled] [ref=e117]:
+      - img [ref=e119]
+      - generic [ref=e122]: Cannot close last pane
+      - generic [ref=e123]: Cmd W

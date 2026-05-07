@@ -1,0 +1,279 @@
+import { type MouseEvent, useEffect, useRef } from "react";
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
+import { X } from "lucide-react";
+import type { ConsoleProfile } from "../../../shared/types";
+
+type Pane = {
+  id: string;
+  profileId?: string;
+  sessionId?: string;
+};
+
+type TerminalPaneProps = {
+  pane: Pane;
+  workspaceId: string;
+  profile: ConsoleProfile;
+  workspaceName: string;
+  terminalFontSize?: number;
+  active: boolean;
+  showHeader: boolean;
+  canClose: boolean;
+  onFocus: () => void;
+  onClose: () => void;
+  onSession: (sessionId: string) => void;
+  onContextMenu: (event: MouseEvent) => void;
+};
+
+type TerminalRecord = {
+  terminal: Terminal;
+  fit: FitAddon;
+  sessionId?: string;
+  inputDisposable: { dispose: () => void };
+  offData: () => void;
+  offExit: () => void;
+  exited: boolean;
+};
+
+const terminalRecords = new Map<string, TerminalRecord>();
+
+export function terminalRecordKey(workspaceId: string, paneId: string): string {
+  return `${workspaceId}:${paneId}`;
+}
+
+export function disposeTerminalPane(workspaceId: string, paneId: string): void {
+  const key = terminalRecordKey(workspaceId, paneId);
+  const record = terminalRecords.get(key);
+  if (!record) {
+    return;
+  }
+
+  record.inputDisposable.dispose();
+  record.offData();
+  record.offExit();
+  if (record.sessionId && !record.exited) {
+    void window.pui.terminal.kill(record.sessionId);
+  }
+  record.terminal.dispose();
+  terminalRecords.delete(key);
+}
+
+export function disposeTerminalPanes(workspaceId: string, paneIds: string[]): void {
+  for (const paneId of paneIds) {
+    disposeTerminalPane(workspaceId, paneId);
+  }
+}
+
+export function TerminalPane({
+  pane,
+  workspaceId,
+  profile,
+  workspaceName,
+  terminalFontSize = 13,
+  active,
+  showHeader,
+  canClose,
+  onFocus,
+  onClose,
+  onSession,
+  onContextMenu
+}: TerminalPaneProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const xtermMountRef = useRef<HTMLDivElement | null>(null);
+  const recordRef = useRef<TerminalRecord | null>(null);
+  const onSessionRef = useRef(onSession);
+
+  useEffect(() => {
+    onSessionRef.current = onSession;
+  });
+
+  useEffect(() => {
+    if (!xtermMountRef.current) {
+      return;
+    }
+
+    const record = getOrCreateTerminalRecord(workspaceId, pane.id, pane.sessionId, profile, active, (sessionId) => {
+      onSessionRef.current(sessionId);
+    });
+    recordRef.current = record;
+    attachTerminalElement(record.terminal, xtermMountRef.current);
+    record.terminal.options.cursorBlink = active;
+    if (record.terminal.options.fontSize !== terminalFontSize) {
+      record.terminal.options.fontSize = terminalFontSize;
+    }
+    fitTerminal(record.fit);
+    if (record.sessionId) {
+      onSessionRef.current(record.sessionId);
+      void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
+    }
+
+    const observer = new ResizeObserver(() => {
+      fitTerminal(record.fit);
+      if (record.sessionId) {
+        void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
+      }
+    });
+    observer.observe(xtermMountRef.current);
+
+    return () => {
+      observer.disconnect();
+      recordRef.current = null;
+    };
+  }, [pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
+
+  useEffect(() => {
+    if (recordRef.current) {
+      recordRef.current.terminal.options.cursorBlink = active;
+      if (active) {
+        recordRef.current.terminal.focus();
+      }
+    }
+  }, [active]);
+
+  const focusPane = () => {
+    onFocus();
+    recordRef.current?.terminal.focus();
+    const textarea = xtermMountRef.current?.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
+    textarea?.focus();
+  };
+
+  return (
+    <div
+      className={active ? "terminal-pane active" : "terminal-pane inactive"}
+      tabIndex={0}
+      onMouseDown={focusPane}
+      onContextMenu={onContextMenu}
+    >
+      {showHeader ? (
+        <div className="pane-header">
+          <span className="profile-dot" style={{ background: profile.appearance.color }} />
+          <span>{workspaceName}</span>
+          <span className="pane-cwd">{profile.cwd}</span>
+          {canClose ? (
+            <button
+              className="pane-close"
+              type="button"
+              title="Close pane"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClose();
+              }}
+            >
+              <X size={12} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="terminal-host" ref={containerRef} onMouseDown={focusPane}>
+        <div className="xterm-mount" ref={xtermMountRef} />
+      </div>
+    </div>
+  );
+}
+
+function getOrCreateTerminalRecord(
+  workspaceId: string,
+  paneId: string,
+  existingSessionId: string | undefined,
+  profile: ConsoleProfile,
+  active: boolean,
+  onSession: (sessionId: string) => void
+): TerminalRecord {
+  const key = terminalRecordKey(workspaceId, paneId);
+  const existing = terminalRecords.get(key);
+  if (existing) {
+    if (existingSessionId && !existing.sessionId) {
+      existing.sessionId = existingSessionId;
+    }
+    return existing;
+  }
+
+  const terminal = new Terminal({
+    cursorBlink: active,
+    convertEol: true,
+    fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    fontSize: 13,
+    lineHeight: 1.25,
+    theme: {
+      background: "#111318",
+      foreground: "#e8edf2",
+      cursor: "#e5e7eb",
+      selectionBackground: "#334155"
+    }
+  });
+  const fit = new FitAddon();
+  terminal.loadAddon(fit);
+
+  const record: TerminalRecord = {
+    terminal,
+    fit,
+    sessionId: existingSessionId,
+    inputDisposable: terminal.onData((data) => {
+      if (record.sessionId) {
+        void window.pui.terminal.write(record.sessionId, data);
+      }
+    }),
+    offData: window.pui.terminal.onData(({ sessionId, data }) => {
+      if (sessionId === record.sessionId) {
+        record.terminal.write(data);
+      }
+    }),
+    offExit: window.pui.terminal.onExit(({ sessionId, exitCode }) => {
+      if (sessionId === record.sessionId && !record.exited) {
+        record.exited = true;
+        record.terminal.writeln("");
+        record.terminal.writeln(`[process exited with code ${exitCode}]`);
+      }
+    }),
+    exited: false
+  };
+
+  terminalRecords.set(key, record);
+
+  if (!record.sessionId) {
+    void window.pui.terminal
+      .create({
+        profile,
+        paneId,
+        cols: terminal.cols,
+        rows: terminal.rows
+      })
+      .then((session) => {
+        if (!terminalRecords.has(key)) {
+          void window.pui.terminal.kill(session.id);
+          return;
+        }
+        record.sessionId = session.id;
+        onSession(session.id);
+        if (session.ptyProcessId === 0) {
+          terminal.writeln("terminal bridge unavailable");
+        }
+      });
+  } else {
+    onSession(record.sessionId);
+  }
+
+  return record;
+}
+
+function attachTerminalElement(terminal: Terminal, mount: HTMLDivElement): void {
+  if (terminal.element) {
+    if (terminal.element.parentElement !== mount) {
+      mount.appendChild(terminal.element);
+    }
+    return;
+  }
+
+  terminal.open(mount);
+}
+
+function fitTerminal(fit: FitAddon): void {
+  window.requestAnimationFrame(() => {
+    try {
+      fit.fit();
+    } catch {
+      // xterm can report incomplete dimensions during first layout in browser preview.
+    }
+  });
+}

@@ -1,0 +1,107 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - generic [ref=e9]: Pui
+    - generic [ref=e10]:
+      - button "Search" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+        - generic [ref=e15]: Search
+      - button "Codex" [ref=e16] [cursor=pointer]:
+        - img [ref=e17]
+        - generic [ref=e19]: Codex
+      - button "Diffs" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e26]: Diffs
+      - button "Settings" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+        - generic [ref=e31]: Settings
+    - generic [ref=e32]: Workspaces
+    - button "PU pui" [ref=e207] [cursor=pointer]:
+      - generic [ref=e35]: PU
+      - strong [ref=e36]: pui
+    - button "New workspace" [ref=e38] [cursor=pointer]:
+      - img [ref=e39]
+      - generic [ref=e40]: New workspace
+  - main [ref=e41]:
+    - generic [ref=e42]:
+      - generic [ref=e43]:
+        - strong [ref=e44]: pui
+        - generic [ref=e45]: /Users/paddy/Documents/GitHub/pui
+      - generic [ref=e46]:
+        - button "Workspace" [ref=e47] [cursor=pointer]:
+          - img [ref=e48]
+          - generic [ref=e49]: Workspace
+        - button "Split" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+          - generic [ref=e53]: Split
+        - button "Codex" [ref=e54] [cursor=pointer]:
+          - img [ref=e55]
+          - generic [ref=e57]: Codex
+        - button "Diffs" [ref=e58] [cursor=pointer]:
+          - img [ref=e59]
+          - generic [ref=e64]: Diffs
+        - button "Settings" [ref=e65] [cursor=pointer]:
+          - img [ref=e66]
+    - generic [ref=e69]:
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e74]: pui
+          - generic [ref=e75]: /Users/paddy/Documents/GitHub/pui
+        - generic [ref=e80]:
+          - textbox "Terminal input" [ref=e112]
+          - generic [ref=e115]: paddy@Paddys-MacBook-Air pui %
+      - complementary [ref=e118]:
+        - generic [ref=e119]:
+          - button "Codex" [ref=e120] [cursor=pointer]:
+            - img [ref=e121]
+            - text: Codex
+          - button "Diffs" [ref=e123] [cursor=pointer]:
+            - img [ref=e124]
+            - text: Diffs
+        - generic [ref=e129]:
+          - generic [ref=e130]:
+            - button "Refresh" [ref=e131] [cursor=pointer]:
+              - img [ref=e132]
+              - text: Refresh
+            - generic [ref=e137]: Git integration is available in the Electron app window.
+          - generic [ref=e138]:
+            - generic [ref=e140]: No changed files.
+            - generic [ref=e143]: Select a file to review changes.
+  - dialog "Settings" [ref=e144]:
+    - complementary [ref=e145]:
+      - generic [ref=e146]:
+        - strong [ref=e147]: Settings
+        - button "Close settings" [ref=e148] [cursor=pointer]:
+          - img [ref=e149]
+      - navigation [ref=e152]:
+        - button "General" [ref=e153] [cursor=pointer]:
+          - img [ref=e154]
+          - generic [ref=e157]: General
+        - button "Workspaces" [ref=e158] [cursor=pointer]:
+          - img [ref=e159]
+          - generic [ref=e161]: Workspaces
+        - button "Terminal" [ref=e162] [cursor=pointer]:
+          - img [ref=e163]
+          - generic [ref=e166]: Terminal
+        - button "Codex" [ref=e167] [cursor=pointer]:
+          - img [ref=e168]
+          - generic [ref=e172]: Codex
+        - button "Shortcuts" [ref=e173] [cursor=pointer]:
+          - img [ref=e174]
+          - generic [ref=e176]: Shortcuts
+    - main [ref=e177]:
+      - heading "Workspaces" [level=2] [ref=e190]
+      - generic [ref=e191]:
+        - generic [ref=e192]:
+          - generic [ref=e193]: Workspace name
+          - textbox "Workspace name" [ref=e194]: pui
+          - generic [ref=e195]: Workspace path
+          - generic [ref=e196]:
+            - textbox "Workspace path" [ref=e197]: /Users/paddy/Documents/GitHub/pui
+            - button "Save" [ref=e198] [cursor=pointer]
+          - paragraph [ref=e204]: When the path changes, profiles that used the old workspace path move with it.
+          - generic [ref=e208]: Saved
+        - generic [ref=e200]:
+          - generic [ref=e201]: pui
+          - code [ref=e202]: /Users/paddy/Documents/GitHub/pui

@@ -50,7 +50,7 @@
 }
 
 :root[data-density="compact"] {
-  --titlebar-height: 38px;
+  --titlebar-height: 44px;
 }
 
 * {
@@ -400,7 +400,7 @@ kbd {
 
 .platform-win32 .workspace-topbar,
 .platform-linux .workspace-topbar {
-  padding-right: var(--window-controls-width);
+  padding-right: calc(var(--window-controls-width) + 12px);
 }
 
 .platform-browser .workspace-topbar {
@@ -631,7 +631,7 @@ kbd {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 0 12px 0 14px;
+  padding: 0 12px 0 16px;
   background: var(--surface-root);
   border-bottom: 1px solid var(--line-soft);
   -webkit-app-region: drag;
@@ -675,10 +675,12 @@ kbd {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .workspace-topbar-actions button {
   height: 30px;
+  min-width: 0;
   padding: 0 9px;
   color: var(--text-muted);
   font-size: 12px;
@@ -688,6 +690,13 @@ kbd {
 .workspace-topbar-actions button:hover {
   color: var(--text-strong);
   background: var(--surface-hover);
+}
+
+.workspace-topbar-actions button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-topbar-actions small {
@@ -914,10 +923,6 @@ kbd {
   box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
-.workbench {
-  grid-template-rows: 38px minmax(0, 1fr);
-}
-
 .workspace-topbar {
   background: color-mix(in srgb, var(--surface-root) 96%, transparent);
   border-bottom-color: var(--line-soft);
@@ -932,7 +937,7 @@ kbd {
 }
 
 .workspace-topbar-actions button {
-  height: 26px;
+  height: 30px;
   padding: 0 8px;
 }
 

@@ -47,7 +47,7 @@ import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
 import { getDevToolsFlagState } from "./lib/devFlags";
 import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
-import { applyThemePreferences, themeKey } from "./lib/theme";
+import { applyThemePreferences, readTitleBarTheme, themeKey } from "./lib/theme";
 import {
   appendWorkbenchNode,
   buildSplitTracks,
@@ -189,6 +189,7 @@ export function App() {
 
   useEffect(() => {
     applyThemePreferences(appPreferences);
+    void pui.app.setTitleBarTheme(readTitleBarTheme());
   }, [appPreferences]);
 
   const completeOnboarding = async (nextSettings: AppSettings) => {

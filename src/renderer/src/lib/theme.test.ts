@@ -6,6 +6,7 @@ import {
   DARK_THEME_TOKENS,
   LIGHT_THEME_TOKENS,
   readTerminalTheme,
+  readTitleBarTheme,
   resolveThemeTokens,
   themeKey
 } from "./theme";
@@ -75,6 +76,20 @@ describe("theme helpers", () => {
       foreground: "#aabbcc",
       cursor: "#ddeeff",
       selectionBackground: "#112233"
+    });
+
+    root.remove();
+  });
+
+  it("reads native titlebar theme variables", () => {
+    const root = document.createElement("div");
+    root.style.setProperty("--surface-root", "#f8fafc");
+    root.style.setProperty("--text-muted", "#475569");
+    document.body.append(root);
+
+    expect(readTitleBarTheme(root)).toEqual({
+      color: "#f8fafc",
+      symbolColor: "#475569"
     });
 
     root.remove();

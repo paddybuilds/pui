@@ -1,7 +1,8 @@
 export const ipc = {
   app: {
     versionInfo: "app:version-info",
-    checkForUpdates: "app:check-for-updates"
+    checkForUpdates: "app:check-for-updates",
+    setTitleBarTheme: "app:set-title-bar-theme"
   },
   dialog: {
     openFolder: "dialog:open-folder"

@@ -89,7 +89,8 @@ const browserPreviewApi: PuiApi = {
       currentVersion: previewVersion,
       checkedAt: new Date().toISOString(),
       message: "Update checks are unavailable in browser preview."
-    })
+    }),
+    setTitleBarTheme: async () => undefined
   },
   dialog: {
     openFolder: async (defaultPath) =>

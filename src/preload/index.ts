@@ -9,7 +9,8 @@ import type {
   GitOperationResult,
   GitStatus,
   SettingsLoadState,
-  TerminalSession
+  TerminalSession,
+  TitleBarTheme
 } from "../shared/types";
 
 export type ShellCandidate = {
@@ -25,7 +26,8 @@ const api = {
   platform: process.platform,
   app: {
     getVersionInfo: () => ipcRenderer.invoke(ipc.app.versionInfo) as Promise<AppVersionInfo>,
-    checkForUpdates: () => ipcRenderer.invoke(ipc.app.checkForUpdates) as Promise<AppUpdateCheckResult>
+    checkForUpdates: () => ipcRenderer.invoke(ipc.app.checkForUpdates) as Promise<AppUpdateCheckResult>,
+    setTitleBarTheme: (theme: TitleBarTheme) => ipcRenderer.invoke(ipc.app.setTitleBarTheme, theme)
   },
   dialog: {
     openFolder: (defaultPath?: string) =>

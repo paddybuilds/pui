@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, ConsoleProfile } from "../shared/types";
+import type { AppSettings, ConsoleProfile, TitleBarTheme } from "../shared/types";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
 import { StoreService } from "./store";
@@ -12,6 +12,11 @@ import { AppUpdateService } from "./updateService";
 let mainWindow: BrowserWindow | undefined;
 let terminalService: TerminalService | undefined;
 let gitService: GitWorkspaceService | undefined;
+
+const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
+  color: "#090b0f",
+  symbolColor: "#8b95a5"
+};
 
 const storeService = new StoreService();
 const appUpdateService = new AppUpdateService({
@@ -26,14 +31,13 @@ function createWindow(): void {
     minWidth: 1080,
     minHeight: 720,
     title: "Pui",
-    backgroundColor: "#111318",
+    backgroundColor: DEFAULT_TITLE_BAR_THEME.color,
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     trafficLightPosition: isMac ? { x: 20, y: 20 } : undefined,
     titleBarOverlay: isMac
       ? undefined
       : {
-          color: "#0b0f14",
-          symbolColor: "#9ca3af",
+          ...DEFAULT_TITLE_BAR_THEME,
           height: 44
         },
     webPreferences: {
@@ -78,6 +82,9 @@ app.on("window-all-closed", () => {
 function registerIpc(): void {
   ipcMain.handle(ipc.app.versionInfo, () => appUpdateService.getVersionInfo());
   ipcMain.handle(ipc.app.checkForUpdates, () => appUpdateService.checkForUpdates());
+  ipcMain.handle(ipc.app.setTitleBarTheme, (_event, theme: TitleBarTheme) => {
+    applyTitleBarTheme(theme);
+  });
 
   ipcMain.handle(ipc.dialog.openFolder, async (_event, defaultPath?: string) => {
     if (!mainWindow) {
@@ -134,4 +141,17 @@ function registerIpc(): void {
   });
   ipcMain.handle(ipc.git.push, (_event, workspace: string) => gitService?.push(workspace));
   ipcMain.handle(ipc.git.watch, (_event, workspace: string) => gitService?.watch(workspace));
+}
+
+function applyTitleBarTheme(theme: TitleBarTheme): void {
+  if (process.platform === "darwin" || !mainWindow) {
+    return;
+  }
+
+  mainWindow.setBackgroundColor(theme.color);
+  mainWindow.setTitleBarOverlay({
+    color: theme.color,
+    symbolColor: theme.symbolColor,
+    height: 44
+  });
 }

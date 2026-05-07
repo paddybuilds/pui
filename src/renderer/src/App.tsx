@@ -82,8 +82,7 @@ export function App() {
       if (initialWorkspace) {
         hydrateWorkspace(initialWorkspace);
         setActiveWorkspaceId(initialWorkspace.id);
-        await refreshGit(initialWorkspace.path);
-        await pui.git.watch(initialWorkspace.path);
+        void refreshWorkspaceGit(initialWorkspace.path);
       }
       didHydrateRef.current = true;
       if (!loaded.workspaces) {
@@ -116,6 +115,21 @@ export function App() {
     setGitStatus(status);
   }, []);
 
+  const refreshWorkspaceGit = useCallback(async (workspacePath: string) => {
+    try {
+      await refreshGit(workspacePath);
+      await pui.git.watch(workspacePath);
+    } catch (error) {
+      console.error("Failed to refresh workspace Git state", error);
+      setGitStatus({
+        workspace: workspacePath,
+        isRepo: false,
+        files: [],
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }, [refreshGit]);
+
   const hydrateWorkspace = (workspace: TerminalWorkspace) => {
     const firstProfile = workspace.profiles[0];
     const validProfileIds = new Set(workspace.profiles.map((profile) => profile.id));
@@ -135,8 +149,7 @@ export function App() {
     if (workspace.kind === "quick") {
       setGitStatus(null);
     } else {
-      await refreshGit(workspace.path);
-      await pui.git.watch(workspace.path);
+      await refreshWorkspaceGit(workspace.path);
     }
     setPaletteOpen(false);
     closeContextMenu();
@@ -274,9 +287,14 @@ export function App() {
     if (!settings) {
       return;
     }
-    const path = await pui.dialog.openFolder(activeWorkspace?.defaultCwd || activeWorkspace?.path || settings.workspace);
-    if (path) {
-      await createWorkspace({ path });
+    try {
+      const path = await pui.dialog.openFolder(activeWorkspace?.defaultCwd || activeWorkspace?.path || settings.workspace);
+      if (path) {
+        await createWorkspace({ path });
+      }
+    } catch (error) {
+      console.error("Failed to open folder", error);
+      window.alert(`Could not open that folder: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -349,11 +367,10 @@ export function App() {
     };
 
     const saved = await pui.settings.save(nextSettings);
-    setSettings(saved);
+    setSettings(normalizeSettings(saved));
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
-    await refreshGit(defaultCwd);
-    await pui.git.watch(defaultCwd);
+    void refreshWorkspaceGit(defaultCwd);
   };
 
   const startRenameWorkspace = (workspace: TerminalWorkspace) => {
@@ -457,8 +474,7 @@ export function App() {
       if (nextActiveWorkspace.kind === "quick") {
         setGitStatus(null);
       } else {
-        await refreshGit(nextActiveWorkspace.path);
-        await pui.git.watch(nextActiveWorkspace.path);
+        await refreshWorkspaceGit(nextActiveWorkspace.path);
       }
     } else {
       setActiveWorkspaceId("");
@@ -518,8 +534,7 @@ export function App() {
     setSettings(normalizeSettings(saved));
     setActiveWorkspaceId(folder.id);
     hydrateWorkspace(nextFolder);
-    await refreshGit(folder.path);
-    await pui.git.watch(folder.path);
+    await refreshWorkspaceGit(folder.path);
   };
 
   const updateActiveWorkspace = async (workspace: TerminalWorkspace) => {
@@ -540,8 +555,7 @@ export function App() {
     if (workspace.kind === "quick") {
       setGitStatus(null);
     } else {
-      await refreshGit(workspace.path);
-      await pui.git.watch(workspace.path);
+      await refreshWorkspaceGit(workspace.path);
     }
   };
 

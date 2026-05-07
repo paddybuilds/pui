@@ -78,10 +78,14 @@ function registerIpc(): void {
     if (!mainWindow) {
       return undefined;
     }
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const options = {
+      title: "Open folder",
+      buttonLabel: "Open Folder",
       defaultPath: defaultPath && existsSync(defaultPath) ? defaultPath : undefined,
-      properties: ["openDirectory", "createDirectory"]
-    });
+      properties: ["openDirectory"] as Array<"openDirectory">
+    };
+    const result =
+      process.platform === "win32" ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(mainWindow, options);
     return result.canceled ? undefined : result.filePaths[0];
   });
 

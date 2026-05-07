@@ -1,5 +1,7 @@
 import packageMetadata from "../../package.json";
+import { execFileSync } from "node:child_process";
 import type { AppUpdateCheckResult, AppVersionInfo } from "../shared/types";
+import { gitCommand } from "./gitExecutable";
 
 type PackageMetadata = {
   name?: string;
@@ -17,6 +19,7 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<FetchResponse>;
 
 type AppUpdateServiceOptions = {
   getVersion: () => string;
+  getCommitSha?: () => string | undefined;
   packageMetadata?: PackageMetadata;
   fetch?: FetchLike;
   now?: () => Date;
@@ -35,9 +38,12 @@ export class AppUpdateService {
 
   getVersionInfo(): AppVersionInfo {
     const repositoryUrl = repositoryUrlFromMetadata(this.metadata);
+    const commitSha = normalizeCommitSha(this.options.getCommitSha?.() ?? currentGitCommitSha());
     return {
       name: this.metadata.name ?? "pui",
       version: this.options.getVersion(),
+      commitSha,
+      commitShortSha: commitSha?.slice(0, 7),
       repositoryUrl,
       updateCheckConfigured: Boolean(parseGitHubRepository(repositoryUrl))
     };
@@ -196,6 +202,33 @@ export function compareReleaseVersions(currentVersion: string, latestVersion: st
   }
 
   return 0;
+}
+
+export function normalizeCommitSha(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  return /^[a-f0-9]{7,40}$/i.test(normalized) ? normalized : undefined;
+}
+
+function currentGitCommitSha(): string | undefined {
+  const envCommit = normalizeCommitSha(process.env.PUI_COMMIT_SHA ?? process.env.GITHUB_SHA);
+  if (envCommit) {
+    return envCommit;
+  }
+
+  try {
+    return normalizeCommitSha(
+      execFileSync(gitCommand(), ["rev-parse", "HEAD"], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"]
+      })
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 function releasePageUrlFromPayload(payload: unknown): string | undefined {

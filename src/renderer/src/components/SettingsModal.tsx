@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { Keyboard, Monitor, Play, RefreshCw, Settings, TerminalSquare, X } from "lucide-react";
+import { Info, Keyboard, Monitor, Play, RefreshCw, Settings, TerminalSquare, X } from "lucide-react";
 import type {
   AppSettings,
   AppUpdateCheckResult,
@@ -12,7 +12,7 @@ import { shortcutLabel } from "../lib/shortcuts";
 
 const pui = getPuiApi();
 
-type SettingsSection = "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
+type SettingsSection = "about" | "general" | "workspaces" | "terminal" | "workflow" | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
@@ -23,6 +23,7 @@ type SettingsModalProps = {
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }> = [
+  { id: "about", label: "About", icon: <Info size={15} /> },
   { id: "general", label: "General", icon: <Settings size={15} /> },
   { id: "workspaces", label: "Folders", icon: <Monitor size={15} /> },
   { id: "terminal", label: "Terminal", icon: <TerminalSquare size={15} /> },
@@ -31,7 +32,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }>
 ];
 
 export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, platform, onClose }: SettingsModalProps) {
-  const [section, setSection] = useState<SettingsSection>("general");
+  const [section, setSection] = useState<SettingsSection>("about");
   const activeSection = sections.find((item) => item.id === section) ?? sections[0];
 
   return (
@@ -69,6 +70,7 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
           <header className="settings-content-header">
             <h2>{activeSection.label}</h2>
           </header>
+          {section === "about" ? <AboutSettings /> : null}
           {section === "general" ? <GeneralSettings settings={settings} activeWorkspace={activeWorkspace} /> : null}
           {section === "workspaces" ? (
             <WorkspaceSettings
@@ -90,7 +92,7 @@ export function SettingsModal({ settings, activeWorkspace, onWorkspaceChange, pl
   );
 }
 
-function GeneralSettings({ settings, activeWorkspace }: { settings: AppSettings; activeWorkspace: TerminalWorkspace }) {
+function AboutSettings() {
   const [versionInfo, setVersionInfo] = useState<AppVersionInfo>();
   const [versionError, setVersionError] = useState<string>();
   const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult>();
@@ -153,15 +155,12 @@ function GeneralSettings({ settings, activeWorkspace }: { settings: AppSettings;
 
   return (
     <div className="settings-page">
-      <SettingRow label="Folder label" value={activeWorkspace.name} />
-      <SettingRow label="Open folder" value={basename(activeWorkspace.path)} />
-      <SettingRow label="Folder path" value={activeWorkspace.path} />
-      <SettingRow label="Recent folders" value={String(settings.recentWorkspaces.length)} />
-      <SettingGroup title="Pui">
-        <SettingRow
-          label="Current version"
-          value={versionInfo?.version ?? (versionError ? "Unavailable" : "Loading")}
-        />
+      <SettingGroup title="Pui build">
+        <SettingRow label="Version" value={versionInfo?.version ?? (versionError ? "Unavailable" : "Loading")} />
+        <SettingRow label="Commit" value={versionInfo?.commitShortSha ?? "Unavailable"} />
+        <SettingRow label="Repository" value={versionInfo?.repositoryUrl ?? "Unavailable"} />
+      </SettingGroup>
+      <SettingGroup title="Updates">
         <div className="settings-action-row">
           <button
             type="button"
@@ -178,6 +177,17 @@ function GeneralSettings({ settings, activeWorkspace }: { settings: AppSettings;
           ) : null}
         </div>
       </SettingGroup>
+    </div>
+  );
+}
+
+function GeneralSettings({ settings, activeWorkspace }: { settings: AppSettings; activeWorkspace: TerminalWorkspace }) {
+  return (
+    <div className="settings-page">
+      <SettingRow label="Folder label" value={activeWorkspace.name} />
+      <SettingRow label="Open folder" value={basename(activeWorkspace.path)} />
+      <SettingRow label="Folder path" value={activeWorkspace.path} />
+      <SettingRow label="Recent folders" value={String(settings.recentWorkspaces.length)} />
     </div>
   );
 }

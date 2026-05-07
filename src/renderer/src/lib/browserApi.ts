@@ -87,6 +87,8 @@ const browserPreviewApi: PuiApi = {
     getVersionInfo: async (): Promise<AppVersionInfo> => ({
       name: "pui",
       version: previewVersion,
+      commitSha: "preview",
+      commitShortSha: "preview",
       updateCheckConfigured: false
     }),
     checkForUpdates: async (): Promise<AppUpdateCheckResult> => ({

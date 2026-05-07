@@ -1342,32 +1342,29 @@ kbd {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: 24px auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--terminal-background);
-  border: 1px solid transparent;
-}
-
-.code-editor-shell.active {
-  border-color: color-mix(in srgb, var(--accent) 54%, var(--line-soft));
 }
 
 .code-editor-header {
   min-width: 0;
-  min-height: 44px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(130px, 220px) auto;
+  overflow: hidden;
+  display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 7px 10px 7px 14px;
+  gap: 8px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-panel);
+  background: color-mix(in srgb, var(--surface-root) 82%, transparent);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .code-editor-header div {
   min-width: 0;
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .code-editor-header strong {
@@ -1375,9 +1372,9 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-strong);
-  font-size: 13px;
-  font-weight: 600;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .code-editor-header span {
@@ -1385,31 +1382,13 @@ kbd {
   font-size: 11px;
 }
 
-.code-editor-header select {
-  min-width: 0;
-  height: 28px;
-  padding: 0 8px;
-  color: var(--text-muted);
-  background: var(--surface-root);
-  border: 1px solid var(--line-soft);
-  border-radius: 5px;
-  font-size: 12px;
-}
-
-.code-editor-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.code-editor-actions button {
-  height: 28px;
-  min-width: 28px;
-  justify-content: center;
-  padding: 0 8px;
+.code-editor-shell.active .code-editor-header {
   color: var(--text-strong);
-  background: var(--surface-active);
-  border: 1px solid var(--line-soft);
+}
+
+.code-editor-shell:hover .pane-close,
+.code-editor-shell.active .pane-close {
+  opacity: 1;
 }
 
 .code-error {

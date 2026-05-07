@@ -40,7 +40,7 @@ describe("CodeWorkspace", () => {
     fireEvent.change(screen.getByLabelText("Code editor"), { target: { value: "changed" } });
     expect(onChange).toHaveBeenLastCalledWith(tab.path, "changed");
 
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.keyDown(screen.getByLabelText("Code workspace"), { key: "s", ctrlKey: true });
     expect(onSave).toHaveBeenCalledWith(tab.path);
   });
 

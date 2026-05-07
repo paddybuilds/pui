@@ -15,7 +15,7 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { PanelRight, PanelTop, Save, X } from "lucide-react";
+import { X } from "lucide-react";
 import {
   type CodeEditorGroup,
   type CodeEditorNode,
@@ -126,6 +126,27 @@ export function CodeWorkspace({ tabs, activePath, onActivate, onChange, onSave, 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void saveActive();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      if (activeGroup) {
+        splitGroup(activeGroup.id, "down");
+      }
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      if (activeGroup) {
+        splitGroup(activeGroup.id, "right");
+      }
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "w" && groups.length > 1) {
+      event.preventDefault();
+      if (activeGroup) {
+        closeGroup(activeGroup.id);
+      }
     }
   };
 
@@ -337,15 +358,12 @@ function CodeEditorTree({
   return (
     <CodeEditorGroupView
       group={node}
-      tabs={tabs}
       active={node.id === activeGroupId}
       tab={node.activePath ? tabByPath.get(node.activePath) : undefined}
       fallbackTab={tabs[0]}
       onFocus={() => onFocusGroup(node.id)}
       onActivatePath={(path) => onActivatePath(node.id, path)}
       onChange={onChange}
-      onSave={onSave}
-      onSplit={(direction) => onSplit(node.id, direction)}
       onCloseGroup={() => onCloseGroup(node.id)}
       canCloseGroup={canCloseGroups}
     />
@@ -354,28 +372,22 @@ function CodeEditorTree({
 
 function CodeEditorGroupView({
   group,
-  tabs,
   active,
   tab,
   fallbackTab,
   onFocus,
   onActivatePath,
   onChange,
-  onSave,
-  onSplit,
   onCloseGroup,
   canCloseGroup
 }: {
   group: CodeEditorGroup;
-  tabs: CodeFileTab[];
   active: boolean;
   tab?: CodeFileTab;
   fallbackTab?: CodeFileTab;
   onFocus: () => void;
   onActivatePath: (path: string) => void;
   onChange: (path: string, contents: string) => void;
-  onSave: (path: string) => Promise<void>;
-  onSplit: (direction: "right" | "down") => void;
   onCloseGroup: () => void;
   canCloseGroup: boolean;
 }) {
@@ -395,42 +407,30 @@ function CodeEditorGroupView({
   return (
     <div className={active ? "code-editor-shell active" : "code-editor-shell"} onMouseDown={onFocus}>
       <header className="code-editor-header">
+        <span
+          className="profile-dot"
+          style={{ background: activeTab.dirty ? "var(--warning)" : "var(--accent)" }}
+          aria-hidden="true"
+        />
         <div>
           <strong title={activeTab.path}>{activeTab.relativePath}</strong>
           <span>{activeTab.loading ? "Loading" : activeTab.dirty ? "Unsaved changes" : "Saved"}</span>
         </div>
-        <select
-          value={activeTab.path}
-          aria-label="Editor split file"
-          onChange={(event) => onActivatePath(event.target.value)}
-        >
-          {tabs.map((item) => (
-            <option key={item.path} value={item.path}>
-              {item.relativePath}
-            </option>
-          ))}
-        </select>
-        <div className="code-editor-actions">
-          <button type="button" title="Split code right" aria-label="Split code right" onClick={() => onSplit("right")}>
-            <PanelRight size={14} />
-          </button>
-          <button type="button" title="Split code down" aria-label="Split code down" onClick={() => onSplit("down")}>
-            <PanelTop size={14} />
-          </button>
-          {canCloseGroup ? (
-            <button type="button" title="Close split" aria-label="Close split" onClick={onCloseGroup}>
-              <X size={14} />
-            </button>
-          ) : null}
+        {canCloseGroup ? (
           <button
+            className="pane-close"
             type="button"
-            disabled={activeTab.loading || !activeTab.dirty}
-            onClick={() => void onSave(activeTab.path)}
+            title="Close split"
+            aria-label="Close split"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onCloseGroup();
+            }}
           >
-            <Save size={14} />
-            <span>Save</span>
+            <X size={12} />
           </button>
-        </div>
+        ) : null}
       </header>
       {activeTab.error ? <div className="code-error">{activeTab.error}</div> : null}
       <div className="code-editor-host">

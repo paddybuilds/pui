@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest an improvement for Pui.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Focused requests with clear user value are easiest to evaluate.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem or workflow gap would this solve?
+      placeholder: When working across folders, I need to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What would you like Pui to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Are there workarounds or simpler approaches?
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Terminal workspace
+        - Codex integration
+        - Git sidebar and diffs
+        - Settings and persistence
+        - Developer tooling
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add screenshots, sketches, links, or constraints that would help reviewers.
+    validations:
+      required: false

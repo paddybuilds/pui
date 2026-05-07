@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_APP_PREFERENCES, type AppSettings } from "../../../shared/types";
+import { DEFAULT_APP_PREFERENCES, type AppSettings, type AppThemeTokens } from "../../../shared/types";
 import {
   basename,
   createInitialWorkspaceSettings,
@@ -234,6 +234,12 @@ describe("workspace settings helpers", () => {
         themePreset: "dark",
         density: "compact",
         terminalFontSize: 16,
+        customTheme: {
+          accent: "#2563eb",
+          text: "  #111827  ",
+          danger: "red; color: blue",
+          unknown: "#ffffff"
+        } as AppThemeTokens & Record<string, string>,
         defaultTerminalProfileId: "profile-a",
         gitPanelDefault: "closed",
         updateChecksEnabled: false,
@@ -243,6 +249,10 @@ describe("workspace settings helpers", () => {
       themePreset: "dark",
       density: "compact",
       terminalFontSize: 16,
+      customTheme: {
+        accent: "#2563eb",
+        text: "#111827"
+      },
       defaultTerminalProfileId: "profile-a",
       gitPanelDefault: "closed",
       updateChecksEnabled: false,

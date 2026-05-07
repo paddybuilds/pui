@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import type { ConsoleProfile } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
+import { readTerminalTheme } from "../lib/theme";
 
 type Pane = {
   id: string;
@@ -18,6 +19,7 @@ type TerminalPaneProps = {
   profile: ConsoleProfile;
   workspaceName: string;
   terminalFontSize?: number;
+  terminalThemeKey: string;
   active: boolean;
   showHeader: boolean;
   canClose: boolean;
@@ -86,6 +88,7 @@ export function TerminalPane({
   profile,
   workspaceName,
   terminalFontSize = 13,
+  terminalThemeKey,
   active,
   showHeader,
   canClose,
@@ -147,6 +150,7 @@ export function TerminalPane({
     if (record.terminal.options.fontSize !== terminalFontSize) {
       record.terminal.options.fontSize = terminalFontSize;
     }
+    record.terminal.options.theme = readTerminalTheme();
     fitTerminal(record.fit);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
@@ -169,7 +173,7 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
+  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, terminalThemeKey, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {
@@ -246,10 +250,7 @@ function getOrCreateTerminalRecord(
     fontSize: 13,
     lineHeight: 1.25,
     theme: {
-      background: "#111318",
-      foreground: "#e8edf2",
-      cursor: "#e5e7eb",
-      selectionBackground: "#334155"
+      ...readTerminalTheme()
     }
   });
   const fit = new FitAddon();

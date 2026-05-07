@@ -3,6 +3,8 @@ import {
   type AppDensity,
   type AppPreferences,
   type AppSettings,
+  type AppThemeToken,
+  type AppThemeTokens,
   type ConsoleProfile,
   type GitPanelDefault,
   type TerminalProfileTemplate,
@@ -109,6 +111,7 @@ export function normalizeAppPreferences(
     terminalFontSize: normalizeTerminalFontSize(
       preferences?.terminalFontSize ?? defaults.terminalFontSize ?? DEFAULT_APP_PREFERENCES.terminalFontSize
     ),
+    ...normalizeCustomTheme(preferences?.customTheme ?? defaults.customTheme),
     ...(defaultTerminalProfileId ? { defaultTerminalProfileId } : {}),
     ...(defaultTerminalProfileTemplate ? { defaultTerminalProfileTemplate } : {}),
     gitPanelDefault: normalizeGitPanelDefault(preferences?.gitPanelDefault ?? defaults.gitPanelDefault),
@@ -293,6 +296,48 @@ function normalizeAppDensity(value: unknown): AppDensity {
 
 function normalizeGitPanelDefault(value: unknown): GitPanelDefault {
   return value === "closed" || value === "open" ? value : DEFAULT_APP_PREFERENCES.gitPanelDefault;
+}
+
+const appThemeTokens = new Set<AppThemeToken>([
+  "surfaceRoot",
+  "surfaceSidebar",
+  "surfacePanel",
+  "surfaceRaised",
+  "surfaceHover",
+  "surfaceActive",
+  "lineSoft",
+  "lineStrong",
+  "textStrong",
+  "text",
+  "textMuted",
+  "textFaint",
+  "accent",
+  "success",
+  "warning",
+  "danger",
+  "terminalBackground",
+  "terminalForeground",
+  "terminalCursor",
+  "terminalSelection"
+]);
+
+function normalizeCustomTheme(value: unknown): { customTheme?: AppThemeTokens } {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const customTheme: AppThemeTokens = {};
+  for (const [key, rawValue] of Object.entries(value)) {
+    if (!appThemeTokens.has(key as AppThemeToken) || typeof rawValue !== "string") {
+      continue;
+    }
+    const tokenValue = rawValue.trim();
+    if (tokenValue && tokenValue.length <= 96 && !/[;{}]/.test(tokenValue)) {
+      customTheme[key as AppThemeToken] = tokenValue;
+    }
+  }
+
+  return Object.keys(customTheme).length ? { customTheme } : {};
 }
 
 function normalizeTerminalProfileTemplate(value: unknown): TerminalProfileTemplate | undefined {

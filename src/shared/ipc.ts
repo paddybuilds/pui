@@ -27,6 +27,8 @@ export const ipc = {
     status: "git:status",
     diff: "git:diff",
     commits: "git:commits",
+    commitDetails: "git:commit-details",
+    commitFileDiff: "git:commit-file-diff",
     stage: "git:stage",
     unstage: "git:unstage",
     discard: "git:discard",

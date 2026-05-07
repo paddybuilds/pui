@@ -127,6 +127,12 @@ function registerIpc(): void {
   ipcMain.handle(ipc.git.commits, (_event, payload: { workspace: string; limit?: number }) => {
     return gitService?.getRecentCommits(payload.workspace, payload.limit);
   });
+  ipcMain.handle(ipc.git.commitDetails, (_event, payload: { workspace: string; hash: string }) => {
+    return gitService?.getCommitDetails(payload.workspace, payload.hash);
+  });
+  ipcMain.handle(ipc.git.commitFileDiff, (_event, payload: { workspace: string; hash: string; file: string }) => {
+    return gitService?.getCommitFileDiff(payload.workspace, payload.hash, payload.file);
+  });
   ipcMain.handle(ipc.git.stage, (_event, payload: { workspace: string; paths: string[] }) => {
     return gitService?.stage(payload.workspace, payload.paths);
   });

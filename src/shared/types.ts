@@ -50,6 +50,25 @@ export type GitCommit = {
   subject: string;
 };
 
+export type GitCommitFile = {
+  path: string;
+  additions: number | null;
+  deletions: number | null;
+};
+
+export type GitCommitDetails = GitCommit & {
+  authorEmail: string;
+  body: string;
+  files: GitCommitFile[];
+};
+
+export type GitCommitFileDiff = {
+  workspace: string;
+  hash: string;
+  file: string;
+  text: string;
+};
+
 export type GitOperationResult = {
   ok: boolean;
   stdout: string;

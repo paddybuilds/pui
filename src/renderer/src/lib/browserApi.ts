@@ -6,6 +6,8 @@ import type {
   AppVersionInfo,
   ConsoleProfile,
   GitCommit,
+  GitCommitDetails,
+  GitCommitFileDiff,
   GitDiff,
   GitOperationResult,
   GitStatus,
@@ -136,6 +138,10 @@ const browserPreviewApi: PuiApi = {
       bridgeGet<GitDiff>("/git/diff", { workspace: gitWorkspace, file: file || "", cached: String(cached) }),
     commits: (gitWorkspace, limit = 16) =>
       bridgeGet<GitCommit[]>("/git/commits", { workspace: gitWorkspace, limit: String(limit) }),
+    commitDetails: (gitWorkspace, hash) =>
+      bridgeGet<GitCommitDetails>("/git/commit-details", { workspace: gitWorkspace, hash }),
+    commitFileDiff: (gitWorkspace, hash, file) =>
+      bridgeGet<GitCommitFileDiff>("/git/commit-file-diff", { workspace: gitWorkspace, hash, file }),
     stage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/stage", { workspace: gitWorkspace, paths }),
     unstage: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/unstage", { workspace: gitWorkspace, paths }),
     discard: (gitWorkspace, paths) => bridgePost<GitStatus>("/git/discard", { workspace: gitWorkspace, paths }),

@@ -999,10 +999,8 @@ kbd {
 .git-panel-header {
   min-width: 0;
   min-height: 54px;
-  display: flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -1027,25 +1025,6 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.git-summary {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.git-summary span {
-  min-width: auto;
-  padding: 3px 7px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background: var(--badge-bg);
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11px;
 }
 
 .git-tabs {
@@ -1096,7 +1075,6 @@ kbd {
 
 .changes-tab-panel {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .commit-section,
@@ -1109,6 +1087,10 @@ kbd {
 
 .commit-section {
   min-height: 0;
+}
+
+.changes-section {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .commit-section header,
@@ -1136,6 +1118,45 @@ kbd {
   font-size: 11px;
 }
 
+.file-bulk-actions {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 10px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-panel);
+}
+
+.file-bulk-actions button {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  justify-content: center;
+  padding: 0 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.file-bulk-actions button:last-child {
+  grid-column: 1 / -1;
+}
+
+.git-section-resizer {
+  min-width: 0;
+  min-height: 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-panel);
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.git-section-resizer:hover,
+.git-section-resizer:active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel));
+}
+
 .commit-composer {
   border-top: 1px solid var(--line-soft);
   background: var(--surface-raised);
@@ -1144,13 +1165,31 @@ kbd {
 .commit-form {
   padding: 8px 10px 10px;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 8px;
+  min-height: 0;
 }
 
 .commit-form textarea {
   width: 100%;
-  min-height: 68px;
-  resize: vertical;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+  border-color: var(--line-soft);
+  background: color-mix(in srgb, var(--surface-root) 86%, black);
+  color: var(--text-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.commit-form textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.commit-form textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  outline-offset: 0;
 }
 
 .git-operation-message {
@@ -1172,12 +1211,24 @@ kbd {
 
 .commit-row {
   min-width: 0;
+  width: 100%;
+  height: auto;
+  min-height: 54px;
   display: grid;
+  align-items: center;
+  justify-content: stretch;
   gap: 4px;
   padding: 8px 9px;
+  text-align: left;
   border-radius: 6px;
   border: 1px solid transparent;
   background: var(--surface-hover);
+}
+
+.commit-row:hover {
+  color: var(--text-strong);
+  border-color: var(--line-strong);
+  background: var(--surface-active);
 }
 
 .commit-row strong {
@@ -1203,7 +1254,6 @@ kbd {
 .diff-body {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(112px, 28%) minmax(0, 1fr);
 }
 
 .file-list {
@@ -1211,37 +1261,90 @@ kbd {
   overflow: auto;
   border-right: 0;
   border-bottom: 1px solid var(--line-soft);
-  padding: 8px 10px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 2px;
   background: var(--surface-raised);
 }
 
-.file-button {
+.file-row {
   width: 100%;
-  min-height: 42px;
+  min-width: 0;
+  min-height: 32px;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 0 2px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+}
+
+.file-select {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 42%, var(--line-strong));
+  border-radius: 3px;
+  background: var(--surface-root);
+}
+
+.file-select:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.file-select:checked::before {
+  content: "";
+  width: 6px;
+  height: 3px;
+  border-left: 1.5px solid var(--surface-root);
+  border-bottom: 1.5px solid var(--surface-root);
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.file-select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  outline-offset: 2px;
+}
+
+.file-button {
+  min-width: 0;
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px 4px 0;
   text-align: left;
   font-size: 12px;
   border-color: transparent;
-  background: var(--surface-hover);
+  background: transparent;
 }
 
 .file-button:hover {
+  background: transparent;
+}
+
+.file-row:hover,
+.file-row.active {
   color: var(--text-strong);
-  background: var(--surface-hover);
-  border-color: var(--line-strong);
+  border-color: var(--line-soft);
+  background: color-mix(in srgb, var(--surface-active) 72%, transparent);
 }
 
 .file-name-group {
   min-width: 0;
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
 }
 
 .file-name-group strong,
@@ -1254,32 +1357,37 @@ kbd {
 
 .file-name-group strong {
   color: var(--text);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
 }
 
 .file-name-group small {
   color: var(--text-faint);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9px;
 }
 
-.file-button.active {
-  background: var(--surface-active);
+.file-row.active {
+  background: color-mix(in srgb, var(--surface-active) 84%, transparent);
   border-color: var(--accent);
 }
 
 .file-status {
-  width: 32px;
-  height: 24px;
+  display: flex;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: pre;
+}
+
+.file-status span {
+  min-width: 16px;
+  height: 18px;
   display: grid;
   place-items: center;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  border-radius: 4px;
   color: var(--warning);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  white-space: pre;
+  background: color-mix(in srgb, var(--warning) 11%, transparent);
 }
 
 .diff-view {
@@ -1335,8 +1443,25 @@ kbd {
 
 .diff-line {
   min-height: 17px;
-  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 48px 48px minmax(0, 1fr);
+  padding: 0 10px 0 0;
   white-space: pre;
+}
+
+.diff-line-number {
+  min-width: 0;
+  padding: 0 8px;
+  border-right: 1px solid color-mix(in srgb, var(--line-soft) 62%, transparent);
+  color: var(--text-faint);
+  text-align: right;
+  user-select: none;
+}
+
+.diff-line-text {
+  min-width: 0;
+  padding-left: 10px;
+  overflow: visible;
 }
 
 .diff-line.meta {
@@ -1355,6 +1480,371 @@ kbd {
 
 .diff-line.context {
   color: var(--terminal-foreground);
+}
+
+.diff-modal-backdrop,
+.commit-details-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--overlay-backdrop);
+  backdrop-filter: blur(8px);
+}
+
+.diff-modal {
+  width: min(980px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 48px));
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  box-shadow: 0 24px 90px var(--shadow-color);
+}
+
+.diff-modal header {
+  min-width: 0;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.diff-modal header div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.diff-modal header span {
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.diff-modal header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.diff-modal header button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.diff-modal-actions {
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-raised);
+}
+
+.diff-modal-actions button {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.diff-modal-code {
+  min-height: 0;
+  margin: 0;
+  padding: 10px 0;
+  overflow: auto;
+  background: var(--terminal-background);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.commit-details-modal {
+  width: min(1180px, calc(100vw - 48px));
+  height: min(780px, calc(100vh - 48px));
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  box-shadow: 0 24px 90px var(--shadow-color);
+}
+
+.commit-details-modal header {
+  min-width: 0;
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.commit-details-modal header div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.commit-details-modal header span {
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.commit-details-modal header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.commit-details-modal header button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.commit-details-content {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.commit-details-meta {
+  min-width: 0;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-panel);
+}
+
+.commit-metadata {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.commit-metadata div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.commit-metadata dt {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.commit-metadata dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.commit-body {
+  margin: 0;
+  padding: 12px;
+  max-height: 120px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.commit-file-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.commit-file-summary .additions {
+  color: var(--success);
+}
+
+.commit-file-summary .deletions {
+  color: var(--danger);
+}
+
+.commit-review {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+}
+
+.commit-file-sidebar {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface-raised);
+}
+
+.commit-review-resizer {
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line-soft);
+  border-right: 1px solid var(--line-soft);
+  background: var(--surface-panel);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.commit-review-resizer:hover,
+.commit-review-resizer:active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel));
+}
+
+.commit-file-button {
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: stretch;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-align: left;
+  background: transparent;
+}
+
+.commit-file-button:hover,
+.commit-file-button.active {
+  border-color: var(--line-strong);
+  background: var(--surface-active);
+}
+
+.commit-file-button span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.commit-file-button strong,
+.commit-file-button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-file-button strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.commit-file-button small {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.commit-file-button code {
+  color: var(--text-muted);
+  font-size: 11px;
+  display: flex;
+  gap: 6px;
+}
+
+.commit-file-button .additions,
+.diff-line.add .diff-line-text::first-letter {
+  color: var(--success);
+}
+
+.commit-file-button .deletions,
+.diff-line.remove .diff-line-text::first-letter {
+  color: var(--danger);
+}
+
+.commit-diff-pane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--terminal-background);
+}
+
+.commit-diff-pane header {
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-raised);
+}
+
+.commit-diff-pane header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.commit-diff-pane header span {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.commit-diff-code {
+  min-height: 0;
+  margin: 0;
+  padding: 10px 0;
+  overflow: auto;
+  background: var(--terminal-background);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .empty-state {

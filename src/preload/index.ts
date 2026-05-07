@@ -5,6 +5,8 @@ import type {
   AppUpdateCheckResult,
   AppVersionInfo,
   GitCommit,
+  GitCommitDetails,
+  GitCommitFileDiff,
   GitDiff,
   GitOperationResult,
   GitStatus,
@@ -72,6 +74,10 @@ const api = {
       ipcRenderer.invoke(ipc.git.diff, { workspace, file, cached }) as Promise<GitDiff>,
     commits: (workspace: string, limit = 16) =>
       ipcRenderer.invoke(ipc.git.commits, { workspace, limit }) as Promise<GitCommit[]>,
+    commitDetails: (workspace: string, hash: string) =>
+      ipcRenderer.invoke(ipc.git.commitDetails, { workspace, hash }) as Promise<GitCommitDetails>,
+    commitFileDiff: (workspace: string, hash: string, file: string) =>
+      ipcRenderer.invoke(ipc.git.commitFileDiff, { workspace, hash, file }) as Promise<GitCommitFileDiff>,
     stage: (workspace: string, paths: string[]) =>
       ipcRenderer.invoke(ipc.git.stage, { workspace, paths }) as Promise<GitStatus>,
     unstage: (workspace: string, paths: string[]) =>

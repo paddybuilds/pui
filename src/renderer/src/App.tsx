@@ -1106,7 +1106,11 @@ export function App() {
               />
               <aside className="workspace-side-panel">
                 {fileExplorerVisible ? (
-                  <FileExplorerPanel workspace={activeWorkspace.path} workspaceName={activeFolderTitle} />
+                  <FileExplorerPanel
+                    workspace={activeWorkspace.path}
+                    workspaceName={activeFolderTitle}
+                    gitStatus={gitStatus}
+                  />
                 ) : (
                   <GitPanel workspace={activeWorkspace.path} status={gitStatus} onStatus={setGitStatus} />
                 )}

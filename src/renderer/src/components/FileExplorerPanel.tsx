@@ -1,11 +1,12 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, File, Folder, RefreshCw } from "lucide-react";
-import type { FileSystemEntry } from "../../../shared/types";
+import type { FileSystemEntry, GitFileStatus, GitStatus } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 
 type FileExplorerPanelProps = {
   workspace: string;
   workspaceName: string;
+  gitStatus: GitStatus | null;
 };
 
 type DirectoryState = {
@@ -16,7 +17,7 @@ type DirectoryState = {
 
 const pui = getPuiApi();
 
-export function FileExplorerPanel({ workspace, workspaceName }: FileExplorerPanelProps) {
+export function FileExplorerPanel({ workspace, workspaceName, gitStatus }: FileExplorerPanelProps) {
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set([workspace]));
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
 
@@ -60,6 +61,8 @@ export function FileExplorerPanel({ workspace, workspaceName }: FileExplorerPane
 
   const rootState = directories[workspace];
   const rootEntries = useMemo(() => rootState?.entries ?? [], [rootState?.entries]);
+  const gitFileStatusByPath = useMemo(() => createGitFileStatusMap(gitStatus), [gitStatus]);
+  const changedDirectoryPaths = useMemo(() => createChangedDirectorySet(gitFileStatusByPath), [gitFileStatusByPath]);
 
   const toggleDirectory = (entry: FileSystemEntry) => {
     setExpandedDirectories((current) => {
@@ -100,6 +103,8 @@ export function FileExplorerPanel({ workspace, workspaceName }: FileExplorerPane
             depth={0}
             expandedDirectories={expandedDirectories}
             directories={directories}
+            gitFileStatusByPath={gitFileStatusByPath}
+            changedDirectoryPaths={changedDirectoryPaths}
             onToggleDirectory={toggleDirectory}
           />
         ))}
@@ -116,25 +121,34 @@ function FileTreeEntry({
   depth,
   expandedDirectories,
   directories,
+  gitFileStatusByPath,
+  changedDirectoryPaths,
   onToggleDirectory
 }: {
   entry: FileSystemEntry;
   depth: number;
   expandedDirectories: Set<string>;
   directories: Record<string, DirectoryState>;
+  gitFileStatusByPath: Map<string, GitFileStatus>;
+  changedDirectoryPaths: Set<string>;
   onToggleDirectory: (entry: FileSystemEntry) => void;
 }) {
   const isDirectory = entry.kind === "directory";
   const expanded = isDirectory && expandedDirectories.has(entry.path);
   const directoryState = directories[entry.path];
+  const normalizedRelativePath = normalizeGitPath(entry.relativePath);
+  const gitFileStatus = isDirectory ? undefined : gitFileStatusByPath.get(normalizedRelativePath);
+  const directoryHasChanges = isDirectory && changedDirectoryPaths.has(normalizedRelativePath);
+  const changed = Boolean(gitFileStatus || directoryHasChanges);
+  const changeKind = gitFileStatus ? describeGitFileStatus(gitFileStatus) : directoryHasChanges ? "Changed files" : "";
 
   return (
     <>
       <button
         type="button"
-        className="file-tree-row"
+        className={changed ? "file-tree-row changed" : "file-tree-row"}
         style={{ "--file-tree-depth": depth } as CSSProperties}
-        title={entry.path}
+        title={changeKind ? `${entry.path} · ${changeKind}` : entry.path}
         role="treeitem"
         aria-expanded={isDirectory ? expanded : undefined}
         onClick={() => {
@@ -148,6 +162,7 @@ function FileTreeEntry({
         </span>
         {isDirectory ? <Folder size={14} /> : <File size={14} />}
         <span>{entry.name}</span>
+        {changed ? <small className={gitFileStatus ? "file-tree-change-badge" : "file-tree-change-dot"} /> : null}
       </button>
       {expanded ? (
         <div role="group">
@@ -168,6 +183,8 @@ function FileTreeEntry({
               depth={depth + 1}
               expandedDirectories={expandedDirectories}
               directories={directories}
+              gitFileStatusByPath={gitFileStatusByPath}
+              changedDirectoryPaths={changedDirectoryPaths}
               onToggleDirectory={onToggleDirectory}
             />
           ))}
@@ -175,4 +192,42 @@ function FileTreeEntry({
       ) : null}
     </>
   );
+}
+
+function createGitFileStatusMap(gitStatus: GitStatus | null): Map<string, GitFileStatus> {
+  const statusByPath = new Map<string, GitFileStatus>();
+  gitStatus?.files.forEach((file) => {
+    statusByPath.set(normalizeGitPath(file.path), file);
+  });
+  return statusByPath;
+}
+
+function createChangedDirectorySet(gitFileStatusByPath: Map<string, GitFileStatus>): Set<string> {
+  const directories = new Set<string>();
+  gitFileStatusByPath.forEach((_status, filePath) => {
+    const parts = filePath.split("/");
+    parts.pop();
+    while (parts.length > 0) {
+      directories.add(parts.join("/"));
+      parts.pop();
+    }
+  });
+  return directories;
+}
+
+function normalizeGitPath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+function describeGitFileStatus(file: GitFileStatus): string {
+  if (file.indexStatus === "?" || file.workingTreeStatus === "?") {
+    return "Untracked";
+  }
+  if (file.indexStatus.trim() && file.workingTreeStatus.trim()) {
+    return "Staged and modified";
+  }
+  if (file.indexStatus.trim()) {
+    return "Staged";
+  }
+  return "Modified";
 }

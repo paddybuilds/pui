@@ -1092,7 +1092,7 @@ kbd {
   height: 28px;
   min-width: 0;
   display: grid;
-  grid-template-columns: 16px 18px minmax(0, 1fr);
+  grid-template-columns: 16px 18px minmax(0, 1fr) 12px;
   align-items: center;
   justify-content: stretch;
   gap: 5px;
@@ -1111,12 +1111,20 @@ kbd {
   background: var(--surface-active);
 }
 
+.file-tree-row.changed {
+  color: var(--text);
+}
+
+.file-tree-row.changed svg {
+  color: var(--warning);
+}
+
 .file-tree-row svg {
   color: currentColor;
   flex: 0 0 auto;
 }
 
-.file-tree-row span:last-child {
+.file-tree-row > span:nth-child(3) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1128,6 +1136,27 @@ kbd {
   height: 18px;
   display: grid;
   place-items: center;
+}
+
+.file-tree-change-badge,
+.file-tree-change-dot {
+  justify-self: center;
+  flex: 0 0 auto;
+}
+
+.file-tree-change-badge {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.file-tree-change-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--warning) 72%, transparent);
 }
 
 .file-tree-note {

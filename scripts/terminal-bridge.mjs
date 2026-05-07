@@ -174,6 +174,16 @@ async function handleHttpRequest(request, response) {
       sendJson(response, await discardGitPaths(workspace, paths));
       return;
     }
+    if (url.pathname === "/git/commit" && request.method === "POST") {
+      const { workspace, message } = await readJsonBody(request);
+      sendJson(response, await gitOperation(workspace, ["commit", "-m", message]));
+      return;
+    }
+    if (url.pathname === "/git/push" && request.method === "POST") {
+      const { workspace } = await readJsonBody(request);
+      sendJson(response, await gitOperation(workspace, ["push"]));
+      return;
+    }
 
     sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
@@ -302,6 +312,20 @@ async function git(workspace, args) {
     stdout: result.stdout,
     stderr: result.stderr
   };
+}
+
+async function gitOperation(workspace, args) {
+  try {
+    const result = await git(workspace, args);
+    return { ok: true, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: error?.stdout || "",
+      stderr: error?.stderr || "",
+      error: error?.stderr || error?.message || String(error)
+    };
+  }
 }
 
 function parseGitStatus(output) {

@@ -251,7 +251,7 @@ export function App() {
   };
 
   useEffect(() => {
-    activeGitWorkspaceRef.current = activeWorkspace?.kind === "quick" ? null : activeWorkspace?.path ?? null;
+    activeGitWorkspaceRef.current = activeWorkspace?.kind === "quick" ? null : (activeWorkspace?.path ?? null);
   }, [activeWorkspace?.kind, activeWorkspace?.path]);
 
   useEffect(() => {

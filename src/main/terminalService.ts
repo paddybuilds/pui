@@ -63,7 +63,14 @@ export class TerminalService {
       this.sessions.delete(sessionId);
     });
 
-    this.sessions.set(sessionId, { session, pty: child, pendingData: "", flushScheduled: false, lastCols: cols, lastRows: rows });
+    this.sessions.set(sessionId, {
+      session,
+      pty: child,
+      pendingData: "",
+      flushScheduled: false,
+      lastCols: cols,
+      lastRows: rows
+    });
     return session;
   }
 

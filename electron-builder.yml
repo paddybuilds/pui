@@ -1,0 +1,37 @@
+appId: com.paddybuilds.pui
+productName: Pui
+directories:
+  output: release
+files:
+  - out/**
+  - node_modules/**
+  - package.json
+asarUnpack:
+  - node_modules/node-pty/**
+publish:
+  provider: github
+  owner: paddybuilds
+  repo: pui
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  identity: null
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

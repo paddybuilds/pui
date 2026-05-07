@@ -2,7 +2,7 @@ import type { PuiApi, ShellCandidate } from "../../../preload";
 import { DEFAULT_APP_PREFERENCES } from "../../../shared/types";
 import type {
   AppSettings,
-  AppUpdateCheckResult,
+  AppUpdateSnapshot,
   AppVersionInfo,
   ConsoleProfile,
   GitCommit,
@@ -86,12 +86,29 @@ const browserPreviewApi: PuiApi = {
       commitShortSha: "preview",
       updateCheckConfigured: false
     }),
-    checkForUpdates: async (): Promise<AppUpdateCheckResult> => ({
-      status: "unavailable",
+    checkForUpdates: async (): Promise<AppUpdateSnapshot> => ({
+      status: "not-available",
       currentVersion: previewVersion,
       checkedAt: new Date().toISOString(),
-      message: "Update checks are unavailable in browser preview."
+      message: "Update checks are unavailable in browser preview.",
+      installReady: false,
+      installSupported: false
     }),
+    downloadUpdate: async (): Promise<AppUpdateSnapshot> => ({
+      status: "error",
+      currentVersion: previewVersion,
+      message: "Update downloads are unavailable in browser preview.",
+      installReady: false,
+      installSupported: false
+    }),
+    installDownloadedUpdate: async (): Promise<AppUpdateSnapshot> => ({
+      status: "error",
+      currentVersion: previewVersion,
+      message: "Update installs are unavailable in browser preview.",
+      installReady: false,
+      installSupported: false
+    }),
+    onUpdateStatus: () => noopUnsubscribe,
     setTitleBarTheme: async () => undefined
   },
   dialog: {

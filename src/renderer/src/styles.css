@@ -2157,6 +2157,23 @@ kbd {
   white-space: normal;
 }
 
+.settings-update-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-root);
+}
+
+.settings-update-progress::-webkit-progress-bar {
+  background: var(--surface-root);
+}
+
+.settings-update-progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
 .settings-update-status.success {
   color: var(--success);
 }

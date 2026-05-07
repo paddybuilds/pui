@@ -265,8 +265,7 @@ function getOrCreateTerminalRecord(
   const shortcutHandler: TerminalRecord["shortcutHandler"] = { current: undefined };
   terminal.attachCustomKeyEventHandler((event) => shortcutHandler.current?.(event) ?? true);
 
-  let record: TerminalRecord;
-  record = {
+  const record: TerminalRecord = {
     terminal,
     fit,
     shortcutHandler,

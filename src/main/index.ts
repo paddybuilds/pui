@@ -1,17 +1,19 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import electronUpdater from "electron-updater";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, ConsoleProfile, TitleBarTheme } from "../shared/types";
+import type { AppSettings, AppUpdateSnapshot, ConsoleProfile, TitleBarTheme } from "../shared/types";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
 import { StoreService } from "./store";
 import { TerminalService } from "./terminalService";
-import { AppUpdateService } from "./updateService";
+import { AppUpdateService, type AppUpdaterAdapter } from "./updateService";
 
 let mainWindow: BrowserWindow | undefined;
 let terminalService: TerminalService | undefined;
 let gitService: GitWorkspaceService | undefined;
+let appUpdateService: AppUpdateService | undefined;
 
 const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
   color: "#090b0f",
@@ -19,10 +21,7 @@ const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
 };
 
 const storeService = new StoreService();
-const appUpdateService = new AppUpdateService({
-  getVersion: () => app.getVersion()
-});
-
+const { autoUpdater } = electronUpdater;
 function createWindow(): void {
   const isMac = process.platform === "darwin";
   mainWindow = new BrowserWindow({
@@ -49,6 +48,14 @@ function createWindow(): void {
 
   terminalService = new TerminalService(mainWindow);
   gitService = new GitWorkspaceService(mainWindow);
+  appUpdateService = new AppUpdateService({
+    getVersion: () => app.getVersion(),
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    macAutoUpdateEnabled: process.env.PUI_ENABLE_MAC_AUTO_UPDATE === "true",
+    updater: autoUpdater as unknown as AppUpdaterAdapter,
+    onStatus: (status) => sendUpdateStatus(status)
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -80,8 +87,10 @@ app.on("window-all-closed", () => {
 });
 
 function registerIpc(): void {
-  ipcMain.handle(ipc.app.versionInfo, () => appUpdateService.getVersionInfo());
-  ipcMain.handle(ipc.app.checkForUpdates, () => appUpdateService.checkForUpdates());
+  ipcMain.handle(ipc.app.versionInfo, () => appUpdateService?.getVersionInfo());
+  ipcMain.handle(ipc.app.checkForUpdates, () => appUpdateService?.checkForUpdates());
+  ipcMain.handle(ipc.app.downloadUpdate, () => appUpdateService?.downloadUpdate());
+  ipcMain.handle(ipc.app.installDownloadedUpdate, () => appUpdateService?.installDownloadedUpdate());
   ipcMain.handle(ipc.app.setTitleBarTheme, (_event, theme: TitleBarTheme) => {
     applyTitleBarTheme(theme);
   });
@@ -157,6 +166,13 @@ function registerIpc(): void {
   });
   ipcMain.handle(ipc.git.push, (_event, workspace: string) => gitService?.push(workspace));
   ipcMain.handle(ipc.git.watch, (_event, workspace: string) => gitService?.watch(workspace));
+}
+
+function sendUpdateStatus(status: AppUpdateSnapshot): void {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send(ipc.app.updateStatus, status);
 }
 
 function applyTitleBarTheme(theme: TitleBarTheme): void {

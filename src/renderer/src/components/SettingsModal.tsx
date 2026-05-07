@@ -18,7 +18,7 @@ import type {
   AppSettings,
   AppThemeToken,
   AppThemeTokens,
-  AppUpdateCheckResult,
+  AppUpdateSnapshot,
   AppVersionInfo,
   ConsoleProfile,
   GitPanelDefault,
@@ -145,8 +145,7 @@ export function SettingsModal({
 function AboutSettings({ onReplayOnboarding }: { onReplayOnboarding: () => void }) {
   const [versionInfo, setVersionInfo] = useState<AppVersionInfo>();
   const [versionError, setVersionError] = useState<string>();
-  const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult>();
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking">("idle");
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateSnapshot>();
 
   useEffect(() => {
     let mounted = true;
@@ -164,23 +163,37 @@ function AboutSettings({ onReplayOnboarding }: { onReplayOnboarding: () => void 
     };
   }, []);
 
+  useEffect(() => {
+    return pui.app.onUpdateStatus((status) => setUpdateStatus(status));
+  }, []);
+
   const checkForUpdates = async () => {
-    setUpdateStatus("checking");
-    setUpdateCheck(undefined);
     try {
-      setUpdateCheck(await pui.app.checkForUpdates());
+      setUpdateStatus(await pui.app.checkForUpdates());
       setVersionError(undefined);
     } catch (error) {
-      setUpdateCheck({
+      setUpdateStatus({
         status: "error",
         currentVersion: versionInfo?.version ?? "unknown",
-        checkedAt: new Date().toISOString(),
-        message: error instanceof Error ? error.message : String(error)
+        message: error instanceof Error ? error.message : String(error),
+        installReady: false,
+        installSupported: false
       });
-    } finally {
-      setUpdateStatus("idle");
     }
   };
+
+  const downloadUpdate = async () => {
+    setUpdateStatus(await pui.app.downloadUpdate());
+  };
+
+  const installDownloadedUpdate = async () => {
+    setUpdateStatus(await pui.app.installDownloadedUpdate());
+  };
+
+  const checking = updateStatus?.status === "checking";
+  const downloading = updateStatus?.status === "downloading";
+  const canDownload = updateStatus?.status === "available" && updateStatus.installSupported;
+  const canInstall = updateStatus?.status === "downloaded" && updateStatus.installReady;
 
   return (
     <div className="settings-page">
@@ -194,18 +207,43 @@ function AboutSettings({ onReplayOnboarding }: { onReplayOnboarding: () => void 
           <button
             type="button"
             onClick={() => void checkForUpdates()}
-            disabled={!versionInfo || updateStatus === "checking"}
+            disabled={!versionInfo || checking || downloading}
           >
-            <RefreshCw size={14} className={updateStatus === "checking" ? "settings-spin" : undefined} />
-            <span>{updateStatus === "checking" ? "Checking" : "Check for updates"}</span>
+            <RefreshCw size={14} className={checking ? "settings-spin" : undefined} />
+            <span>{checking ? "Checking" : "Check for updates"}</span>
           </button>
+          {canDownload ? (
+            <button type="button" onClick={() => void downloadUpdate()}>
+              <RefreshCw size={14} />
+              <span>Download update</span>
+            </button>
+          ) : null}
+          {canInstall ? (
+            <button type="button" onClick={() => void installDownloadedUpdate()}>
+              <RefreshCw size={14} />
+              <span>Install and restart</span>
+            </button>
+          ) : null}
+          {updateStatus?.releaseUrl ? (
+            <button type="button" onClick={() => window.open(updateStatus.releaseUrl, "_blank", "noopener")}>
+              <span>Open release</span>
+            </button>
+          ) : null}
           <span
-            className={`settings-update-status ${updateCheck ? updateCheckTone(updateCheck) : versionError ? "error" : ""}`}
+            className={`settings-update-status ${updateStatus ? updateCheckTone(updateStatus) : versionError ? "error" : ""}`}
             role="status"
           >
-            {updateStatus === "checking" ? "Checking GitHub releases..." : updateCheck?.message || versionError || ""}
+            {updateStatus?.message || versionError || ""}
           </span>
         </div>
+        {updateStatus?.progress ? (
+          <progress
+            className="settings-update-progress"
+            value={Math.round(updateStatus.progress.percent)}
+            max={100}
+            aria-label="Update download progress"
+          />
+        ) : null}
       </SettingGroup>
       <SettingGroup title="Onboarding">
         <div className="settings-action-row">
@@ -783,14 +821,17 @@ function splitArgs(value: string): string[] {
     .filter(Boolean);
 }
 
-function updateCheckTone(result: AppUpdateCheckResult): "success" | "notice" | "error" {
+function updateCheckTone(result: AppUpdateSnapshot): "success" | "notice" | "error" {
   if (result.status === "error") {
     return "error";
   }
-  if (result.status === "unavailable") {
+  if (result.status === "available" || result.status === "downloaded") {
+    return "success";
+  }
+  if (result.status === "not-available") {
     return "notice";
   }
-  return "success";
+  return "notice";
 }
 
 function SettingRow({ label, value }: { label: string; value: string }) {

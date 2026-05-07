@@ -2,6 +2,9 @@ export const ipc = {
   app: {
     versionInfo: "app:version-info",
     checkForUpdates: "app:check-for-updates",
+    downloadUpdate: "app:download-update",
+    installDownloadedUpdate: "app:install-downloaded-update",
+    updateStatus: "app:update-status",
     setTitleBarTheme: "app:set-title-bar-theme"
   },
   dialog: {

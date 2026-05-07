@@ -97,6 +97,36 @@ export type AppUpdateCheckResult = {
   repositoryUrl?: string;
 };
 
+export type AppUpdateStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "not-available"
+  | "error";
+
+export type AppUpdateProgress = {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+};
+
+export type AppUpdateSnapshot = {
+  status: AppUpdateStatus;
+  currentVersion: string;
+  message: string;
+  installReady: boolean;
+  installSupported: boolean;
+  checkedAt?: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  repositoryUrl?: string;
+  releaseNotes?: string;
+  progress?: AppUpdateProgress;
+};
+
 export type TitleBarTheme = {
   color: string;
   symbolColor: string;

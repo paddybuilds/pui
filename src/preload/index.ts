@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { ipc } from "../shared/ipc";
 import type {
   AppSettings,
-  AppUpdateCheckResult,
+  AppUpdateSnapshot,
   AppVersionInfo,
   GitCommit,
   GitCommitDetails,
@@ -28,7 +28,16 @@ const api = {
   platform: process.platform,
   app: {
     getVersionInfo: () => ipcRenderer.invoke(ipc.app.versionInfo) as Promise<AppVersionInfo>,
-    checkForUpdates: () => ipcRenderer.invoke(ipc.app.checkForUpdates) as Promise<AppUpdateCheckResult>,
+    checkForUpdates: () => ipcRenderer.invoke(ipc.app.checkForUpdates) as Promise<AppUpdateSnapshot>,
+    downloadUpdate: () => ipcRenderer.invoke(ipc.app.downloadUpdate) as Promise<AppUpdateSnapshot>,
+    installDownloadedUpdate: () => ipcRenderer.invoke(ipc.app.installDownloadedUpdate) as Promise<AppUpdateSnapshot>,
+    onUpdateStatus: (callback: (status: AppUpdateSnapshot) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: AppUpdateSnapshot) => callback(status);
+      ipcRenderer.on(ipc.app.updateStatus, listener);
+      return () => {
+        ipcRenderer.removeListener(ipc.app.updateStatus, listener);
+      };
+    },
     setTitleBarTheme: (theme: TitleBarTheme) => ipcRenderer.invoke(ipc.app.setTitleBarTheme, theme)
   },
   dialog: {

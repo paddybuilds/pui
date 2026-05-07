@@ -15,16 +15,28 @@ users' terminals, folders, and Git repositories.
 
 Prerequisites:
 
-- macOS.
+- macOS for the primary app experience.
 - Node.js 22.12 or newer.
 - npm 10 or newer.
-- Xcode Command Line Tools for native modules.
+- Native build tools if you need to compile `node-pty` from source. On macOS,
+  install Xcode Command Line Tools. On Windows, install Visual Studio Build
+  Tools with the MSVC x64/x86 Spectre-mitigated libraries.
 
 Install dependencies:
 
 ```sh
 npm install
 ```
+
+If you intentionally need to rebuild native Electron modules, run:
+
+```sh
+npm run rebuild:native
+```
+
+On Windows, `node-pty` source rebuilds can fail with `MSB8040` until the
+Spectre-mitigated MSVC libraries are installed from Visual Studio Installer's
+Individual components tab.
 
 Run the app locally:
 

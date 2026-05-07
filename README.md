@@ -22,7 +22,9 @@ developer work are welcome.
 - macOS for the primary app experience.
 - Node.js 22.12 or newer.
 - npm 10 or newer.
-- Xcode Command Line Tools, required by native dependencies such as `node-pty`.
+- Native build tools if you need to compile `node-pty` from source:
+  Xcode Command Line Tools on macOS, or Visual Studio Build Tools with the
+  MSVC x64/x86 Spectre-mitigated libraries on Windows.
 
 ## Getting Started
 
@@ -31,6 +33,17 @@ Install dependencies:
 ```sh
 npm install
 ```
+
+`node-pty` ships prebuilt binaries for macOS and Windows. If you intentionally
+rebuild native modules, run:
+
+```sh
+npm run rebuild:native
+```
+
+On Windows, a source rebuild requires the Visual Studio Individual component
+named like `MSVC ... C++ x64/x86 Spectre-mitigated libs`; otherwise MSBuild can
+fail with `MSB8040`.
 
 Start the development app:
 

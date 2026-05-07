@@ -8,6 +8,7 @@ import {
   useRef,
   useState
 } from "react";
+import type { ITheme } from "@xterm/xterm";
 import {
   Edit3,
   GitCompare,
@@ -47,7 +48,7 @@ import { useContextMenu } from "./components/useContextMenu";
 import { getPuiApi } from "./lib/browserApi";
 import { getDevToolsFlagState } from "./lib/devFlags";
 import { matchesShortcut, shortcutLabel } from "./lib/shortcuts";
-import { applyThemePreferences, readTitleBarTheme, themeKey } from "./lib/theme";
+import { applyThemePreferences, readTitleBarTheme, resolveTerminalTheme, themeKey } from "./lib/theme";
 import {
   appendWorkbenchNode,
   buildSplitTracks,
@@ -119,6 +120,7 @@ export function App() {
     [settings?.appPreferences, settings?.profiles]
   );
   const terminalThemeKey = useMemo(() => themeKey(appPreferences), [appPreferences]);
+  const terminalTheme = useMemo(() => resolveTerminalTheme(appPreferences), [appPreferences]);
 
   const refreshGit = useCallback(async (workspacePath: string) => {
     const status = await pui.git.status(workspacePath);
@@ -1002,6 +1004,7 @@ export function App() {
                 fallbackProfile={profiles[0]}
                 workspaceName={activeFolderTitle}
                 terminalFontSize={activeWorkspace.terminalFontSize}
+                terminalTheme={terminalTheme}
                 terminalThemeKey={terminalThemeKey}
                 activePaneId={activePaneId}
                 workspaceId={activeWorkspace.id}
@@ -1166,6 +1169,7 @@ function PaneTree({
   fallbackProfile,
   workspaceName,
   terminalFontSize,
+  terminalTheme,
   terminalThemeKey,
   workspaceId,
   activePaneId,
@@ -1184,6 +1188,7 @@ function PaneTree({
   fallbackProfile?: ConsoleProfile;
   workspaceName: string;
   terminalFontSize?: number;
+  terminalTheme: ITheme;
   terminalThemeKey: string;
   workspaceId: string;
   activePaneId: string;
@@ -1237,6 +1242,7 @@ function PaneTree({
               fallbackProfile={fallbackProfile}
               workspaceName={workspaceName}
               terminalFontSize={terminalFontSize}
+              terminalTheme={terminalTheme}
               terminalThemeKey={terminalThemeKey}
               workspaceId={workspaceId}
               activePaneId={activePaneId}
@@ -1278,6 +1284,7 @@ function PaneTree({
       profile={profile}
       workspaceName={workspaceName}
       terminalFontSize={terminalFontSize}
+      terminalTheme={terminalTheme}
       terminalThemeKey={terminalThemeKey}
       active={node.id === activePaneId}
       showHeader={showHeaders}

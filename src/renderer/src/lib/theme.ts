@@ -111,6 +111,19 @@ export function readTerminalTheme(root: HTMLElement = document.documentElement):
   };
 }
 
+export function resolveTerminalTheme(
+  preferences: Pick<AppPreferences, "themePreset" | "customTheme">,
+  systemScheme: "light" | "dark" = getSystemScheme()
+): ITheme {
+  const tokens = resolveThemeTokens(preferences, systemScheme);
+  return {
+    background: tokens.terminalBackground,
+    foreground: tokens.terminalForeground,
+    cursor: tokens.terminalCursor,
+    selectionBackground: tokens.terminalSelection
+  };
+}
+
 export function readTitleBarTheme(root: HTMLElement = document.documentElement): TitleBarTheme {
   const styles = window.getComputedStyle(root);
   return {

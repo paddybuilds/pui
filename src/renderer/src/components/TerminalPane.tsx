@@ -1,11 +1,10 @@
 import { type MouseEvent, useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { X } from "lucide-react";
 import type { ConsoleProfile } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
-import { readTerminalTheme } from "../lib/theme";
 
 type Pane = {
   id: string;
@@ -19,6 +18,7 @@ type TerminalPaneProps = {
   profile: ConsoleProfile;
   workspaceName: string;
   terminalFontSize?: number;
+  terminalTheme: ITheme;
   terminalThemeKey: string;
   active: boolean;
   showHeader: boolean;
@@ -88,6 +88,7 @@ export function TerminalPane({
   profile,
   workspaceName,
   terminalFontSize = 13,
+  terminalTheme,
   terminalThemeKey,
   active,
   showHeader,
@@ -118,9 +119,17 @@ export function TerminalPane({
       return;
     }
 
-    const record = getOrCreateTerminalRecord(workspaceId, pane.id, pane.sessionId, profile, active, (sessionId) => {
-      onSessionRef.current(sessionId);
-    });
+    const record = getOrCreateTerminalRecord(
+      workspaceId,
+      pane.id,
+      pane.sessionId,
+      profile,
+      active,
+      terminalTheme,
+      (sessionId) => {
+        onSessionRef.current(sessionId);
+      }
+    );
     recordRef.current = record;
     record.shortcutHandler.current = (event) => {
       const actions = shortcutActionsRef.current;
@@ -147,10 +156,7 @@ export function TerminalPane({
     const mount = xtermMountRef.current;
     attachTerminalElement(record.terminal, mount);
     record.terminal.options.cursorBlink = active;
-    if (record.terminal.options.fontSize !== terminalFontSize) {
-      record.terminal.options.fontSize = terminalFontSize;
-    }
-    record.terminal.options.theme = readTerminalTheme();
+    applyTerminalAppearance(record.terminal, terminalTheme, terminalFontSize);
     fitTerminal(record.fit);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
@@ -173,7 +179,7 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, terminalThemeKey, workspaceId]);
+  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, terminalTheme, terminalThemeKey, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {
@@ -232,6 +238,7 @@ function getOrCreateTerminalRecord(
   existingSessionId: string | undefined,
   profile: ConsoleProfile,
   active: boolean,
+  terminalTheme: ITheme,
   onSession: (sessionId: string) => void
 ): TerminalRecord {
   const key = terminalRecordKey(workspaceId, paneId);
@@ -249,9 +256,7 @@ function getOrCreateTerminalRecord(
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,
     lineHeight: 1.25,
-    theme: {
-      ...readTerminalTheme()
-    }
+    theme: terminalTheme
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
@@ -336,5 +341,15 @@ function fitTerminal(fit: FitAddon): void {
     } catch {
       // xterm can report incomplete dimensions during first layout in browser preview.
     }
+  });
+}
+
+function applyTerminalAppearance(terminal: Terminal, theme: ITheme, fontSize: number): void {
+  terminal.options.theme = theme;
+  if (terminal.options.fontSize !== fontSize) {
+    terminal.options.fontSize = fontSize;
+  }
+  window.requestAnimationFrame(() => {
+    terminal.refresh(0, Math.max(0, terminal.rows - 1));
   });
 }

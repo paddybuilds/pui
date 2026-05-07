@@ -209,6 +209,13 @@ export function App() {
     setOnboardingDismissible(false);
   };
 
+  const openReplayOnboarding = () => {
+    setSettingsOpen(false);
+    setDevSettingsOpen(false);
+    setOnboardingDismissible(true);
+    setOnboardingOpen(true);
+  };
+
   useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {
       return;
@@ -694,6 +701,12 @@ export function App() {
     }
   };
 
+  const updateSettings = async (nextSettings: AppSettings) => {
+    const saved = await pui.settings.save(nextSettings);
+    const normalized = normalizeSettings(saved, pui.platform, newId);
+    setSettings(normalized);
+  };
+
   const openWorkspaceContextMenu = (event: MouseEvent, workspace: TerminalWorkspace) => {
     openContextMenu(event, [
       {
@@ -1054,7 +1067,9 @@ export function App() {
         <SettingsModal
           settings={settings}
           activeWorkspace={activeWorkspace}
+          onSettingsChange={updateSettings}
           onWorkspaceChange={updateActiveWorkspace}
+          onReplayOnboarding={openReplayOnboarding}
           platform={pui.platform}
           onClose={() => setSettingsOpen(false)}
         />

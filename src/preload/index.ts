@@ -1,11 +1,20 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, CodexRun, GitCommit, GitDiff, GitOperationResult, GitStatus, TerminalSession } from "../shared/types";
+import type {
+  AppSettings,
+  CodexRun,
+  GitCommit,
+  GitDiff,
+  GitOperationResult,
+  GitStatus,
+  TerminalSession
+} from "../shared/types";
 
 const api = {
   platform: process.platform,
   dialog: {
-    openFolder: (defaultPath?: string) => ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
+    openFolder: (defaultPath?: string) =>
+      ipcRenderer.invoke(ipc.dialog.openFolder, defaultPath) as Promise<string | undefined>
   },
   settings: {
     load: () => ipcRenderer.invoke(ipc.settings.load) as Promise<AppSettings>,
@@ -37,7 +46,8 @@ const api = {
     }
   },
   codex: {
-    run: (prompt: string, workspace: string) => ipcRenderer.invoke(ipc.codex.run, { prompt, workspace }) as Promise<CodexRun>,
+    run: (prompt: string, workspace: string) =>
+      ipcRenderer.invoke(ipc.codex.run, { prompt, workspace }) as Promise<CodexRun>,
     cancel: (runId: string) => ipcRenderer.invoke(ipc.codex.cancel, runId),
     onEvent: (callback: (payload: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

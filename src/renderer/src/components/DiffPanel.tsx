@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { GitCommitHorizontal, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { GitCommitHorizontal, RotateCcw, Upload } from "lucide-react";
 import type { GitCommit, GitDiff, GitFileStatus, GitStatus } from "../../../shared/types";
 import { splitDiff } from "../lib/diff";
+import { getPuiApi } from "../lib/browserApi";
 
 type GitPanelProps = {
   workspace: string;
@@ -9,15 +10,40 @@ type GitPanelProps = {
   onStatus: (status: GitStatus) => void;
 };
 
+const pui = getPuiApi();
+
 export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
+  const [activeTab, setActiveTab] = useState<"changes" | "commits">("changes");
   const [selectedFile, setSelectedFile] = useState<string | undefined>();
   const [diff, setDiff] = useState<GitDiff | null>(null);
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [operationMessage, setOperationMessage] = useState("");
   const [committing, setCommitting] = useState(false);
-  const files = status?.files ?? [];
-  const stagedFiles = files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?");
+  const files = useMemo(() => status?.files ?? [], [status?.files]);
+  const fileKey = useMemo(() => files.map((file) => file.path).join("|"), [files]);
+  const stagedFiles = useMemo(
+    () => files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?"),
+    [files]
+  );
+  const unstagedFiles = useMemo(() => files.filter((file) => file.workingTreeStatus.trim()), [files]);
+
+  const loadCommits = useCallback(async () => {
+    setCommits(await pui.git.commits(workspace, 16));
+  }, [workspace]);
+
+  const loadDiff = useCallback(
+    async (file: string) => {
+      setSelectedFile(file);
+      const unstaged = await pui.git.diff(workspace, file, false);
+      if (unstaged.text.trim()) {
+        setDiff(unstaged);
+        return;
+      }
+      setDiff(await pui.git.diff(workspace, file, true));
+    },
+    [workspace]
+  );
 
   useEffect(() => {
     if (!status?.isRepo) {
@@ -35,42 +61,20 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
       setDiff(null);
     }
     void loadCommits();
-  }, [status?.files.map((file) => file.path).join("|")]);
-
-  const refresh = async () => {
-    const nextStatus = await window.pui.git.status(workspace);
-    onStatus(nextStatus);
-    if (nextStatus.isRepo) {
-      await loadCommits();
-    }
-  };
-
-  const loadCommits = async () => {
-    setCommits(await window.pui.git.commits(workspace, 16));
-  };
-
-  const loadDiff = async (file: string) => {
-    setSelectedFile(file);
-    const unstaged = await window.pui.git.diff(workspace, file, false);
-    if (unstaged.text.trim()) {
-      setDiff(unstaged);
-      return;
-    }
-    setDiff(await window.pui.git.diff(workspace, file, true));
-  };
+  }, [fileKey, files, loadCommits, loadDiff, selectedFile, status?.isRepo]);
 
   const stage = async (file: string) => {
-    onStatus(await window.pui.git.stage(workspace, [file]));
+    onStatus(await pui.git.stage(workspace, [file]));
   };
 
   const unstage = async (file: string) => {
-    onStatus(await window.pui.git.unstage(workspace, [file]));
+    onStatus(await pui.git.unstage(workspace, [file]));
   };
 
   const discard = async (file: string) => {
     const confirmed = window.confirm(`Discard working tree changes in ${file}? This cannot be undone.`);
     if (confirmed) {
-      onStatus(await window.pui.git.discard(workspace, [file]));
+      onStatus(await pui.git.discard(workspace, [file]));
     }
   };
 
@@ -82,7 +86,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
 
     setCommitting(true);
     setOperationMessage("");
-    const commitResult = await window.pui.git.commit(workspace, message);
+    const commitResult = await pui.git.commit(workspace, message);
     if (!commitResult.ok) {
       setOperationMessage(commitResult.error || commitResult.stderr || "Commit failed.");
       setCommitting(false);
@@ -90,11 +94,11 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     }
 
     if (pushAfterCommit) {
-      const pushResult = await window.pui.git.push(workspace);
+      const pushResult = await pui.git.push(workspace);
       if (!pushResult.ok) {
         setOperationMessage(pushResult.error || pushResult.stderr || "Commit succeeded, but push failed.");
         setCommitting(false);
-        onStatus(await window.pui.git.status(workspace));
+        onStatus(await pui.git.status(workspace));
         await loadCommits();
         return;
       }
@@ -104,7 +108,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     }
 
     setCommitMessage("");
-    onStatus(await window.pui.git.status(workspace));
+    onStatus(await pui.git.status(workspace));
     await loadCommits();
     setCommitting(false);
   };
@@ -116,129 +120,162 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
           <strong>Git</strong>
           <span>{status?.branch ?? "Repository"}</span>
         </div>
-        <button type="button" onClick={refresh}>
-          <RefreshCw size={14} />
-          Refresh
+        <div className="git-summary" aria-label="Git summary">
+          <span>{files.length} changed</span>
+          <span>{stagedFiles.length} staged</span>
+        </div>
+      </div>
+
+      <div className="git-tabs" role="tablist" aria-label="Git sidebar sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "changes"}
+          className={activeTab === "changes" ? "active" : ""}
+          onClick={() => setActiveTab("changes")}
+        >
+          <span>Changes</span>
+          {files.length ? <small>{files.length}</small> : null}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "commits"}
+          className={activeTab === "commits" ? "active" : ""}
+          onClick={() => setActiveTab("commits")}
+        >
+          <span>Commits</span>
+          {commits.length ? <small>{commits.length}</small> : null}
         </button>
       </div>
 
-      <section className="commit-section">
-        <header>
-          <GitCommitHorizontal size={14} />
-          <span>Recent commits</span>
-        </header>
-        <div className="commit-list">
-          {commits.map((commit) => (
-            <article key={commit.hash} className="commit-row" title={commit.hash}>
-              <strong>{commit.subject}</strong>
-              <span>
-                {commit.shortHash} · {commit.author} · {commit.date}
-              </span>
-            </article>
-          ))}
-          {commits.length === 0 ? <div className="empty-state">No commits found.</div> : null}
-        </div>
-      </section>
-
-      <section className="changes-section">
-        <header>
-          <span>Changes</span>
-          <small>{files.length} changed</small>
-        </header>
-        <div className="diff-body">
-          <div className="file-list">
-            {files.map((file) => (
-              <FileButton
-                key={file.path}
-                file={file}
-                active={file.path === selectedFile}
-                onClick={() => loadDiff(file.path)}
-              />
-            ))}
-            {files.length === 0 ? <div className="empty-state">No changed files.</div> : null}
-          </div>
-
-          <div className="diff-view">
-            {selectedFile ? (
-              <div className="file-actions">
-                <strong>{selectedFile}</strong>
-                <div className="file-action-buttons">
-                  <button type="button" onClick={() => stage(selectedFile)}>
-                    <Upload size={14} />
-                    Stage
-                  </button>
-                  <button type="button" onClick={() => unstage(selectedFile)}>
-                    Unstage
-                  </button>
-                  <button type="button" className="danger" onClick={() => discard(selectedFile)}>
-                    <RotateCcw size={14} />
-                    Discard
-                  </button>
-                </div>
+      {activeTab === "changes" ? (
+        <div className="git-tab-panel changes-tab-panel" role="tabpanel">
+          <section className="changes-section">
+            <header>
+              <span>Changes</span>
+              <small>{unstagedFiles.length} unstaged</small>
+            </header>
+            <div className="diff-body">
+              <div className="file-list">
+                {files.map((file) => (
+                  <FileButton
+                    key={file.path}
+                    file={file}
+                    active={file.path === selectedFile}
+                    onClick={() => loadDiff(file.path)}
+                  />
+                ))}
+                {files.length === 0 ? <div className="empty-state">No changed files.</div> : null}
               </div>
-            ) : null}
-            <pre className="diff-code">
-              {diff?.text ? (
-                splitDiff(diff.text).map((line, index) => (
-                  <div key={index} className={`diff-line ${line.type}`}>
-                    {line.text || " "}
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">Select a file to review changes.</div>
-              )}
-            </pre>
-          </div>
-        </div>
-      </section>
 
-      <section className="commit-composer">
-        <header>
-          <span>Commit</span>
-          <small>{stagedFiles.length} staged</small>
-        </header>
-        <div className="commit-form">
-          <textarea
-            value={commitMessage}
-            onChange={(event) => {
-              setCommitMessage(event.target.value);
-              setOperationMessage("");
-            }}
-            placeholder="Commit message"
-          />
-          <div className="file-action-buttons">
-            <button type="button" disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()} onClick={() => void commit(false)}>
-              Commit
-            </button>
-            <button type="button" disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()} onClick={() => void commit(true)}>
-              Commit & Push
-            </button>
-          </div>
-          {operationMessage ? <p className="git-operation-message">{operationMessage}</p> : null}
+              <div className="diff-view">
+                {selectedFile ? (
+                  <div className="file-actions">
+                    <strong title={selectedFile}>{selectedFile}</strong>
+                    <div className="file-action-buttons">
+                      <button type="button" onClick={() => stage(selectedFile)}>
+                        <Upload size={14} />
+                        Stage
+                      </button>
+                      <button type="button" onClick={() => unstage(selectedFile)}>
+                        Unstage
+                      </button>
+                      <button type="button" className="danger" onClick={() => discard(selectedFile)}>
+                        <RotateCcw size={14} />
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                <pre className="diff-code">
+                  {diff?.text ? (
+                    splitDiff(diff.text).map((line, index) => (
+                      <div key={index} className={`diff-line ${line.type}`}>
+                        {line.text || " "}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-state">Select a file to review changes.</div>
+                  )}
+                </pre>
+              </div>
+            </div>
+          </section>
+
+          <section className="commit-composer">
+            <header>
+              <span>Commit & push</span>
+              <small>{stagedFiles.length} staged</small>
+            </header>
+            <div className="commit-form">
+              <textarea
+                value={commitMessage}
+                onChange={(event) => {
+                  setCommitMessage(event.target.value);
+                  setOperationMessage("");
+                }}
+                placeholder="Commit message"
+              />
+              <div className="file-action-buttons">
+                <button
+                  type="button"
+                  disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()}
+                  onClick={() => void commit(false)}
+                >
+                  Commit
+                </button>
+                <button
+                  type="button"
+                  disabled={committing || stagedFiles.length === 0 || !commitMessage.trim()}
+                  onClick={() => void commit(true)}
+                >
+                  Commit & Push
+                </button>
+              </div>
+              {operationMessage ? <p className="git-operation-message">{operationMessage}</p> : null}
+            </div>
+          </section>
         </div>
-      </section>
+      ) : (
+        <section className="git-tab-panel commit-section" role="tabpanel">
+          <header>
+            <GitCommitHorizontal size={14} />
+            <span>Recent commits</span>
+          </header>
+          <div className="commit-list">
+            {commits.map((commit) => (
+              <article key={commit.hash} className="commit-row" title={commit.hash}>
+                <strong>{commit.subject}</strong>
+                <span>
+                  {commit.shortHash} · {commit.author} · {commit.date}
+                </span>
+              </article>
+            ))}
+            {commits.length === 0 ? <div className="empty-state">No commits found.</div> : null}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
-function FileButton({
-  file,
-  active,
-  onClick
-}: {
-  file: GitFileStatus;
-  active: boolean;
-  onClick: () => void;
-}) {
+function FileButton({ file, active, onClick }: { file: GitFileStatus; active: boolean; onClick: () => void }) {
   const staged = file.indexStatus.trim() || "-";
   const unstaged = file.workingTreeStatus.trim() || "-";
+  const pathParts = file.path.split(/[\\/]/);
+  const fileName = pathParts.pop() ?? file.path;
+  const directory = pathParts.join("/");
   return (
     <button type="button" className={active ? "file-button active" : "file-button"} onClick={onClick}>
       <span className="file-status">
         {staged}
         {unstaged}
       </span>
-      <span>{file.path}</span>
+      <span className="file-name-group">
+        <strong>{fileName}</strong>
+        {directory ? <small>{directory}</small> : null}
+      </span>
     </button>
   );
 }

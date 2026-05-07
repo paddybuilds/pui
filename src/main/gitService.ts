@@ -5,6 +5,7 @@ import { BrowserWindow } from "electron";
 import { parseGitStatus } from "../shared/gitStatus";
 import { ipc } from "../shared/ipc";
 import type { GitCommit, GitDiff, GitOperationResult, GitStatus } from "../shared/types";
+import { gitCommand } from "./gitExecutable";
 
 const execFileAsync = promisify(execFile);
 
@@ -90,9 +91,7 @@ export class GitWorkspaceService {
   async discard(workspace: string, paths: string[]): Promise<GitStatus> {
     const status = await this.getStatus(workspace);
     const untracked = new Set(
-      status.files
-        .filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?")
-        .map((file) => file.path)
+      status.files.filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?").map((file) => file.path)
     );
     const untrackedPaths = paths.filter((path) => untracked.has(path));
     const trackedPaths = paths.filter((path) => !untracked.has(path));
@@ -142,7 +141,7 @@ export class GitWorkspaceService {
   }
 
   private async git(workspace: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-    const result = await execFileAsync("git", ["-C", workspace, ...args], {
+    const result = await execFileAsync(gitCommand(), ["-C", workspace, ...args], {
       maxBuffer: 1024 * 1024 * 12
     });
     return {

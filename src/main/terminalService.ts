@@ -1,9 +1,9 @@
-import os from "node:os";
 import path from "node:path";
 import { BrowserWindow } from "electron";
 import pty, { type IPty } from "node-pty";
 import { ipc } from "../shared/ipc";
 import type { ConsoleProfile, TerminalSession } from "../shared/types";
+import { defaultShell, resolveProfileShell } from "./shell";
 
 type SessionRecord = {
   session: TerminalSession;
@@ -18,7 +18,7 @@ export class TerminalService {
   create(profile: ConsoleProfile, paneId: string, cols: number, rows: number): TerminalSession {
     const sessionId = crypto.randomUUID();
     const cwd = profile.cwd || process.cwd();
-    const shell = profile.command || process.env.SHELL || "/bin/zsh";
+    const shell = resolveProfileShell(profile.command, profile.args);
     const env = {
       ...process.env,
       TERM: "xterm-256color",
@@ -27,7 +27,7 @@ export class TerminalService {
       ...profile.env
     };
 
-    const child = pty.spawn(shell, profile.args || [], {
+    const child = pty.spawn(shell.command, shell.args, {
       name: "xterm-256color",
       cols,
       rows,
@@ -45,15 +45,16 @@ export class TerminalService {
     };
 
     child.onData((data) => {
-      this.window.webContents.send(ipc.terminal.data, { sessionId, data });
+      this.send(ipc.terminal.data, { sessionId, data });
     });
 
     child.onExit(({ exitCode, signal }) => {
       const record = this.sessions.get(sessionId);
-      if (record) {
-        record.session.status = "exited";
+      if (!record) {
+        return;
       }
-      this.window.webContents.send(ipc.terminal.exit, { sessionId, exitCode, signal });
+      record.session.status = "exited";
+      this.send(ipc.terminal.exit, { sessionId, exitCode, signal });
       this.sessions.delete(sessionId);
     });
 
@@ -82,7 +83,17 @@ export class TerminalService {
     }
   }
 
+  private send(channel: string, payload: unknown): void {
+    if (!this.window.isDestroyed() && !this.window.webContents.isDestroyed()) {
+      try {
+        this.window.webContents.send(channel, payload);
+      } catch {
+        // The renderer can disappear while node-pty is still flushing exit data during app shutdown.
+      }
+    }
+  }
+
   static defaultShellName(): string {
-    return path.basename(process.env.SHELL || os.userInfo().shell || "zsh");
+    return defaultShell().name;
   }
 }

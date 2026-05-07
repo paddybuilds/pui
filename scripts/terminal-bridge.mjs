@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -5,10 +6,13 @@ import { createServer } from "node:http";
 import { promisify } from "node:util";
 import { WebSocketServer } from "ws";
 import pty from "node-pty";
+import { parseGitStatus } from "../src/shared/gitStatusParser.js";
 
 const port = Number(process.env.PUI_TERMINAL_BRIDGE_PORT || 4317);
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
+const posixFallbackShells = new Set(["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"]);
+let cachedGitCommand;
 
 const httpServer = createServer((request, response) => {
   void handleHttpRequest(request, response);
@@ -63,24 +67,30 @@ server.on("connection", (socket) => {
   });
 });
 
+server.on("error", handleListenError);
+
 httpServer.listen(port, "127.0.0.1", () => {
   console.log(`[pui-terminal-bridge] ws://127.0.0.1:${port}`);
 });
 
-httpServer.on("error", (error) => {
+httpServer.on("error", handleListenError);
+
+function handleListenError(error) {
   if (error.code === "EADDRINUSE") {
-    console.log(`[pui-terminal-bridge] port ${port} already in use`);
+    console.log(`[pui-terminal-bridge] port ${port} already in use; reusing existing bridge`);
+    process.exit(0);
     return;
   }
   console.error(error);
-});
+  process.exit(1);
+}
 
 function createSession(socket, message) {
   const profile = message.profile || {};
-  const shell = profile.command || process.env.SHELL || os.userInfo().shell || "/bin/zsh";
+  const shell = resolveShell(profile.command, profile.args || []);
   const cwd = path.resolve(profile.cwd || process.cwd());
   const sessionId = crypto.randomUUID();
-  const child = pty.spawn(shell, profile.args || [], {
+  const child = pty.spawn(shell.command, shell.args, {
     name: "xterm-256color",
     cols: Math.max(1, Number(message.cols || 80)),
     rows: Math.max(1, Number(message.rows || 24)),
@@ -117,6 +127,21 @@ function createSession(socket, message) {
       status: "running"
     }
   });
+}
+
+function resolveShell(command, args) {
+  if (process.platform === "win32" && (!command || posixFallbackShells.has(command))) {
+    const windowsShell = process.env.PUI_SHELL || "powershell.exe";
+    return {
+      command: windowsShell,
+      args: windowsShell.toLowerCase().endsWith("powershell.exe") ? ["-NoLogo"] : []
+    };
+  }
+
+  return {
+    command: command || process.env.SHELL || os.userInfo().shell || "/bin/zsh",
+    args
+  };
 }
 
 function send(socket, payload) {
@@ -192,11 +217,53 @@ async function handleHttpRequest(request, response) {
 }
 
 async function openFolderDialog(defaultPath) {
+  if (process.platform === "win32") {
+    return openWindowsFolderDialog(defaultPath);
+  }
+
+  if (process.platform !== "darwin") {
+    return undefined;
+  }
+
   const script = defaultPath
     ? `POSIX path of (choose folder default location POSIX file ${JSON.stringify(defaultPath)})`
     : "POSIX path of (choose folder)";
   try {
     const result = await execFileAsync("osascript", ["-e", script]);
+    return result.stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function openWindowsFolderDialog(defaultPath) {
+  const script = `
+Add-Type -AssemblyName System.Windows.Forms
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::UTF8
+$sentinel = "Select Folder"
+$initialPath = $args[0]
+$dialog = New-Object System.Windows.Forms.OpenFileDialog
+$dialog.Title = "Open folder"
+$dialog.ValidateNames = $false
+$dialog.CheckFileExists = $false
+$dialog.CheckPathExists = $true
+$dialog.DereferenceLinks = $true
+$dialog.FileName = $sentinel
+if ($initialPath -and (Test-Path -LiteralPath $initialPath -PathType Container)) {
+  $dialog.InitialDirectory = $initialPath
+}
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+  $selectedPath = $dialog.FileName
+  if ((Split-Path -Leaf $selectedPath) -eq $sentinel) {
+    $selectedPath = Split-Path -Parent $selectedPath
+  }
+  if ($selectedPath -and (Test-Path -LiteralPath $selectedPath -PathType Container)) {
+    Write-Output (Resolve-Path -LiteralPath $selectedPath).Path
+  }
+}
+`;
+  try {
+    const result = await execFileAsync("powershell.exe", ["-NoProfile", "-Sta", "-Command", script, defaultPath || ""]);
     return result.stdout.trim() || undefined;
   } catch {
     return undefined;
@@ -240,7 +307,7 @@ async function getGitStatus(workspace) {
       workspace,
       isRepo: true,
       branch: branchResult.stdout.trim() || "HEAD",
-      files: parseGitStatus(statusResult.stdout)
+      files: parseGitStatus(statusResult.stdout, { trimPaths: true })
     };
   } catch (error) {
     return {
@@ -288,9 +355,7 @@ async function getGitCommits(workspace, limit = 16) {
 async function discardGitPaths(workspace, paths) {
   const status = await getGitStatus(workspace);
   const untracked = new Set(
-    status.files
-      .filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?")
-      .map((file) => file.path)
+    status.files.filter((file) => file.indexStatus === "?" && file.workingTreeStatus === "?").map((file) => file.path)
   );
   const untrackedPaths = paths.filter((targetPath) => untracked.has(targetPath));
   const trackedPaths = paths.filter((targetPath) => !untracked.has(targetPath));
@@ -305,13 +370,53 @@ async function discardGitPaths(workspace, paths) {
 }
 
 async function git(workspace, args) {
-  const result = await execFileAsync("git", ["-C", workspace, ...args], {
+  const result = await execFileAsync(gitCommand(), ["-C", workspace, ...args], {
     maxBuffer: 1024 * 1024 * 12
   });
   return {
     stdout: result.stdout,
     stderr: result.stderr
   };
+}
+
+function gitCommand() {
+  if (cachedGitCommand) {
+    return cachedGitCommand;
+  }
+  cachedGitCommand = process.env.PUI_GIT || resolveWindowsGitCommand() || "git";
+  return cachedGitCommand;
+}
+
+function resolveWindowsGitCommand() {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+
+  const candidates = [
+    process.env.ProgramFiles ? path.join(process.env.ProgramFiles, "Git", "cmd", "git.exe") : undefined,
+    process.env["ProgramFiles(x86)"] ? path.join(process.env["ProgramFiles(x86)"], "Git", "cmd", "git.exe") : undefined,
+    ...githubDesktopGitCandidates()
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function githubDesktopGitCandidates() {
+  const localAppData = process.env.LOCALAPPDATA;
+  if (!localAppData) {
+    return [];
+  }
+
+  const desktopDir = path.join(localAppData, "GitHubDesktop");
+  try {
+    return fs
+      .readdirSync(desktopDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("app-"))
+      .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }))
+      .map((entry) => path.join(desktopDir, entry.name, "resources", "app", "git", "cmd", "git.exe"));
+  } catch {
+    return [];
+  }
 }
 
 async function gitOperation(workspace, args) {
@@ -326,21 +431,4 @@ async function gitOperation(workspace, args) {
       error: error?.stderr || error?.message || String(error)
     };
   }
-}
-
-function parseGitStatus(output) {
-  return output
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const indexStatus = line[0] ?? " ";
-      const workingTreeStatus = line[1] ?? " ";
-      const rawPath = line.slice(3);
-      const renamedPath = rawPath.includes(" -> ") ? rawPath.split(" -> ").at(-1) || rawPath : rawPath;
-      return {
-        path: renamedPath.trim(),
-        indexStatus,
-        workingTreeStatus
-      };
-    });
 }

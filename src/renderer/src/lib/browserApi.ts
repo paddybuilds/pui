@@ -11,15 +11,19 @@ import type {
 } from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
 
-const workspace = "/Users/paddy/Documents/GitHub/pui";
+const isPreviewWindows = navigator.platform.toLowerCase().includes("win");
+const workspace = isPreviewWindows ? "C:\\Users\\paddy\\Documents\\GitHub\\pui" : "/Users/paddy/Documents/GitHub/pui";
+const defaultShell = isPreviewWindows
+  ? { id: "preview-powershell", name: "PowerShell", command: "powershell.exe", args: ["-NoLogo"] }
+  : { id: "preview-zsh", name: "zsh", command: "/bin/zsh", args: [] };
 
 const defaultProfiles: ConsoleProfile[] = [
   {
-    id: "preview-zsh",
-    name: "zsh",
+    id: defaultShell.id,
+    name: defaultShell.name,
     cwd: workspace,
-    command: "/bin/zsh",
-    args: [],
+    command: defaultShell.command,
+    args: defaultShell.args,
     env: {},
     shortcut: "CmdOrCtrl+1",
     appearance: { color: "#9ca3af", icon: "terminal" }
@@ -65,18 +69,21 @@ const bridgeBaseUrl = "http://127.0.0.1:4317";
 
 export function getPuiApi(): PuiApi {
   if (!window.pui) {
+    if (navigator.userAgent.includes("Electron")) {
+      throw new Error("Pui preload API did not load in Electron.");
+    }
     window.pui = browserPreviewApi;
   }
   return window.pui;
 }
 
 const browserPreviewApi: PuiApi = {
-  platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : "linux",
+  platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : isPreviewWindows ? "win32" : "linux",
   dialog: {
     openFolder: async (defaultPath) =>
       bridgeGet<{ path?: string }>("/dialog/open-folder", { defaultPath: defaultPath || workspace })
         .then((result) => result.path)
-        .catch(() => window.prompt("Folder path", defaultPath || workspace) || undefined)
+        .catch(() => window.prompt("Folder path", defaultPath || workspace)?.trim() || undefined)
   },
   settings: {
     load: async () => settings,
@@ -87,17 +94,19 @@ const browserPreviewApi: PuiApi = {
   },
   terminal: {
     create: (payload) =>
-      terminalBridge.create(payload as { profile: ConsoleProfile; paneId: string; cols: number; rows: number }).catch(() => {
-        const { profile, paneId } = payload as { profile: ConsoleProfile; paneId: string };
-        return {
-          id: crypto.randomUUID(),
-          profileId: profile.id,
-          cwd: profile.cwd,
-          paneId,
-          ptyProcessId: 0,
-          status: "running"
-        } satisfies TerminalSession;
-      }),
+      terminalBridge
+        .create(payload as { profile: ConsoleProfile; paneId: string; cols: number; rows: number })
+        .catch(() => {
+          const { profile, paneId } = payload as { profile: ConsoleProfile; paneId: string };
+          return {
+            id: crypto.randomUUID(),
+            profileId: profile.id,
+            cwd: profile.cwd,
+            paneId,
+            ptyProcessId: 0,
+            status: "running"
+          } satisfies TerminalSession;
+        }),
     write: (sessionId, data) => terminalBridge.write(sessionId, data),
     resize: (sessionId, cols, rows) => terminalBridge.resize(sessionId, cols, rows),
     kill: (sessionId) => terminalBridge.kill(sessionId),

@@ -33,7 +33,12 @@ describe("GitWorkspaceService operations", () => {
       stdout: "committed",
       stderr: ""
     });
-    expect(execFileMock).toHaveBeenCalledWith("git", ["-C", "/repo", "commit", "-m", "ship it"], expect.any(Object), expect.any(Function));
+    expect(execFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/git(?:\.exe)?$/),
+      ["-C", "/repo", "commit", "-m", "ship it"],
+      expect.any(Object),
+      expect.any(Function)
+    );
   });
 
   it("pushes the current branch", async () => {
@@ -51,6 +56,11 @@ describe("GitWorkspaceService operations", () => {
       stdout: "",
       stderr: "pushed"
     });
-    expect(execFileMock).toHaveBeenCalledWith("git", ["-C", "/repo", "push"], expect.any(Object), expect.any(Function));
+    expect(execFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/git(?:\.exe)?$/),
+      ["-C", "/repo", "push"],
+      expect.any(Object),
+      expect.any(Function)
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ipc } from "../shared/ipc";
 import type { AppSettings, ConsoleProfile } from "../shared/types";
@@ -33,7 +34,7 @@ function createWindow(): void {
           height: 44
         },
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.cjs"),
       nodeIntegration: false,
       contextIsolation: true
     }
@@ -77,10 +78,13 @@ function registerIpc(): void {
     if (!mainWindow) {
       return undefined;
     }
-    const result = await dialog.showOpenDialog(mainWindow, {
-      defaultPath,
-      properties: ["openDirectory", "createDirectory"]
-    });
+    const options = {
+      title: "Open folder",
+      buttonLabel: "Open Folder",
+      defaultPath: defaultPath && existsSync(defaultPath) ? defaultPath : undefined,
+      properties: ["openDirectory"] as Array<"openDirectory">
+    };
+    const result = await dialog.showOpenDialog(mainWindow, options);
     return result.canceled ? undefined : result.filePaths[0];
   });
 

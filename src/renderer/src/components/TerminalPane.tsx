@@ -3,6 +3,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { X } from "lucide-react";
 import type { ConsoleProfile } from "../../../shared/types";
+import { getPuiApi } from "../lib/browserApi";
+import { matchesShortcut } from "../lib/shortcuts";
 
 type Pane = {
   id: string;
@@ -21,6 +23,8 @@ type TerminalPaneProps = {
   canClose: boolean;
   onFocus: () => void;
   onClose: () => void;
+  onSplitRight: () => void;
+  onSplitDown: () => void;
   onSession: (sessionId: string) => void;
   onContextMenu: (event: MouseEvent) => void;
 };
@@ -32,10 +36,12 @@ type TerminalRecord = {
   inputDisposable: { dispose: () => void };
   offData: () => void;
   offExit: () => void;
+  shortcutHandler: { current: ((event: KeyboardEvent) => boolean) | undefined };
   exited: boolean;
 };
 
 const terminalRecords = new Map<string, TerminalRecord>();
+const pui = getPuiApi();
 
 export function terminalRecordKey(workspaceId: string, paneId: string): string {
   return `${workspaceId}:${paneId}`;
@@ -52,7 +58,7 @@ export function disposeTerminalPane(workspaceId: string, paneId: string): void {
   record.offData();
   record.offExit();
   if (record.sessionId && !record.exited) {
-    void window.pui.terminal.kill(record.sessionId);
+    void pui.terminal.kill(record.sessionId);
   }
   record.terminal.dispose();
   terminalRecords.delete(key);
@@ -85,6 +91,8 @@ export function TerminalPane({
   canClose,
   onFocus,
   onClose,
+  onSplitRight,
+  onSplitDown,
   onSession,
   onContextMenu
 }: TerminalPaneProps) {
@@ -92,9 +100,14 @@ export function TerminalPane({
   const xtermMountRef = useRef<HTMLDivElement | null>(null);
   const recordRef = useRef<TerminalRecord | null>(null);
   const onSessionRef = useRef(onSession);
+  const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
 
   useEffect(() => {
     onSessionRef.current = onSession;
+  });
+
+  useEffect(() => {
+    shortcutActionsRef.current = { canClose, onClose, onSplitRight, onSplitDown };
   });
 
   useEffect(() => {
@@ -106,7 +119,30 @@ export function TerminalPane({
       onSessionRef.current(sessionId);
     });
     recordRef.current = record;
-    attachTerminalElement(record.terminal, xtermMountRef.current);
+    record.shortcutHandler.current = (event) => {
+      const actions = shortcutActionsRef.current;
+      if (matchesShortcut(event, "CmdOrCtrl+D")) {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onSplitRight();
+        return false;
+      }
+      if (matchesShortcut(event, "CmdOrCtrl+Shift+D")) {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onSplitDown();
+        return false;
+      }
+      if (actions.canClose && matchesShortcut(event, "CmdOrCtrl+W")) {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onClose();
+        return false;
+      }
+      return true;
+    };
+    const mount = xtermMountRef.current;
+    attachTerminalElement(record.terminal, mount);
     record.terminal.options.cursorBlink = active;
     if (record.terminal.options.fontSize !== terminalFontSize) {
       record.terminal.options.fontSize = terminalFontSize;
@@ -114,22 +150,26 @@ export function TerminalPane({
     fitTerminal(record.fit);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
-      void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
+      void pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
     }
 
     const observer = new ResizeObserver(() => {
       fitTerminal(record.fit);
       if (record.sessionId) {
-        void window.pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
+        void pui.terminal.resize(record.sessionId, record.terminal.cols, record.terminal.rows);
       }
     });
     observer.observe(xtermMountRef.current);
 
     return () => {
       observer.disconnect();
+      if (recordRef.current === record) {
+        record.shortcutHandler.current = undefined;
+      }
+      detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
+  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {
@@ -149,7 +189,7 @@ export function TerminalPane({
 
   return (
     <div
-      className={active ? "terminal-pane active" : "terminal-pane inactive"}
+      className={`${active ? "terminal-pane active" : "terminal-pane inactive"}${showHeader ? " has-header" : ""}`}
       tabIndex={0}
       onMouseDown={focusPane}
       onContextMenu={onContextMenu}
@@ -214,22 +254,25 @@ function getOrCreateTerminalRecord(
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
+  const shortcutHandler: TerminalRecord["shortcutHandler"] = { current: undefined };
+  terminal.attachCustomKeyEventHandler((event) => shortcutHandler.current?.(event) ?? true);
 
   const record: TerminalRecord = {
     terminal,
     fit,
     sessionId: existingSessionId,
+    shortcutHandler,
     inputDisposable: terminal.onData((data) => {
       if (record.sessionId) {
-        void window.pui.terminal.write(record.sessionId, data);
+        void pui.terminal.write(record.sessionId, data);
       }
     }),
-    offData: window.pui.terminal.onData(({ sessionId, data }) => {
+    offData: pui.terminal.onData(({ sessionId, data }) => {
       if (sessionId === record.sessionId) {
         record.terminal.write(data);
       }
     }),
-    offExit: window.pui.terminal.onExit(({ sessionId, exitCode }) => {
+    offExit: pui.terminal.onExit(({ sessionId, exitCode }) => {
       if (sessionId === record.sessionId && !record.exited) {
         record.exited = true;
         record.terminal.writeln("");
@@ -242,7 +285,7 @@ function getOrCreateTerminalRecord(
   terminalRecords.set(key, record);
 
   if (!record.sessionId) {
-    void window.pui.terminal
+    void pui.terminal
       .create({
         profile,
         paneId,
@@ -251,7 +294,7 @@ function getOrCreateTerminalRecord(
       })
       .then((session) => {
         if (!terminalRecords.has(key)) {
-          void window.pui.terminal.kill(session.id);
+          void pui.terminal.kill(session.id);
           return;
         }
         record.sessionId = session.id;
@@ -269,13 +312,20 @@ function getOrCreateTerminalRecord(
 
 function attachTerminalElement(terminal: Terminal, mount: HTMLDivElement): void {
   if (terminal.element) {
-    if (terminal.element.parentElement !== mount) {
-      mount.appendChild(terminal.element);
+    if (terminal.element.parentElement !== mount || mount.children.length !== 1) {
+      mount.replaceChildren(terminal.element);
     }
     return;
   }
 
+  mount.replaceChildren();
   terminal.open(mount);
+}
+
+function detachTerminalElement(terminal: Terminal, mount: HTMLDivElement): void {
+  if (terminal.element?.parentElement === mount) {
+    terminal.element.remove();
+  }
 }
 
 function fitTerminal(fit: FitAddon): void {

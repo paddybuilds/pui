@@ -789,7 +789,9 @@ export function App() {
     <div className="app-shell" style={{ gridTemplateColumns: `${sidebarWidth}px ${RESIZER_SIZE}px minmax(0, 1fr)` }}>
       <aside className="sidebar">
         <div className="brand">
-          <TerminalSquare size={18} />
+          <span className="brand-emoji" aria-hidden="true">
+            💩
+          </span>
           <span>Pui</span>
         </div>
 

@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  color: #d8dee6;
-  background: #090b0f;
+  color: var(--text);
+  background: var(--surface-root);
   font-family:
     "Geist Sans",
     -apple-system,
@@ -36,9 +36,17 @@
   --terminal-foreground: #e8edf2;
   --terminal-cursor: #e5e7eb;
   --terminal-selection: #334155;
+  --scrollbar-track: color-mix(in srgb, var(--surface-root) 82%, black);
+  --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 38%, var(--surface-root));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-muted) 58%, var(--surface-root));
+  --overlay-backdrop: color-mix(in srgb, var(--surface-root) 68%, transparent);
+  --shadow-color: color-mix(in srgb, var(--surface-root) 64%, black);
+  --badge-bg: color-mix(in srgb, var(--text-muted) 13%, transparent);
+  --diff-add-bg: color-mix(in srgb, var(--success) 18%, var(--terminal-background));
+  --diff-remove-bg: color-mix(in srgb, var(--danger) 18%, var(--terminal-background));
   --titlebar-height: 44px;
   --window-controls-width: 154px;
-  scrollbar-color: #303946 #0b0f14;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 :root[data-density="compact"] {
@@ -62,17 +70,17 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-  background: #0b0f14;
+  background: var(--scrollbar-track);
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #303946;
-  border: 2px solid #0b0f14;
+  background: var(--scrollbar-thumb);
+  border: 2px solid var(--scrollbar-track);
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #465365;
+  background: var(--scrollbar-thumb-hover);
 }
 
 button,
@@ -96,7 +104,7 @@ button {
 }
 
 button:hover {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--surface-hover);
 }
 
 button:disabled {
@@ -108,8 +116,8 @@ input,
 textarea,
 select {
   color: var(--text);
-  background: #0b0f14;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: var(--surface-root);
+  border: 1px solid var(--line-strong);
   border-radius: 3px;
   padding: 8px 10px;
   outline: none;
@@ -123,13 +131,13 @@ textarea {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: rgba(203, 213, 225, 0.42);
+  border-color: var(--accent);
 }
 
 kbd {
-  color: #aeb8c4;
-  background: #111318;
-  border: 1px solid #2c3440;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 11px;
@@ -140,8 +148,8 @@ kbd {
   height: 100vh;
   display: grid;
   place-items: center;
-  background: #111318;
-  color: #aeb8c4;
+  background: var(--surface-root);
+  color: var(--text-muted);
 }
 
 .onboarding-shell {
@@ -167,8 +175,8 @@ kbd {
   top: 12px;
   right: 12px;
   z-index: 2;
-  background: rgba(15, 19, 25, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: color-mix(in srgb, var(--surface-panel) 84%, transparent);
+  border: 1px solid var(--line-strong);
 }
 
 .onboarding-summary {
@@ -178,7 +186,7 @@ kbd {
   gap: 42px;
   padding: 20px;
   border-right: 1px solid var(--line-soft);
-  background: #0c1015;
+  background: var(--surface-sidebar);
 }
 
 .onboarding-brand {
@@ -246,7 +254,7 @@ kbd {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--badge-bg);
   font-size: 11px;
 }
 
@@ -328,7 +336,7 @@ kbd {
 
 .settings-error {
   margin: 0;
-  color: #ffb8b8;
+  color: var(--danger);
   font-size: 12px;
 }
 
@@ -373,7 +381,7 @@ kbd {
 
 .sidebar {
   background: var(--surface-sidebar);
-  border-right: 1px solid rgba(148, 163, 184, 0.08);
+  border-right: 1px solid var(--line-soft);
   padding: 14px 10px;
   display: flex;
   flex-direction: column;
@@ -409,7 +417,7 @@ kbd {
 
 .app-resizer:hover,
 .app-resizer:active {
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--surface-active);
 }
 
 .app-sidebar-resizer,
@@ -427,6 +435,18 @@ kbd {
   font-weight: 600;
   color: var(--text-strong);
   font-size: 14px;
+  -webkit-app-region: drag;
+}
+
+.brand-emoji {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--surface-raised);
+  font-size: 16px;
+  line-height: 1;
   -webkit-app-region: drag;
 }
 
@@ -485,7 +505,7 @@ kbd {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 500;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--surface-hover);
   border-radius: 5px;
 }
 
@@ -521,12 +541,12 @@ kbd {
 }
 
 .workspace-button.active::before {
-  background: #cbd5e1;
+  background: var(--accent);
 }
 
 .workspace-button.active span:first-child {
   color: var(--text-strong);
-  background: rgba(148, 163, 184, 0.14);
+  background: var(--surface-active);
 }
 
 .workspace-button.quick {
@@ -612,7 +632,7 @@ kbd {
   align-items: center;
   gap: 12px;
   padding: 0 12px 0 14px;
-  background: #0b0f14;
+  background: var(--surface-root);
   border-bottom: 1px solid var(--line-soft);
   -webkit-app-region: drag;
 }
@@ -685,7 +705,7 @@ kbd {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--line-soft);
 }
 
 .empty-workbench {
@@ -698,7 +718,7 @@ kbd {
   gap: 10px;
   padding: clamp(72px, 16vh, 150px) 24px 24px;
   color: var(--text-muted);
-  background: #0d1117;
+  background: var(--surface-panel);
 }
 
 .empty-workbench svg {
@@ -741,20 +761,20 @@ kbd {
   min-height: 0;
   display: grid;
   gap: 0;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--line-soft);
 }
 
 .pane-resizer {
   min-width: 0;
   min-height: 0;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--line-soft);
   touch-action: none;
   z-index: 1;
 }
 
 .pane-resizer:hover,
 .pane-resizer:active {
-  background: rgba(148, 163, 184, 0.18);
+  background: var(--line-strong);
 }
 
 .pane-resizer.vertical {
@@ -794,7 +814,7 @@ kbd {
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--line-soft);
   color: var(--text-muted);
   font-size: 11px;
   font-family: var(--font-mono);
@@ -886,12 +906,12 @@ kbd {
 
 .workspace-button span:first-child {
   width: 24px;
-  background: rgba(148, 163, 184, 0.07);
+  background: var(--surface-hover);
 }
 
 .workspace-button.active {
-  background: rgba(148, 163, 184, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.06);
+  background: var(--surface-active);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
 .workbench {
@@ -899,8 +919,8 @@ kbd {
 }
 
 .workspace-topbar {
-  background: rgba(9, 12, 17, 0.96);
-  border-bottom-color: rgba(148, 163, 184, 0.07);
+  background: color-mix(in srgb, var(--surface-root) 96%, transparent);
+  border-bottom-color: var(--line-soft);
 }
 
 .workspace-topbar-title strong {
@@ -1014,7 +1034,7 @@ kbd {
   padding: 3px 7px;
   border: 1px solid var(--line-soft);
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--badge-bg);
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-size: 11px;
@@ -1046,7 +1066,7 @@ kbd {
 .git-tabs button.active {
   color: var(--text-strong);
   background: var(--surface-active);
-  border-color: rgba(148, 163, 184, 0.18);
+  border-color: var(--line-strong);
 }
 
 .git-tabs small {
@@ -1055,7 +1075,7 @@ kbd {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--badge-bg);
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1149,7 +1169,7 @@ kbd {
   padding: 8px 9px;
   border-radius: 6px;
   border: 1px solid transparent;
-  background: rgba(148, 163, 184, 0.045);
+  background: var(--surface-hover);
 }
 
 .commit-row strong {
@@ -1201,13 +1221,13 @@ kbd {
   text-align: left;
   font-size: 12px;
   border-color: transparent;
-  background: rgba(148, 163, 184, 0.035);
+  background: var(--surface-hover);
 }
 
 .file-button:hover {
   color: var(--text-strong);
   background: var(--surface-hover);
-  border-color: rgba(148, 163, 184, 0.14);
+  border-color: var(--line-strong);
 }
 
 .file-name-group {
@@ -1247,8 +1267,8 @@ kbd {
   display: grid;
   place-items: center;
   border-radius: 5px;
-  background: rgba(245, 165, 36, 0.1);
-  color: #f5b84f;
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  color: var(--warning);
   font-family: var(--font-mono);
   font-size: 11px;
   white-space: pre;
@@ -1317,12 +1337,12 @@ kbd {
 
 .diff-line.add {
   color: var(--success);
-  background: #0f2b1f;
+  background: var(--diff-add-bg);
 }
 
 .diff-line.remove {
   color: var(--danger);
-  background: #331819;
+  background: var(--diff-remove-bg);
 }
 
 .diff-line.context {
@@ -1342,15 +1362,15 @@ kbd {
   align-items: flex-start;
   justify-content: center;
   padding-top: 90px;
-  background: rgba(0, 0, 0, 0.42);
+  background: var(--overlay-backdrop);
 }
 
 .palette {
   width: min(620px, calc(100vw - 40px));
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--surface-panel);
-  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 20px 80px var(--shadow-color);
   overflow: hidden;
 }
 
@@ -1360,7 +1380,7 @@ kbd {
   border: 0;
   border-bottom: 1px solid var(--line-soft);
   border-radius: 0;
-  background: #0b0f14;
+  background: var(--surface-root);
 }
 
 .palette-list {
@@ -1387,10 +1407,10 @@ kbd {
   max-height: calc(100vh - 16px);
   overflow: auto;
   padding: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--line-strong);
   border-radius: 7px;
   background: var(--surface-panel);
-  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 14px 44px var(--shadow-color);
 }
 
 .context-menu button {
@@ -1412,7 +1432,7 @@ kbd {
 }
 
 .context-menu button.destructive {
-  color: #ffb8b8;
+  color: var(--danger);
 }
 
 .context-menu-icon {
@@ -1445,7 +1465,7 @@ kbd {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.56);
+  background: var(--overlay-backdrop);
   backdrop-filter: blur(8px);
 }
 
@@ -1459,7 +1479,7 @@ kbd {
   background: var(--surface-panel);
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.56);
+  box-shadow: 0 24px 90px var(--shadow-color);
   overflow: hidden;
 }
 
@@ -1509,8 +1529,8 @@ kbd {
 .settings-tab:hover,
 .settings-tab.active {
   color: var(--text-strong);
-  background: rgba(148, 163, 184, 0.1);
-  border-color: rgba(148, 163, 184, 0.08);
+  background: var(--surface-active);
+  border-color: var(--line-soft);
 }
 
 .settings-content {
@@ -1620,13 +1640,13 @@ kbd {
 .settings-form > button {
   justify-self: start;
   color: var(--text-strong);
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: var(--surface-active);
+  border: 1px solid var(--line-soft);
 }
 
 .settings-action-row button:hover,
 .settings-form > button:hover {
-  background: rgba(148, 163, 184, 0.18);
+  background: var(--surface-hover);
 }
 
 .settings-update-status {
@@ -1675,9 +1695,9 @@ kbd {
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.07);
+  border: 1px solid var(--line-soft);
   border-radius: 7px;
-  background: rgba(6, 10, 15, 0.4);
+  background: color-mix(in srgb, var(--surface-root) 68%, transparent);
 }
 
 .settings-list-row:has(button) {
@@ -1704,20 +1724,20 @@ kbd {
   height: 26px;
   padding: 0 8px;
   color: var(--text-muted);
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-hover);
   font-size: 12px;
 }
 
 .settings-list-row button:hover {
   color: var(--text-strong);
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--surface-active);
 }
 
 .settings-check-row {
   min-height: 36px;
   padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--line-soft);
   border-radius: 7px;
   background: color-mix(in srgb, var(--surface-root) 70%, transparent);
 }

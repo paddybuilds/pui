@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { X } from "lucide-react";
 import type { ConsoleProfile } from "../../../shared/types";
+import { matchesShortcut } from "../lib/shortcuts";
 
 type Pane = {
   id: string;
@@ -21,6 +22,8 @@ type TerminalPaneProps = {
   canClose: boolean;
   onFocus: () => void;
   onClose: () => void;
+  onSplitRight: () => void;
+  onSplitDown: () => void;
   onSession: (sessionId: string) => void;
   onContextMenu: (event: MouseEvent) => void;
 };
@@ -32,6 +35,7 @@ type TerminalRecord = {
   inputDisposable: { dispose: () => void };
   offData: () => void;
   offExit: () => void;
+  shortcutHandler: { current: ((event: KeyboardEvent) => boolean) | undefined };
   exited: boolean;
 };
 
@@ -85,6 +89,8 @@ export function TerminalPane({
   canClose,
   onFocus,
   onClose,
+  onSplitRight,
+  onSplitDown,
   onSession,
   onContextMenu
 }: TerminalPaneProps) {
@@ -92,9 +98,14 @@ export function TerminalPane({
   const xtermMountRef = useRef<HTMLDivElement | null>(null);
   const recordRef = useRef<TerminalRecord | null>(null);
   const onSessionRef = useRef(onSession);
+  const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
 
   useEffect(() => {
     onSessionRef.current = onSession;
+  });
+
+  useEffect(() => {
+    shortcutActionsRef.current = { canClose, onClose, onSplitRight, onSplitDown };
   });
 
   useEffect(() => {
@@ -106,6 +117,28 @@ export function TerminalPane({
       onSessionRef.current(sessionId);
     });
     recordRef.current = record;
+    record.shortcutHandler.current = (event) => {
+      const actions = shortcutActionsRef.current;
+      if (matchesShortcut(event, "CmdOrCtrl+D")) {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onSplitRight();
+        return false;
+      }
+      if (matchesShortcut(event, "CmdOrCtrl+Shift+D")) {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onSplitDown();
+        return false;
+      }
+      if (actions.canClose && matchesShortcut(event, "CmdOrCtrl+W")) {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onClose();
+        return false;
+      }
+      return true;
+    };
     attachTerminalElement(record.terminal, xtermMountRef.current);
     record.terminal.options.cursorBlink = active;
     if (record.terminal.options.fontSize !== terminalFontSize) {
@@ -127,6 +160,9 @@ export function TerminalPane({
 
     return () => {
       observer.disconnect();
+      if (recordRef.current === record) {
+        record.shortcutHandler.current = undefined;
+      }
       recordRef.current = null;
     };
   }, [pane.id, pane.sessionId, profile, terminalFontSize, workspaceId]);
@@ -214,11 +250,14 @@ function getOrCreateTerminalRecord(
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
+  const shortcutHandler: TerminalRecord["shortcutHandler"] = { current: undefined };
+  terminal.attachCustomKeyEventHandler((event) => shortcutHandler.current?.(event) ?? true);
 
   const record: TerminalRecord = {
     terminal,
     fit,
     sessionId: existingSessionId,
+    shortcutHandler,
     inputDisposable: terminal.onData((data) => {
       if (record.sessionId) {
         void window.pui.terminal.write(record.sessionId, data);

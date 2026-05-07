@@ -830,6 +830,7 @@ export function App() {
               onFocus={setActivePaneId}
               onClosePane={closePane}
               onPaneContextMenu={openPaneContextMenu}
+              onSplitPane={splitPaneById}
               onResizeSplit={resizeSplit}
               onSession={(paneId, sessionId) =>
                 setSessionsByWorkspace((current) => {
@@ -1155,6 +1156,7 @@ function PaneTree({
   onFocus,
   onClosePane,
   onPaneContextMenu,
+  onSplitPane,
   onResizeSplit,
   onSession
 }: {
@@ -1171,6 +1173,7 @@ function PaneTree({
   onFocus: (paneId: string) => void;
   onClosePane: (paneId: string) => void;
   onPaneContextMenu: (event: MouseEvent, paneId: string) => void;
+  onSplitPane: (paneId: string, direction: "right" | "down") => void;
   onResizeSplit: (splitId: string, sizes: number[]) => void;
   onSession: (paneId: string, sessionId: string) => void;
 }) {
@@ -1221,6 +1224,7 @@ function PaneTree({
               onFocus={onFocus}
               onClosePane={onClosePane}
               onPaneContextMenu={onPaneContextMenu}
+              onSplitPane={onSplitPane}
               onResizeSplit={onResizeSplit}
               onSession={onSession}
             />
@@ -1257,6 +1261,8 @@ function PaneTree({
       canClose={canClosePanes}
       onFocus={() => onFocus(node.id)}
       onClose={() => onClosePane(node.id)}
+      onSplitRight={() => onSplitPane(node.id, "right")}
+      onSplitDown={() => onSplitPane(node.id, "down")}
       onContextMenu={(event) => onPaneContextMenu(event, node.id)}
       onSession={(sessionId) => onSession(node.id, sessionId)}
     />

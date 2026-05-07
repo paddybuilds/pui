@@ -642,7 +642,8 @@ kbd {
 }
 
 .git-panel {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(96px, 18%);
+  background: #0b0f14;
 }
 
 .diff-toolbar,
@@ -660,12 +661,12 @@ kbd {
 
 .git-panel-header {
   min-width: 0;
-  height: 48px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -677,7 +678,7 @@ kbd {
 
 .git-panel-header strong {
   color: var(--text-strong);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -691,6 +692,24 @@ kbd {
   white-space: nowrap;
 }
 
+.git-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.git-summary span {
+  min-width: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+
 .commit-section,
 .changes-section,
 .commit-composer {
@@ -700,14 +719,15 @@ kbd {
 }
 
 .commit-section {
+  min-height: 0;
   border-bottom: 1px solid var(--line-soft);
-  max-height: 124px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .commit-section header,
 .changes-section header,
 .commit-composer header {
-  height: 34px;
+  min-height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -715,6 +735,7 @@ kbd {
   padding: 0 12px;
   color: var(--text-muted);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .commit-section header {
@@ -730,10 +751,11 @@ kbd {
 
 .commit-composer {
   border-top: 1px solid var(--line-soft);
+  background: #0d1117;
 }
 
 .commit-form {
-  padding: 8px;
+  padding: 8px 10px 10px;
   display: grid;
   gap: 8px;
 }
@@ -755,7 +777,7 @@ kbd {
 .commit-list {
   min-height: 0;
   overflow: auto;
-  padding: 0 8px 8px;
+  padding: 0 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -765,9 +787,10 @@ kbd {
   min-width: 0;
   display: grid;
   gap: 4px;
-  padding: 8px;
+  padding: 8px 9px;
   border-radius: 6px;
-  background: rgba(148, 163, 184, 0.04);
+  border: 1px solid transparent;
+  background: rgba(148, 163, 184, 0.045);
 }
 
 .commit-row strong {
@@ -798,7 +821,7 @@ kbd {
 .diff-body {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(72px, 18%) minmax(0, 1fr);
+  grid-template-rows: minmax(112px, 28%) minmax(0, 1fr);
 }
 
 .file-list {
@@ -806,30 +829,57 @@ kbd {
   overflow: auto;
   border-right: 0;
   border-bottom: 1px solid var(--line-soft);
-  padding: 8px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  background: #0d1117;
 }
 
 .file-button {
   width: 100%;
-  height: 30px;
-  min-height: 30px;
+  min-height: 42px;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  padding: 0 8px;
+  gap: 9px;
+  padding: 6px 8px;
   text-align: left;
   font-size: 12px;
+  border-color: transparent;
+  background: rgba(148, 163, 184, 0.035);
 }
 
-.file-button span:last-child {
+.file-button:hover {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+.file-name-group {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.file-name-group strong,
+.file-name-group small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-name-group strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.file-name-group small {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
 }
 
 .file-button.active {
@@ -838,7 +888,13 @@ kbd {
 }
 
 .file-status {
-  color: #f5a524;
+  width: 32px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(245, 165, 36, 0.1);
+  color: #f5b84f;
   font-family: var(--font-mono);
   font-size: 11px;
   white-space: pre;
@@ -853,10 +909,11 @@ kbd {
 
 .file-actions {
   min-width: 0;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--line-soft);
   display: grid;
   gap: 8px;
+  background: #0d1117;
 }
 
 .file-actions strong {
@@ -886,7 +943,7 @@ kbd {
 
 .diff-code {
   margin: 0;
-  padding: 8px 0;
+  padding: 10px 0;
   overflow: auto;
   background: #0d1015;
   font-family: var(--font-mono);

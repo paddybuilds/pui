@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitCommitHorizontal, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import { GitCommitHorizontal, RotateCcw, Upload } from "lucide-react";
 import type { GitCommit, GitDiff, GitFileStatus, GitStatus } from "../../../shared/types";
 import { splitDiff } from "../lib/diff";
 
@@ -18,6 +18,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [committing, setCommitting] = useState(false);
   const files = status?.files ?? [];
   const stagedFiles = files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?");
+  const unstagedFiles = files.filter((file) => file.workingTreeStatus.trim());
 
   useEffect(() => {
     if (!status?.isRepo) {
@@ -36,14 +37,6 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     }
     void loadCommits();
   }, [status?.files.map((file) => file.path).join("|")]);
-
-  const refresh = async () => {
-    const nextStatus = await window.pui.git.status(workspace);
-    onStatus(nextStatus);
-    if (nextStatus.isRepo) {
-      await loadCommits();
-    }
-  };
 
   const loadCommits = async () => {
     setCommits(await window.pui.git.commits(workspace, 16));
@@ -116,34 +109,16 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
           <strong>Git</strong>
           <span>{status?.branch ?? "Repository"}</span>
         </div>
-        <button type="button" onClick={refresh}>
-          <RefreshCw size={14} />
-          Refresh
-        </button>
-      </div>
-
-      <section className="commit-section">
-        <header>
-          <GitCommitHorizontal size={14} />
-          <span>Recent commits</span>
-        </header>
-        <div className="commit-list">
-          {commits.map((commit) => (
-            <article key={commit.hash} className="commit-row" title={commit.hash}>
-              <strong>{commit.subject}</strong>
-              <span>
-                {commit.shortHash} · {commit.author} · {commit.date}
-              </span>
-            </article>
-          ))}
-          {commits.length === 0 ? <div className="empty-state">No commits found.</div> : null}
+        <div className="git-summary" aria-label="Git summary">
+          <span>{files.length} changed</span>
+          <span>{stagedFiles.length} staged</span>
         </div>
-      </section>
+      </div>
 
       <section className="changes-section">
         <header>
           <span>Changes</span>
-          <small>{files.length} changed</small>
+          <small>{unstagedFiles.length} unstaged</small>
         </header>
         <div className="diff-body">
           <div className="file-list">
@@ -161,7 +136,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
           <div className="diff-view">
             {selectedFile ? (
               <div className="file-actions">
-                <strong>{selectedFile}</strong>
+                <strong title={selectedFile}>{selectedFile}</strong>
                 <div className="file-action-buttons">
                   <button type="button" onClick={() => stage(selectedFile)}>
                     <Upload size={14} />
@@ -217,6 +192,24 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
           {operationMessage ? <p className="git-operation-message">{operationMessage}</p> : null}
         </div>
       </section>
+
+      <section className="commit-section">
+        <header>
+          <GitCommitHorizontal size={14} />
+          <span>Recent commits</span>
+        </header>
+        <div className="commit-list">
+          {commits.map((commit) => (
+            <article key={commit.hash} className="commit-row" title={commit.hash}>
+              <strong>{commit.subject}</strong>
+              <span>
+                {commit.shortHash} · {commit.author} · {commit.date}
+              </span>
+            </article>
+          ))}
+          {commits.length === 0 ? <div className="empty-state">No commits found.</div> : null}
+        </div>
+      </section>
     </div>
   );
 }
@@ -232,13 +225,19 @@ function FileButton({
 }) {
   const staged = file.indexStatus.trim() || "-";
   const unstaged = file.workingTreeStatus.trim() || "-";
+  const pathParts = file.path.split(/[\\/]/);
+  const fileName = pathParts.pop() ?? file.path;
+  const directory = pathParts.join("/");
   return (
     <button type="button" className={active ? "file-button active" : "file-button"} onClick={onClick}>
       <span className="file-status">
         {staged}
         {unstaged}
       </span>
-      <span>{file.path}</span>
+      <span className="file-name-group">
+        <strong>{fileName}</strong>
+        {directory ? <small>{directory}</small> : null}
+      </span>
     </button>
   );
 }

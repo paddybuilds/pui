@@ -8,7 +8,7 @@ import {
   useRef,
   useState
 } from "react";
-import { Edit3, GitCompare, PanelRight, PanelTop, Play, Plus, Save, Settings, TerminalSquare, Trash2, X } from "lucide-react";
+import { Edit3, GitCompare, PanelRight, PanelTop, Play, Plus, Settings, TerminalSquare, Trash2, X } from "lucide-react";
 import type {
   AppSettings,
   ConsoleProfile,
@@ -784,25 +784,16 @@ export function App() {
                     {gitStatus.files.length ? <small>{gitStatus.files.length}</small> : null}
                   </button>
                 ) : null}
-                {activeWorkspace.kind !== "quick" ? (
-                  <>
-                    <button type="button" title="Save layout preset" onClick={() => void saveCurrentLayoutPreset()}>
-                      <Save size={14} />
-                      <span>Save layout</span>
-                    </button>
-                    {(activeWorkspace.quickCommands ?? []).map((command) => (
+                {activeWorkspace.kind !== "quick"
+                  ? (activeWorkspace.quickCommands ?? []).map((command) => (
                       <button key={command.id} type="button" title={command.name} onClick={() => runQuickCommand(command)}>
                         <Play size={14} />
                         <span>{command.name}</span>
                       </button>
-                    ))}
-                  </>
-                ) : null}
+                    ))
+                  : null}
               </>
             ) : null}
-            <button type="button" className={settingsOpen ? "active" : ""} title="Settings" onClick={() => setSettingsOpen(true)}>
-              <Settings size={14} />
-            </button>
           </div>
         </header>
         <div

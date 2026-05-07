@@ -13,6 +13,15 @@ import type {
   TerminalSession
 } from "../shared/types";
 
+export type ShellCandidate = {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  source: "environment" | "system" | "wsl" | "custom";
+  available: boolean;
+};
+
 const api = {
   platform: process.platform,
   app: {
@@ -27,6 +36,9 @@ const api = {
     loadState: () => ipcRenderer.invoke(ipc.settings.loadState) as Promise<SettingsLoadState>,
     load: () => ipcRenderer.invoke(ipc.settings.load) as Promise<AppSettings>,
     save: (settings: AppSettings) => ipcRenderer.invoke(ipc.settings.save, settings) as Promise<AppSettings>
+  },
+  system: {
+    listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
   },
   terminal: {
     create: (payload: unknown) => ipcRenderer.invoke(ipc.terminal.create, payload) as Promise<TerminalSession>,

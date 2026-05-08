@@ -1,7 +1,7 @@
-import { type MouseEvent, useEffect, useRef } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
-import { X } from "lucide-react";
+import { ArrowDown, X } from "lucide-react";
 import type { ConsoleProfile, TerminalPaneSnapshot } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
@@ -65,6 +65,7 @@ const MAX_TERMINAL_SNAPSHOT_LINES = 300;
 const MAX_TERMINAL_SNAPSHOT_CHARS = 80_000;
 const TERMINAL_SNAPSHOT_IDLE_MS = 1_500;
 const TERMINAL_SNAPSHOT_INTERVAL_MS = 10_000;
+const JUMP_TO_RECENT_THRESHOLD_LINES = 5;
 const terminalRecords = new Map<string, TerminalRecord>();
 const terminalRecordsBySession = new Map<string, TerminalRecord>();
 let offTerminalData: (() => void) | undefined;
@@ -158,6 +159,7 @@ export function TerminalPane({
   const terminalThemeRef = useRef(terminalTheme);
   const terminalFontSizeRef = useRef(terminalFontSize);
   const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
+  const [showJumpToRecent, setShowJumpToRecent] = useState(false);
 
   useEffect(() => {
     onSessionRef.current = onSession;
@@ -254,9 +256,14 @@ export function TerminalPane({
       void pui.clipboard.writeText(text);
     };
     mount.addEventListener("copy", handleCopy, { capture: true });
+    const updateJumpToRecentVisibility = () => {
+      setShowJumpToRecent(isTerminalScrolledAwayFromRecent(record.terminal));
+    };
+    const scrollDisposable = record.terminal.onScroll(updateJumpToRecentVisibility);
     record.terminal.options.cursorBlink = activeRef.current;
     applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
     scheduleFitAndResize(record);
+    updateJumpToRecentVisibility();
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
     }
@@ -270,6 +277,8 @@ export function TerminalPane({
       observer.disconnect();
       mount.removeEventListener("paste", handlePaste, { capture: true });
       mount.removeEventListener("copy", handleCopy, { capture: true });
+      scrollDisposable.dispose();
+      setShowJumpToRecent(false);
       captureTerminalSnapshot(record);
       if (recordRef.current === record) {
         record.shortcutHandler.current = undefined;
@@ -302,6 +311,15 @@ export function TerminalPane({
     textarea?.focus();
   };
 
+  const jumpToRecent = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const terminal = recordRef.current?.terminal;
+    terminal?.scrollToBottom();
+    terminal?.focus();
+    setShowJumpToRecent(false);
+  };
+
   return (
     <div
       className={`${active ? "terminal-pane active" : "terminal-pane inactive"}${showHeader ? " has-header" : ""}`}
@@ -332,9 +350,26 @@ export function TerminalPane({
       ) : null}
       <div className="terminal-host">
         <div className="xterm-mount" ref={xtermMountRef} />
+        {showJumpToRecent ? (
+          <button
+            className="terminal-jump-to-recent"
+            type="button"
+            title="Jump to recent"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={jumpToRecent}
+          >
+            <ArrowDown size={14} />
+            <span>Jump to recent</span>
+          </button>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function isTerminalScrolledAwayFromRecent(terminal: Terminal): boolean {
+  const buffer = terminal.buffer.active;
+  return buffer.baseY - buffer.viewportY > JUMP_TO_RECENT_THRESHOLD_LINES;
 }
 
 async function pasteClipboardIntoTerminal(record: TerminalRecord): Promise<void> {

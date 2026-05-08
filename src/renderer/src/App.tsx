@@ -142,6 +142,8 @@ export function App() {
   const activeCodeTabs = activeWorkspace ? (codeTabsByWorkspace[activeWorkspace.id] ?? []) : [];
   const activeCodePath = activeWorkspace ? activeCodePathByWorkspace[activeWorkspace.id] : undefined;
   const activeWorkspaceFilePaths = activeWorkspace ? (workspaceFilePathsByWorkspace[activeWorkspace.id] ?? []) : [];
+  const activeFileIndexWorkspaceId = activeWorkspace?.kind === "quick" ? undefined : activeWorkspace?.id;
+  const activeFileIndexWorkspacePath = activeWorkspace?.kind === "quick" ? undefined : activeWorkspace?.path;
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
   const fileExplorerVisible = Boolean(activeWorkspace?.kind !== "quick" && activeSidePanel === "files");
   const gitSidebarVisible = Boolean(
@@ -309,11 +311,11 @@ export function App() {
   }, [activeWorkspace?.kind, activeWorkspace?.path]);
 
   useEffect(() => {
-    if (!activeWorkspace || activeWorkspace.kind === "quick" || !appPreferences.codeAutocompleteEnabled) {
+    if (!activeFileIndexWorkspaceId || !activeFileIndexWorkspacePath || !appPreferences.codeAutocompleteEnabled) {
       return;
     }
-    const workspaceId = activeWorkspace.id;
-    const workspacePath = activeWorkspace.path;
+    const workspaceId = activeFileIndexWorkspaceId;
+    const workspacePath = activeFileIndexWorkspacePath;
     const cachedPaths = workspaceFilePathCacheRef.current[workspaceId];
     if (cachedPaths) {
       setWorkspaceFilePathsByWorkspace((current) =>
@@ -339,12 +341,7 @@ export function App() {
     return () => {
       canceled = true;
     };
-  }, [
-    activeWorkspace?.id,
-    activeWorkspace?.kind,
-    activeWorkspace?.path,
-    appPreferences.codeAutocompleteEnabled
-  ]);
+  }, [activeFileIndexWorkspaceId, activeFileIndexWorkspacePath, appPreferences.codeAutocompleteEnabled]);
 
   useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {

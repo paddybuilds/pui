@@ -135,6 +135,7 @@ export function TerminalPane({
   const onSessionRef = useRef(onSession);
   const initialSnapshotRef = useRef(initialSnapshot);
   const onSnapshotRef = useRef(onSnapshot);
+  const activeRef = useRef(active);
   const profileRef = useRef(profile);
   const terminalThemeRef = useRef(terminalTheme);
   const terminalFontSizeRef = useRef(terminalFontSize);
@@ -145,6 +146,7 @@ export function TerminalPane({
   });
 
   useEffect(() => {
+    activeRef.current = active;
     profileRef.current = profile;
     terminalThemeRef.current = terminalTheme;
     terminalFontSizeRef.current = terminalFontSize;
@@ -175,7 +177,7 @@ export function TerminalPane({
       pane.id,
       pane.sessionId,
       profileRef.current,
-      active,
+      activeRef.current,
       terminalThemeRef.current,
       initialSnapshotRef.current,
       onSnapshotRef.current,
@@ -209,7 +211,7 @@ export function TerminalPane({
     };
     const mount = xtermMountRef.current;
     attachTerminalElement(record.terminal, mount);
-    record.terminal.options.cursorBlink = active;
+    record.terminal.options.cursorBlink = activeRef.current;
     applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
     scheduleFitAndResize(record);
     if (record.sessionId) {

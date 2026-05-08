@@ -492,6 +492,8 @@ function CodeEditorGroupView({
   canCloseGroup: boolean;
 }) {
   const activeTab = tab ?? fallbackTab;
+  const activeTabKind = activeTab?.kind;
+  const activeTabPath = activeTab?.path;
   const allTabsRef = useRef(allTabs);
   const workspaceFilePathsRef = useRef(workspaceFilePaths);
   const autocompleteExtension = useMemo(
@@ -505,14 +507,14 @@ function CodeEditorGroupView({
   }, [allTabs, workspaceFilePaths]);
 
   const extensions = useMemo(() => {
-    if (!activeTab) {
+    if (!activeTabPath) {
       return [];
     }
-    const baseExtensions = editorExtensionsForPath(activeTab.path);
-    return activeTab.kind === "text" && autocompleteEnabled
+    const baseExtensions = editorExtensionsForPath(activeTabPath);
+    return activeTabKind === "text" && autocompleteEnabled
       ? [...baseExtensions, autocompleteExtension]
       : baseExtensions;
-  }, [activeTab?.kind, activeTab?.path, autocompleteEnabled, autocompleteExtension]);
+  }, [activeTabKind, activeTabPath, autocompleteEnabled, autocompleteExtension]);
 
   useEffect(() => {
     if (activeTab && activeTab.path !== group.activePath) {

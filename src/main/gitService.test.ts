@@ -64,6 +64,54 @@ describe("GitWorkspaceService operations", () => {
     );
   });
 
+  it("loads branch and status files from one coalesced status process", async () => {
+    let callback:
+      | ((error: Error | null, result: { stdout: string; stderr: string }) => void)
+      | undefined;
+    execFileMock.mockImplementation((_command, _args, _options, statusCallback) => {
+      callback = statusCallback as typeof callback;
+      return {} as ReturnType<typeof execFile>;
+    });
+
+    const service = new GitWorkspaceService({} as never);
+    const first = service.getStatus("/repo");
+    const second = service.getStatus("/repo");
+
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(execFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/git(?:\.exe)?$/),
+      ["-C", "/repo", "status", "--porcelain=v1", "--branch"],
+      expect.any(Object),
+      expect.any(Function)
+    );
+
+    callback?.(null, {
+      stdout: "## main...origin/main [ahead 1]\n M src/App.tsx\n?? src/new.ts\n",
+      stderr: ""
+    });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {
+        workspace: "/repo",
+        isRepo: true,
+        branch: "main",
+        files: [
+          { path: "src/App.tsx", indexStatus: " ", workingTreeStatus: "M" },
+          { path: "src/new.ts", indexStatus: "?", workingTreeStatus: "?" }
+        ]
+      },
+      {
+        workspace: "/repo",
+        isRepo: true,
+        branch: "main",
+        files: [
+          { path: "src/App.tsx", indexStatus: " ", workingTreeStatus: "M" },
+          { path: "src/new.ts", indexStatus: "?", workingTreeStatus: "?" }
+        ]
+      }
+    ]);
+  });
+
   it("loads commit details with changed file stats", async () => {
     execFileMock.mockImplementation((_command, args, _options, callback) => {
       const gitArgs = args as string[];
@@ -132,5 +180,21 @@ describe("GitWorkspaceService operations", () => {
       expect.any(Object),
       expect.any(Function)
     );
+  });
+
+  it("truncates very large commit file diffs", async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      (callback as unknown as (error: Error | null, result: { stdout: string; stderr: string }) => void)?.(null, {
+        stdout: `${"x".repeat(1_000_050)}\n+changed\n`,
+        stderr: ""
+      });
+      return {} as ReturnType<typeof execFile>;
+    });
+
+    const service = new GitWorkspaceService({} as never);
+    const diff = await service.getCommitFileDiff("/repo", "abcdef123", "src/App.tsx");
+
+    expect(diff.text).toContain("pui truncated this diff");
+    expect(diff.text.length).toBeLessThan(1_000_200);
   });
 });

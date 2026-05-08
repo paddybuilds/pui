@@ -213,12 +213,6 @@ export function TerminalPane({
         copyTerminalSelection(record);
         return false;
       }
-      if (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V")) {
-        event.preventDefault();
-        event.stopPropagation();
-        pasteIntoTerminalRecord(record);
-        return false;
-      }
       if (matchesShortcut(event, "CmdOrCtrl+D")) {
         event.preventDefault();
         event.stopPropagation();
@@ -361,10 +355,6 @@ function copyTerminalSelection(record: TerminalRecord): void {
   if (text) {
     void pui.clipboard.writeText(text);
   }
-}
-
-function pasteIntoTerminalRecord(record: TerminalRecord): void {
-  void pasteClipboardIntoTerminal(record);
 }
 
 function pasteTextIntoTerminal(record: TerminalRecord, text: string): void {

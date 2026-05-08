@@ -651,6 +651,7 @@ export function App() {
         activeWorkspaceView === "terminal" &&
         activeWorkspace &&
         isTerminalShortcutTarget(event.target) &&
+        !isEditableShortcutTarget(event.target) &&
         (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V"))
       ) {
         consumeTerminalClipboardEvent(event);

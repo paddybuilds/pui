@@ -5,6 +5,7 @@ import { ArrowDown, X } from "lucide-react";
 import type { ConsoleProfile, TerminalPaneSnapshot } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
+import { applyTerminalCursorActiveState } from "../lib/terminalCursor";
 
 type Pane = {
   id: string;
@@ -153,6 +154,7 @@ export function TerminalPane({
   const xtermMountRef = useRef<HTMLDivElement | null>(null);
   const recordRef = useRef<TerminalRecord | null>(null);
   const onSessionRef = useRef(onSession);
+  const onFocusRef = useRef(onFocus);
   const initialSnapshotRef = useRef(initialSnapshot);
   const onSnapshotRef = useRef(onSnapshot);
   const activeRef = useRef(active);
@@ -162,11 +164,11 @@ export function TerminalPane({
   const terminalThemeKeyRef = useRef(terminalThemeKey);
   const terminalFontSizeRef = useRef(terminalFontSize);
   const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
-  const previousActiveRef = useRef<boolean>();
   const [showJumpToRecent, setShowJumpToRecent] = useState(false);
 
   useEffect(() => {
     onSessionRef.current = onSession;
+    onFocusRef.current = onFocus;
   });
 
   useEffect(() => {
@@ -248,6 +250,7 @@ export function TerminalPane({
         return;
       }
       consumeTerminalClipboardEvent(event);
+      onFocusRef.current();
       pasteTextIntoTerminal(record, text);
     };
     mount.addEventListener("paste", handlePaste, { capture: true });
@@ -267,6 +270,7 @@ export function TerminalPane({
     };
     const scrollDisposable = record.terminal.onScroll(updateJumpToRecentVisibility);
     applyTerminalAppearance(record, terminalThemeRef.current, terminalFontSizeRef.current, terminalThemeKeyRef.current);
+    applyTerminalCursorActiveState(record.terminal, activeRef.current);
     scheduleFitAndResize(record);
     updateJumpToRecentVisibility();
     if (record.sessionId) {
@@ -294,11 +298,14 @@ export function TerminalPane({
   }, [pane.id, workspaceId]);
 
   useEffect(() => {
-    if (recordRef.current) {
-      if (active && previousActiveRef.current !== true) {
-        recordRef.current.terminal.focus();
-      }
-      previousActiveRef.current = active;
+    const record = recordRef.current;
+    if (!record) {
+      return;
+    }
+
+    applyTerminalCursorActiveState(record.terminal, active);
+    if (active) {
+      record.terminal.focus();
     }
   }, [active]);
 
@@ -318,15 +325,23 @@ export function TerminalPane({
 
   const focusPane = () => {
     onFocus();
-    recordRef.current?.terminal.focus();
+    const record = recordRef.current;
+    if (record) {
+      applyTerminalCursorActiveState(record.terminal, true);
+      record.terminal.focus();
+    }
   };
 
   const jumpToRecent = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const terminal = recordRef.current?.terminal;
-    terminal?.scrollToBottom();
-    terminal?.focus();
+    onFocus();
+    const record = recordRef.current;
+    record?.terminal.scrollToBottom();
+    if (record) {
+      applyTerminalCursorActiveState(record.terminal, true);
+      record.terminal.focus();
+    }
     setShowJumpToRecent(false);
   };
 
@@ -407,6 +422,7 @@ function pasteTextIntoTerminal(record: TerminalRecord, text: string): void {
     return;
   }
 
+  applyTerminalCursorActiveState(record.terminal, true);
   record.terminal.focus();
   record.terminal.paste(text);
 }
@@ -454,7 +470,7 @@ function getOrCreateTerminalRecord(
 
   ensureTerminalEventRouter();
   const terminal = new Terminal({
-    cursorBlink: true,
+    cursorBlink: false,
     cursorInactiveStyle: "none",
     convertEol: true,
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",

@@ -258,8 +258,10 @@ describe("workspace settings helpers", () => {
       gitPanelDefault: "closed",
       updateChecksEnabled: false,
       codeAutocompleteEnabled: false,
+      resumeTerminalSessions: false,
       onboardingCompletedVersion: "0.2.0"
     });
+    expect(normalizeAppPreferences({ resumeTerminalSessions: true }).resumeTerminalSessions).toBe(true);
   });
 
   it("seeds new workspaces from global app preferences and profile templates", () => {

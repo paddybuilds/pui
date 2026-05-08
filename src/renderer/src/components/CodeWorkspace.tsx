@@ -32,8 +32,15 @@ import {
   splitCodeEditorGroup,
   updateCodeSplitSizes
 } from "../lib/codeWorkspace";
-import { codeAutocompleteExtension } from "../lib/editorAutocomplete";
+import { liveCodeAutocompleteExtension } from "../lib/editorAutocomplete";
 import { shortcutLabel } from "../lib/shortcuts";
+
+const CODE_MIRROR_BASIC_SETUP = {
+  foldGutter: true,
+  highlightActiveLine: true,
+  lineNumbers: true,
+  searchKeymap: true
+};
 
 type CodeWorkspaceProps = {
   platform: string;
@@ -485,15 +492,27 @@ function CodeEditorGroupView({
   canCloseGroup: boolean;
 }) {
   const activeTab = tab ?? fallbackTab;
+  const allTabsRef = useRef(allTabs);
+  const workspaceFilePathsRef = useRef(workspaceFilePaths);
+  const autocompleteExtension = useMemo(
+    () => liveCodeAutocompleteExtension(() => allTabsRef.current, () => workspaceFilePathsRef.current),
+    []
+  );
+
+  useEffect(() => {
+    allTabsRef.current = allTabs;
+    workspaceFilePathsRef.current = workspaceFilePaths;
+  }, [allTabs, workspaceFilePaths]);
+
   const extensions = useMemo(() => {
     if (!activeTab) {
       return [];
     }
     const baseExtensions = editorExtensionsForPath(activeTab.path);
     return activeTab.kind === "text" && autocompleteEnabled
-      ? [...baseExtensions, codeAutocompleteExtension(allTabs, workspaceFilePaths)]
+      ? [...baseExtensions, autocompleteExtension]
       : baseExtensions;
-  }, [activeTab, allTabs, autocompleteEnabled, workspaceFilePaths]);
+  }, [activeTab?.kind, activeTab?.path, autocompleteEnabled, autocompleteExtension]);
 
   useEffect(() => {
     if (activeTab && activeTab.path !== group.activePath) {
@@ -546,12 +565,7 @@ function CodeEditorGroupView({
             theme={oneDark}
             extensions={extensions}
             editable={!activeTab.loading}
-            basicSetup={{
-              foldGutter: true,
-              highlightActiveLine: true,
-              lineNumbers: true,
-              searchKeymap: true
-            }}
+            basicSetup={CODE_MIRROR_BASIC_SETUP}
             onFocus={onFocus}
             onChange={(value) => onChange(activeTab.path, value)}
           />

@@ -15,24 +15,41 @@ import type {
 import { gitCommand } from "./gitExecutable";
 
 const execFileAsync = promisify(execFile);
+const MAX_DIFF_TEXT_BYTES = 1_000_000;
 
 export class GitWorkspaceService {
   private watchers = new Map<string, FSWatcher>();
+  private statusRequests = new Map<string, Promise<GitStatus>>();
 
   constructor(private readonly window: BrowserWindow) {}
 
-  async getStatus(workspace: string): Promise<GitStatus> {
+  getStatus(workspace: string): Promise<GitStatus> {
+    const current = this.statusRequests.get(workspace);
+    if (current) {
+      return current;
+    }
+
+    const request = this.readStatus(workspace).finally(() => {
+      if (this.statusRequests.get(workspace) === request) {
+        this.statusRequests.delete(workspace);
+      }
+    });
+    this.statusRequests.set(workspace, request);
+    return request;
+  }
+
+  private async readStatus(workspace: string): Promise<GitStatus> {
     try {
-      const [branchResult, statusResult] = await Promise.all([
-        this.git(workspace, ["branch", "--show-current"]),
-        this.git(workspace, ["status", "--porcelain=v1"])
-      ]);
+      const statusResult = await this.git(workspace, ["status", "--porcelain=v1", "--branch"]);
+      const lines = statusResult.stdout.split("\n");
+      const branchLine = lines.find((line) => line.startsWith("## "));
+      const statusOutput = lines.filter((line) => line && !line.startsWith("## ")).join("\n");
 
       return {
         workspace,
         isRepo: true,
-        branch: branchResult.stdout.trim() || "HEAD",
-        files: parseGitStatus(statusResult.stdout)
+        branch: parseStatusBranch(branchLine) || "HEAD",
+        files: parseGitStatus(statusOutput)
       };
     } catch (error) {
       return {
@@ -53,7 +70,7 @@ export class GitWorkspaceService {
       args.push("--", file);
     }
     const result = await this.git(workspace, args);
-    return { workspace, file, cached, text: result.stdout };
+    return { workspace, file, cached, text: limitDiffText(result.stdout) };
   }
 
   async getRecentCommits(workspace: string, limit = 16): Promise<GitCommit[]> {
@@ -121,7 +138,7 @@ export class GitWorkspaceService {
       "--",
       file
     ]);
-    return { workspace, hash, file, text: result.stdout };
+    return { workspace, hash, file, text: limitDiffText(result.stdout) };
   }
 
   async stage(workspace: string, paths: string[]): Promise<GitStatus> {
@@ -160,12 +177,19 @@ export class GitWorkspaceService {
   }
 
   watch(workspace: string): void {
+    for (const [watchedWorkspace, watcher] of this.watchers) {
+      if (watchedWorkspace !== workspace) {
+        void watcher.close();
+        this.watchers.delete(watchedWorkspace);
+      }
+    }
+
     if (this.watchers.has(workspace)) {
       return;
     }
 
     const watcher = chokidar.watch(workspace, {
-      ignored: /(^|[/\\])(\.git|node_modules|dist|out)([/\\]|$)/,
+      ignored: /(^|[/\\])(\.git|node_modules|dist|out|build|release|\.next|coverage|\.turbo)([/\\]|$)/,
       ignoreInitial: true,
       awaitWriteFinish: {
         stabilityThreshold: 150,
@@ -179,6 +203,15 @@ export class GitWorkspaceService {
 
     watcher.on("add", notify).on("change", notify).on("unlink", notify);
     this.watchers.set(workspace, watcher);
+  }
+
+  unwatch(workspace: string): void {
+    const watcher = this.watchers.get(workspace);
+    if (!watcher) {
+      return;
+    }
+    this.watchers.delete(workspace);
+    void watcher.close();
   }
 
   async close(): Promise<void> {
@@ -225,6 +258,27 @@ function parseCommitFiles(output: string): GitCommitDetails["files"] {
         deletions: deletions === "-" ? null : Number(deletions)
       };
     });
+}
+
+function parseStatusBranch(line: string | undefined): string | undefined {
+  if (!line) {
+    return undefined;
+  }
+
+  const branch = line
+    .slice(3)
+    .replace(/\s+\[.*\]$/, "")
+    .split("...")[0]
+    ?.trim();
+  return branch || undefined;
+}
+
+function limitDiffText(text: string): string {
+  if (text.length <= MAX_DIFF_TEXT_BYTES) {
+    return text;
+  }
+
+  return `${text.slice(0, MAX_DIFF_TEXT_BYTES)}\n\n[pui truncated this diff after ${MAX_DIFF_TEXT_BYTES} characters for performance]\n`;
 }
 
 function debounce(callback: () => void, delay: number): () => void {

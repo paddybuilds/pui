@@ -2,7 +2,7 @@ import { type MouseEvent, useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { X } from "lucide-react";
-import type { ConsoleProfile } from "../../../shared/types";
+import type { ConsoleProfile, TerminalPaneSnapshot } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
 
@@ -28,6 +28,8 @@ type TerminalPaneProps = {
   onSplitRight: () => void;
   onSplitDown: () => void;
   onSession: (sessionId: string) => void;
+  initialSnapshot?: TerminalPaneSnapshot;
+  onSnapshot?: (snapshot: TerminalPaneSnapshot) => void;
   onContextMenu: (event: MouseEvent) => void;
 };
 
@@ -37,16 +39,32 @@ type TerminalRecord = {
   sessionId?: string;
   inputDisposable: { dispose: () => void };
   shortcutHandler: { current: ((event: KeyboardEvent) => boolean) | undefined };
-  outputBuffer: string;
+  outputChunks: string[];
+  outputBytes: number;
+  outputDroppedBytes: number;
   outputFlushFrame?: number;
+  inputChunks: string[];
+  inputBytes: number;
+  inputFlushFrame?: number;
   fitFrame?: number;
   lastResize?: { cols: number; rows: number };
   exited: boolean;
   disposed: boolean;
   outputWriteInProgress: boolean;
+  lastSnapshotAt: number;
+  snapshotFrame?: number;
+  snapshotTimeout?: number;
+  onSnapshot?: (snapshot: TerminalPaneSnapshot) => void;
 };
 
-const MAX_TERMINAL_WRITE_CHUNK = 32 * 1024;
+const MAX_TERMINAL_WRITE_CHUNK = 96 * 1024;
+const MAX_TERMINAL_OUTPUT_BUFFER = 2 * 1024 * 1024;
+const MAX_TERMINAL_INPUT_CHUNK = 16 * 1024;
+const MAX_TERMINAL_INPUT_BUFFER = 512 * 1024;
+const MAX_TERMINAL_SNAPSHOT_LINES = 300;
+const MAX_TERMINAL_SNAPSHOT_CHARS = 80_000;
+const TERMINAL_SNAPSHOT_IDLE_MS = 1_500;
+const TERMINAL_SNAPSHOT_INTERVAL_MS = 10_000;
 const terminalRecords = new Map<string, TerminalRecord>();
 const terminalRecordsBySession = new Map<string, TerminalRecord>();
 let offTerminalData: (() => void) | undefined;
@@ -108,11 +126,18 @@ export function TerminalPane({
   onSplitRight,
   onSplitDown,
   onSession,
+  initialSnapshot,
+  onSnapshot,
   onContextMenu
 }: TerminalPaneProps) {
   const xtermMountRef = useRef<HTMLDivElement | null>(null);
   const recordRef = useRef<TerminalRecord | null>(null);
   const onSessionRef = useRef(onSession);
+  const initialSnapshotRef = useRef(initialSnapshot);
+  const onSnapshotRef = useRef(onSnapshot);
+  const profileRef = useRef(profile);
+  const terminalThemeRef = useRef(terminalTheme);
+  const terminalFontSizeRef = useRef(terminalFontSize);
   const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
 
   useEffect(() => {
@@ -120,8 +145,25 @@ export function TerminalPane({
   });
 
   useEffect(() => {
+    profileRef.current = profile;
+    terminalThemeRef.current = terminalTheme;
+    terminalFontSizeRef.current = terminalFontSize;
+  });
+
+  useEffect(() => {
+    initialSnapshotRef.current = initialSnapshot;
+  }, [initialSnapshot]);
+
+  useEffect(() => {
     shortcutActionsRef.current = { canClose, onClose, onSplitRight, onSplitDown };
   });
+
+  useEffect(() => {
+    onSnapshotRef.current = onSnapshot;
+    if (recordRef.current) {
+      recordRef.current.onSnapshot = onSnapshot;
+    }
+  }, [onSnapshot]);
 
   useEffect(() => {
     if (!xtermMountRef.current) {
@@ -132,14 +174,17 @@ export function TerminalPane({
       workspaceId,
       pane.id,
       pane.sessionId,
-      profile,
+      profileRef.current,
       active,
-      terminalTheme,
+      terminalThemeRef.current,
+      initialSnapshotRef.current,
+      onSnapshotRef.current,
       (sessionId) => {
         onSessionRef.current(sessionId);
       }
     );
     recordRef.current = record;
+    record.onSnapshot = onSnapshotRef.current;
     record.shortcutHandler.current = (event) => {
       const actions = shortcutActionsRef.current;
       if (matchesShortcut(event, "CmdOrCtrl+D")) {
@@ -165,7 +210,7 @@ export function TerminalPane({
     const mount = xtermMountRef.current;
     attachTerminalElement(record.terminal, mount);
     record.terminal.options.cursorBlink = active;
-    applyTerminalAppearance(record.terminal, terminalTheme, terminalFontSize);
+    applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
     scheduleFitAndResize(record);
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
@@ -178,13 +223,14 @@ export function TerminalPane({
 
     return () => {
       observer.disconnect();
+      captureTerminalSnapshot(record);
       if (recordRef.current === record) {
         record.shortcutHandler.current = undefined;
       }
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, terminalTheme, terminalThemeKey, workspaceId]);
+  }, [pane.id, pane.sessionId, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {
@@ -194,6 +240,13 @@ export function TerminalPane({
       }
     }
   }, [active]);
+
+  useEffect(() => {
+    if (recordRef.current) {
+      applyTerminalAppearance(recordRef.current.terminal, terminalTheme, terminalFontSize);
+      scheduleFitAndResize(recordRef.current);
+    }
+  }, [terminalFontSize, terminalTheme, terminalThemeKey]);
 
   const focusPane = () => {
     onFocus();
@@ -244,11 +297,14 @@ function getOrCreateTerminalRecord(
   profile: ConsoleProfile,
   active: boolean,
   terminalTheme: ITheme,
+  initialSnapshot: TerminalPaneSnapshot | undefined,
+  onSnapshot: ((snapshot: TerminalPaneSnapshot) => void) | undefined,
   onSession: (sessionId: string) => void
 ): TerminalRecord {
   const key = terminalRecordKey(workspaceId, paneId);
   const existing = terminalRecords.get(key);
   if (existing) {
+    existing.onSnapshot = onSnapshot;
     if (existingSessionId && existing.sessionId !== existingSessionId) {
       assignTerminalSession(existing, existingSessionId);
     }
@@ -274,17 +330,24 @@ function getOrCreateTerminalRecord(
     fit,
     shortcutHandler,
     inputDisposable: terminal.onData((data) => {
-      if (record.sessionId) {
-        void pui.terminal.write(record.sessionId, data);
-      }
+      queueTerminalInput(record, data);
     }),
-    outputBuffer: "",
+    outputChunks: [],
+    outputBytes: 0,
+    outputDroppedBytes: 0,
+    inputChunks: [],
+    inputBytes: 0,
     exited: false,
     disposed: false,
-    outputWriteInProgress: false
+    outputWriteInProgress: false,
+    lastSnapshotAt: 0,
+    onSnapshot
   };
 
   terminalRecords.set(key, record);
+  if (!existingSessionId && initialSnapshot?.content) {
+    terminal.write(`${initialSnapshot.content.replace(/\r?\n/g, "\r\n")}\r\n`);
+  }
   if (existingSessionId) {
     assignTerminalSession(record, existingSessionId);
   }
@@ -378,14 +441,100 @@ function unregisterTerminalSession(record: TerminalRecord): void {
   }
 }
 
+function queueTerminalInput(record: TerminalRecord, data: string): void {
+  if (record.disposed || !record.sessionId) {
+    return;
+  }
+
+  record.inputChunks.push(data);
+  record.inputBytes += data.length;
+  trimTerminalInputBuffer(record);
+  scheduleTerminalInputFlush(record);
+}
+
+function scheduleTerminalInputFlush(record: TerminalRecord): void {
+  if (record.disposed || record.inputFlushFrame !== undefined) {
+    return;
+  }
+
+  record.inputFlushFrame = window.requestAnimationFrame(() => {
+    record.inputFlushFrame = undefined;
+    flushTerminalInput(record);
+  });
+}
+
+function flushTerminalInput(record: TerminalRecord): void {
+  if (record.disposed || !record.sessionId || record.inputBytes <= 0) {
+    return;
+  }
+
+  while (record.sessionId && record.inputBytes > 0) {
+    const input = takeTerminalInputChunk(record);
+    if (!input) {
+      break;
+    }
+    void pui.terminal.write(record.sessionId, input);
+  }
+}
+
+function takeTerminalInputChunk(record: TerminalRecord): string {
+  const parts: string[] = [];
+  let remaining = MAX_TERMINAL_INPUT_CHUNK;
+
+  while (remaining > 0 && record.inputChunks.length > 0) {
+    const first = record.inputChunks[0];
+    if (first.length <= remaining) {
+      parts.push(first);
+      record.inputChunks.shift();
+      record.inputBytes -= first.length;
+      remaining -= first.length;
+      continue;
+    }
+
+    parts.push(first.slice(0, remaining));
+    record.inputChunks[0] = first.slice(remaining);
+    record.inputBytes -= remaining;
+    remaining = 0;
+  }
+
+  return parts.join("");
+}
+
+function trimTerminalInputBuffer(record: TerminalRecord): void {
+  while (record.inputBytes > MAX_TERMINAL_INPUT_BUFFER && record.inputChunks.length > 0) {
+    const first = record.inputChunks[0];
+    const overflow = record.inputBytes - MAX_TERMINAL_INPUT_BUFFER;
+    if (first.length <= overflow) {
+      record.inputChunks.shift();
+      record.inputBytes -= first.length;
+      continue;
+    }
+
+    record.inputChunks[0] = first.slice(overflow);
+    record.inputBytes -= overflow;
+  }
+}
+
 function cancelPendingTerminalWork(record: TerminalRecord): void {
   if (record.outputFlushFrame !== undefined) {
     window.cancelAnimationFrame(record.outputFlushFrame);
     record.outputFlushFrame = undefined;
   }
+  if (record.inputFlushFrame !== undefined) {
+    window.cancelAnimationFrame(record.inputFlushFrame);
+    record.inputFlushFrame = undefined;
+  }
   if (record.fitFrame !== undefined) {
     window.cancelAnimationFrame(record.fitFrame);
     record.fitFrame = undefined;
+  }
+  if (record.snapshotFrame !== undefined) {
+    window.cancelAnimationFrame(record.snapshotFrame);
+    record.snapshotFrame = undefined;
+  }
+  if (record.snapshotTimeout !== undefined) {
+    window.clearTimeout(record.snapshotTimeout);
+    record.snapshotTimeout = undefined;
   }
 }
 
@@ -394,7 +543,9 @@ function queueTerminalOutput(record: TerminalRecord, data: string): void {
     return;
   }
 
-  record.outputBuffer += data;
+  record.outputChunks.push(data);
+  record.outputBytes += data.length;
+  trimTerminalOutputBuffer(record);
   scheduleTerminalOutputDrain(record);
 }
 
@@ -410,7 +561,7 @@ function scheduleTerminalOutputDrain(record: TerminalRecord): void {
 }
 
 function drainTerminalOutput(record: TerminalRecord): void {
-  if (record.disposed || record.outputWriteInProgress || !record.outputBuffer) {
+  if (record.disposed || record.outputWriteInProgress || record.outputBytes <= 0) {
     return;
   }
 
@@ -422,28 +573,123 @@ function drainTerminalOutput(record: TerminalRecord): void {
   record.outputWriteInProgress = true;
   record.terminal.write(output, () => {
     record.outputWriteInProgress = false;
-    if (record.outputBuffer) {
+    scheduleTerminalSnapshotAfterIdle(record);
+    if (record.outputBytes > 0) {
       scheduleTerminalOutputDrain(record);
     }
   });
 }
 
 function takeTerminalOutputChunk(record: TerminalRecord): string {
-  if (record.outputBuffer.length <= MAX_TERMINAL_WRITE_CHUNK) {
-    const output = record.outputBuffer;
-    record.outputBuffer = "";
-    return output;
+  const parts: string[] = [];
+  let remaining = MAX_TERMINAL_WRITE_CHUNK;
+
+  if (record.outputDroppedBytes > 0) {
+    const notice = `\r\n[pui skipped ${record.outputDroppedBytes} bytes of terminal output]\r\n`;
+    parts.push(notice);
+    remaining = Math.max(0, remaining - notice.length);
+    record.outputDroppedBytes = 0;
   }
 
-  let end = MAX_TERMINAL_WRITE_CHUNK;
-  const lastCodeUnit = record.outputBuffer.charCodeAt(end - 1);
-  if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) {
-    end -= 1;
+  while (remaining > 0 && record.outputChunks.length > 0) {
+    const first = record.outputChunks[0];
+    if (first.length <= remaining) {
+      parts.push(first);
+      record.outputChunks.shift();
+      record.outputBytes -= first.length;
+      remaining -= first.length;
+      continue;
+    }
+
+    let end = remaining;
+    const lastCodeUnit = first.charCodeAt(end - 1);
+    if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) {
+      end -= 1;
+    }
+    if (end <= 0) {
+      break;
+    }
+
+    parts.push(first.slice(0, end));
+    record.outputChunks[0] = first.slice(end);
+    record.outputBytes -= end;
+    remaining = 0;
   }
 
-  const output = record.outputBuffer.slice(0, end);
-  record.outputBuffer = record.outputBuffer.slice(end);
-  return output;
+  return parts.join("");
+}
+
+function trimTerminalOutputBuffer(record: TerminalRecord): void {
+  while (record.outputBytes > MAX_TERMINAL_OUTPUT_BUFFER && record.outputChunks.length > 0) {
+    const first = record.outputChunks[0];
+    const overflow = record.outputBytes - MAX_TERMINAL_OUTPUT_BUFFER;
+    if (first.length <= overflow) {
+      record.outputChunks.shift();
+      record.outputBytes -= first.length;
+      record.outputDroppedBytes += first.length;
+      continue;
+    }
+
+    record.outputChunks[0] = first.slice(overflow);
+    record.outputBytes -= overflow;
+    record.outputDroppedBytes += overflow;
+  }
+}
+
+function scheduleTerminalSnapshotAfterIdle(record: TerminalRecord): void {
+  if (!record.onSnapshot || record.disposed) {
+    return;
+  }
+
+  if (record.snapshotTimeout !== undefined) {
+    window.clearTimeout(record.snapshotTimeout);
+  }
+
+  record.snapshotTimeout = window.setTimeout(() => {
+    record.snapshotTimeout = undefined;
+    if (Date.now() - record.lastSnapshotAt < TERMINAL_SNAPSHOT_INTERVAL_MS) {
+      return;
+    }
+    if (record.snapshotFrame !== undefined) {
+      return;
+    }
+    record.snapshotFrame = window.requestAnimationFrame(() => {
+      record.snapshotFrame = undefined;
+      captureTerminalSnapshot(record);
+    });
+  }, TERMINAL_SNAPSHOT_IDLE_MS);
+}
+
+function captureTerminalSnapshot(record: TerminalRecord): void {
+  if (!record.onSnapshot || record.disposed) {
+    return;
+  }
+
+  const content = readTerminalSnapshotContent(record.terminal);
+  if (!content) {
+    return;
+  }
+
+  record.lastSnapshotAt = Date.now();
+  record.onSnapshot({
+    content,
+    capturedAt: new Date().toISOString()
+  });
+}
+
+function readTerminalSnapshotContent(terminal: Terminal): string {
+  const buffer = terminal.buffer.normal;
+  const start = Math.max(0, buffer.length - MAX_TERMINAL_SNAPSHOT_LINES);
+  const lines: string[] = [];
+
+  for (let index = start; index < buffer.length; index += 1) {
+    lines.push(buffer.getLine(index)?.translateToString(true) ?? "");
+  }
+
+  const content = lines.join("\n").trimEnd();
+  return content.length > MAX_TERMINAL_SNAPSHOT_CHARS
+    ? content.slice(content.length - MAX_TERMINAL_SNAPSHOT_CHARS)
+    : content;
 }
 
 function scheduleFitAndResize(record: TerminalRecord): void {

@@ -127,6 +127,12 @@ export function normalizeAppPreferences(
         : typeof defaults.codeAutocompleteEnabled === "boolean"
           ? defaults.codeAutocompleteEnabled
           : DEFAULT_APP_PREFERENCES.codeAutocompleteEnabled,
+    resumeTerminalSessions:
+      typeof preferences?.resumeTerminalSessions === "boolean"
+        ? preferences.resumeTerminalSessions
+        : typeof defaults.resumeTerminalSessions === "boolean"
+          ? defaults.resumeTerminalSessions
+          : DEFAULT_APP_PREFERENCES.resumeTerminalSessions,
     ...(onboardingCompletedVersion ? { onboardingCompletedVersion } : {})
   };
 }

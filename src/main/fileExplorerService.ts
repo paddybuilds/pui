@@ -8,7 +8,17 @@ import type {
   FileWriteResult
 } from "../shared/types";
 
-const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "out", "dist", "release"]);
+const IGNORED_DIRECTORIES = new Set([
+  ".git",
+  "node_modules",
+  "out",
+  "dist",
+  "build",
+  "release",
+  ".next",
+  "coverage",
+  ".turbo"
+]);
 const MAX_TEXT_FILE_BYTES = 1024 * 1024;
 const MAX_PREVIEW_FILE_BYTES = 25 * 1024 * 1024;
 const BINARY_SAMPLE_BYTES = 4096;

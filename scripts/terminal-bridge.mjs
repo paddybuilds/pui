@@ -12,6 +12,9 @@ const port = Number(process.env.PUI_TERMINAL_BRIDGE_PORT || 4317);
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
 const posixFallbackShells = new Set(["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"]);
+const MAX_PENDING_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_OUTPUT_FLUSH_BYTES = 128 * 1024;
+const MAX_DIFF_TEXT_BYTES = 1_000_000;
 let cachedGitCommand;
 
 const httpServer = createServer((request, response) => {
@@ -112,7 +115,9 @@ function createSession(socket, message) {
   sessions.set(sessionId, {
     pty: child,
     socket,
-    pendingData: "",
+    pendingChunks: [],
+    pendingBytes: 0,
+    droppedBytes: 0,
     flushScheduled: false,
     lastCols: Math.max(1, Number(message.cols || 80)),
     lastRows: Math.max(1, Number(message.rows || 24))
@@ -172,7 +177,27 @@ function queueData(sessionId, data) {
     return;
   }
 
-  record.pendingData += data;
+  record.pendingChunks.push(data);
+  record.pendingBytes += data.length;
+  trimPendingOutput(record);
+  scheduleDataFlush(sessionId, record);
+}
+
+function flushData(sessionId, record) {
+  record.flushScheduled = false;
+  const data = takePendingOutput(record, MAX_OUTPUT_FLUSH_BYTES);
+  if (!data || sessions.get(sessionId) !== record) {
+    clearPendingOutput(record);
+    return;
+  }
+
+  send(record.socket, { type: "data", sessionId, data });
+  if (record.pendingBytes > 0) {
+    scheduleDataFlush(sessionId, record);
+  }
+}
+
+function scheduleDataFlush(sessionId, record) {
   if (record.flushScheduled) {
     return;
   }
@@ -183,16 +208,57 @@ function queueData(sessionId, data) {
   });
 }
 
-function flushData(sessionId, record) {
-  record.flushScheduled = false;
-  const data = record.pendingData;
-  if (!data || sessions.get(sessionId) !== record) {
-    record.pendingData = "";
-    return;
+function trimPendingOutput(record) {
+  while (record.pendingBytes > MAX_PENDING_OUTPUT_BYTES && record.pendingChunks.length > 0) {
+    const first = record.pendingChunks[0];
+    const overflow = record.pendingBytes - MAX_PENDING_OUTPUT_BYTES;
+    if (first.length <= overflow) {
+      record.pendingChunks.shift();
+      record.pendingBytes -= first.length;
+      record.droppedBytes += first.length;
+      continue;
+    }
+
+    record.pendingChunks[0] = first.slice(overflow);
+    record.pendingBytes -= overflow;
+    record.droppedBytes += overflow;
+  }
+}
+
+function takePendingOutput(record, maxBytes) {
+  const parts = [];
+  let remaining = maxBytes;
+
+  if (record.droppedBytes > 0) {
+    const notice = `\r\n[pui skipped ${record.droppedBytes} bytes of terminal output]\r\n`;
+    parts.push(notice);
+    remaining = Math.max(0, remaining - notice.length);
+    record.droppedBytes = 0;
   }
 
-  record.pendingData = "";
-  send(record.socket, { type: "data", sessionId, data });
+  while (remaining > 0 && record.pendingChunks.length > 0) {
+    const first = record.pendingChunks[0];
+    if (first.length <= remaining) {
+      parts.push(first);
+      record.pendingChunks.shift();
+      record.pendingBytes -= first.length;
+      remaining -= first.length;
+      continue;
+    }
+
+    parts.push(first.slice(0, remaining));
+    record.pendingChunks[0] = first.slice(remaining);
+    record.pendingBytes -= remaining;
+    remaining = 0;
+  }
+
+  return parts.join("");
+}
+
+function clearPendingOutput(record) {
+  record.pendingChunks = [];
+  record.pendingBytes = 0;
+  record.droppedBytes = 0;
 }
 
 async function handleHttpRequest(request, response) {
@@ -357,15 +423,15 @@ async function readJsonBody(request) {
 
 async function getGitStatus(workspace) {
   try {
-    const [branchResult, statusResult] = await Promise.all([
-      git(workspace, ["branch", "--show-current"]),
-      git(workspace, ["status", "--porcelain=v1"])
-    ]);
+    const statusResult = await git(workspace, ["status", "--porcelain=v1", "--branch"]);
+    const lines = statusResult.stdout.split("\n");
+    const branchLine = lines.find((line) => line.startsWith("## "));
+    const statusOutput = lines.filter((line) => line && !line.startsWith("## ")).join("\n");
     return {
       workspace,
       isRepo: true,
-      branch: branchResult.stdout.trim() || "HEAD",
-      files: parseGitStatus(statusResult.stdout, { trimPaths: true })
+      branch: parseStatusBranch(branchLine) || "HEAD",
+      files: parseGitStatus(statusOutput, { trimPaths: true })
     };
   } catch (error) {
     return {
@@ -386,7 +452,7 @@ async function getGitDiff(workspace, file, cached = false) {
     args.push("--", file);
   }
   const result = await git(workspace, args);
-  return { workspace, file, cached, text: result.stdout };
+  return { workspace, file, cached, text: limitDiffText(result.stdout) };
 }
 
 async function getGitCommits(workspace, limit = 16) {
@@ -455,7 +521,27 @@ async function getGitCommitFileDiff(workspace, hash, file) {
     "--",
     file
   ]);
-  return { workspace, hash, file, text: result.stdout };
+  return { workspace, hash, file, text: limitDiffText(result.stdout) };
+}
+
+function parseStatusBranch(line) {
+  if (!line) {
+    return undefined;
+  }
+  const branch = line
+    .slice(3)
+    .replace(/\s+\[.*\]$/, "")
+    .split("...")[0]
+    ?.trim();
+  return branch || undefined;
+}
+
+function limitDiffText(text) {
+  if (text.length <= MAX_DIFF_TEXT_BYTES) {
+    return text;
+  }
+
+  return `${text.slice(0, MAX_DIFF_TEXT_BYTES)}\n\n[pui truncated this diff after ${MAX_DIFF_TEXT_BYTES} characters for performance]\n`;
 }
 
 async function discardGitPaths(workspace, paths) {

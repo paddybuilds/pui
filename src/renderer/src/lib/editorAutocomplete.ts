@@ -11,11 +11,43 @@ const MIN_WORD_LENGTH = 3;
 const MAX_WORD_SUGGESTIONS = 80;
 const MAX_PATH_SUGGESTIONS = 80;
 const WORD_PATTERN = /[A-Za-z_$][\w$-]{2,}/g;
+const WORD_COMPLETION_CACHE_MS = 1_000;
+
+type CompletionCache = {
+  wordOptions: Completion[];
+  wordCapturedAt: number;
+  pathKey: string;
+  pathOptions: Completion[];
+};
 
 export function codeAutocompleteExtension(tabs: CodeFileTab[], workspaceFilePaths: string[]): Extension {
   return autocompletion({
     activateOnTyping: true,
     override: [codeCompletionSource(tabs, workspaceFilePaths)]
+  });
+}
+
+export function liveCodeAutocompleteExtension(
+  getTabs: () => CodeFileTab[],
+  getWorkspaceFilePaths: () => string[]
+): Extension {
+  const cache: CompletionCache = {
+    wordOptions: [],
+    wordCapturedAt: 0,
+    pathKey: "",
+    pathOptions: []
+  };
+
+  return autocompletion({
+    activateOnTyping: true,
+    override: [
+      (context) =>
+        completeFromOptions(
+          context,
+          cachedWordCompletions(cache, getTabs()),
+          cachedPathCompletions(cache, getWorkspaceFilePaths())
+        )
+    ]
   });
 }
 
@@ -26,37 +58,7 @@ export function codeCompletionSource(
   const wordOptions = buildWordCompletions(tabs);
   const pathOptions = buildPathCompletions(workspaceFilePaths);
 
-  return (context) => {
-    const pathContext = matchPathContext(context);
-    if (pathContext) {
-      const options = filterPathCompletions(pathOptions, pathContext.query);
-      if (options.length === 0 && !context.explicit) {
-        return null;
-      }
-      return {
-        from: pathContext.from,
-        options,
-        validFor: /^[\w./@~-]*$/
-      };
-    }
-
-    const word = context.matchBefore(/[A-Za-z_$][\w$-]*/);
-    if (!word || (word.from === word.to && !context.explicit)) {
-      return null;
-    }
-    const query = word.text.toLowerCase();
-    const options = wordOptions
-      .filter((option) => option.label.toLowerCase().startsWith(query))
-      .slice(0, MAX_WORD_SUGGESTIONS);
-    if (options.length === 0 && !context.explicit) {
-      return null;
-    }
-    return {
-      from: word.from,
-      options,
-      validFor: /^[A-Za-z_$][\w$-]*$/
-    };
-  };
+  return (context) => completeFromOptions(context, wordOptions, pathOptions);
 }
 
 export function buildWordCompletions(tabs: CodeFileTab[]): Completion[] {
@@ -111,6 +113,64 @@ function filterPathCompletions(options: Completion[], query: string): Completion
   return options
     .filter((option) => option.label.toLowerCase().startsWith(normalizedQuery))
     .slice(0, MAX_PATH_SUGGESTIONS);
+}
+
+function completeFromOptions(
+  context: CompletionContext,
+  wordOptions: Completion[],
+  pathOptions: Completion[]
+): CompletionResult | null {
+  const pathContext = matchPathContext(context);
+  if (pathContext) {
+    const options = filterPathCompletions(pathOptions, pathContext.query);
+    if (options.length === 0 && !context.explicit) {
+      return null;
+    }
+    return {
+      from: pathContext.from,
+      options,
+      validFor: /^[\w./@~-]*$/
+    };
+  }
+
+  const word = context.matchBefore(/[A-Za-z_$][\w$-]*/);
+  if (!word || (word.from === word.to && !context.explicit)) {
+    return null;
+  }
+  const query = word.text.toLowerCase();
+  const options = wordOptions
+    .filter((option) => option.label.toLowerCase().startsWith(query))
+    .slice(0, MAX_WORD_SUGGESTIONS);
+  if (options.length === 0 && !context.explicit) {
+    return null;
+  }
+  return {
+    from: word.from,
+    options,
+    validFor: /^[A-Za-z_$][\w$-]*$/
+  };
+}
+
+function cachedWordCompletions(cache: CompletionCache, tabs: CodeFileTab[]): Completion[] {
+  const now = Date.now();
+  if (now - cache.wordCapturedAt < WORD_COMPLETION_CACHE_MS) {
+    return cache.wordOptions;
+  }
+
+  cache.wordOptions = buildWordCompletions(tabs);
+  cache.wordCapturedAt = now;
+  return cache.wordOptions;
+}
+
+function cachedPathCompletions(cache: CompletionCache, paths: string[]): Completion[] {
+  const key = paths.join("\0");
+  if (cache.pathKey === key) {
+    return cache.pathOptions;
+  }
+
+  cache.pathKey = key;
+  cache.pathOptions = buildPathCompletions(paths);
+  return cache.pathOptions;
 }
 
 function classifyWordCompletion(word: string): Completion["type"] {

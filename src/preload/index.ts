@@ -16,6 +16,7 @@ import type {
   GitOperationResult,
   GitStatus,
   SettingsLoadState,
+  TerminalPaneSnapshot,
   TerminalSession,
   TitleBarTheme
 } from "../shared/types";
@@ -52,7 +53,9 @@ const api = {
   settings: {
     loadState: () => ipcRenderer.invoke(ipc.settings.loadState) as Promise<SettingsLoadState>,
     load: () => ipcRenderer.invoke(ipc.settings.load) as Promise<AppSettings>,
-    save: (settings: AppSettings) => ipcRenderer.invoke(ipc.settings.save, settings) as Promise<AppSettings>
+    save: (settings: AppSettings) => ipcRenderer.invoke(ipc.settings.save, settings) as Promise<AppSettings>,
+    saveTerminalSnapshots: (snapshots: Record<string, Record<string, TerminalPaneSnapshot>>) =>
+      ipcRenderer.invoke(ipc.settings.saveTerminalSnapshots, snapshots) as Promise<AppSettings>
   },
   system: {
     listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
@@ -133,6 +136,7 @@ const api = {
       ipcRenderer.invoke(ipc.git.commit, { workspace, message }) as Promise<GitOperationResult>,
     push: (workspace: string) => ipcRenderer.invoke(ipc.git.push, workspace) as Promise<GitOperationResult>,
     watch: (workspace: string) => ipcRenderer.invoke(ipc.git.watch, workspace),
+    unwatch: (workspace: string) => ipcRenderer.invoke(ipc.git.unwatch, workspace),
     onChanged: (callback: (payload: { workspace: string }) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { workspace: string }) => callback(payload);
       ipcRenderer.on(ipc.git.changed, listener);

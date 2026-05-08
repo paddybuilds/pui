@@ -699,6 +699,17 @@ function WorkflowSettings({
           <span>Show autocomplete suggestions</span>
         </label>
       </SettingGroup>
+      <SettingGroup title="Terminal sessions">
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={preferences.resumeTerminalSessions}
+            onChange={(event) => void onSavePreferences({ resumeTerminalSessions: event.target.checked })}
+          />
+          <TerminalSquare size={14} />
+          <span>Restore terminal history when Pui opens</span>
+        </label>
+      </SettingGroup>
       <form className="settings-form" onSubmit={saveQuickCommand}>
         <label htmlFor="quick-command-name">Quick command</label>
         <div className="settings-inline-control">

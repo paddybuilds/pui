@@ -10,6 +10,7 @@ import type {
   TerminalPaneSnapshot,
   TitleBarTheme
 } from "../shared/types";
+import { CodexHookService } from "./codexHookService";
 import { FileExplorerService } from "./fileExplorerService";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
@@ -21,6 +22,7 @@ let mainWindow: BrowserWindow | undefined;
 let terminalService: TerminalService | undefined;
 let gitService: GitWorkspaceService | undefined;
 let appUpdateService: AppUpdateService | undefined;
+let codexHookService: CodexHookService | undefined;
 
 const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
   color: "#090b0f",
@@ -71,6 +73,8 @@ function createWindow(): void {
 
   terminalService = new TerminalService(mainWindow);
   gitService = new GitWorkspaceService(mainWindow);
+  codexHookService = new CodexHookService(mainWindow);
+  void codexHookService.start();
   appUpdateService = new AppUpdateService({
     getVersion: () => app.getVersion(),
     platform: process.platform,
@@ -100,6 +104,7 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   terminalService?.killAll();
+  void codexHookService?.stop();
   void gitService?.close();
 });
 
@@ -142,6 +147,7 @@ function registerIpc(): void {
   );
 
   ipcMain.handle(ipc.system.listShells, () => listShells());
+  ipcMain.handle(ipc.codex.installHooks, () => codexHookService?.installHooks());
   ipcMain.handle(ipc.clipboard.readText, () => clipboard.readText());
   ipcMain.handle(ipc.clipboard.writeText, (_event, text: string) => {
     clipboard.writeText(text);
@@ -182,8 +188,11 @@ function registerIpc(): void {
 
   ipcMain.handle(
     ipc.terminal.create,
-    (_event, payload: { profile: ConsoleProfile; paneId: string; cols: number; rows: number }) => {
-      return terminalService?.create(payload.profile, payload.paneId, payload.cols, payload.rows);
+    (
+      _event,
+      payload: { profile: ConsoleProfile; workspaceId?: string; paneId: string; cols: number; rows: number }
+    ) => {
+      return terminalService?.create(payload.profile, payload.workspaceId ?? "", payload.paneId, payload.cols, payload.rows);
     }
   );
 

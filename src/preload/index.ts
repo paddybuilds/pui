@@ -4,6 +4,8 @@ import type {
   AppSettings,
   AppUpdateSnapshot,
   AppVersionInfo,
+  CodexHookEvent,
+  CodexHookInstallResult,
   GitCommit,
   GitCommitDetails,
   GitCommitFileDiff,
@@ -117,6 +119,16 @@ const api = {
       ipcRenderer.on(ipc.terminal.exit, listener);
       return () => {
         ipcRenderer.removeListener(ipc.terminal.exit, listener);
+      };
+    }
+  },
+  codex: {
+    installHooks: () => ipcRenderer.invoke(ipc.codex.installHooks) as Promise<CodexHookInstallResult>,
+    onSubagentDetected: (callback: (event: CodexHookEvent) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: CodexHookEvent) => callback(payload);
+      ipcRenderer.on(ipc.codex.subagentDetected, listener);
+      return () => {
+        ipcRenderer.removeListener(ipc.codex.subagentDetected, listener);
       };
     }
   },

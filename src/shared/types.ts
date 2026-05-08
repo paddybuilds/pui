@@ -21,6 +21,23 @@ export type TerminalSession = {
   status: "running" | "exited";
 };
 
+export type CodexHookEvent = {
+  eventName: "SessionStart" | "Stop";
+  codexSessionId: string;
+  agentId?: string;
+  agentType?: string;
+  puiWorkspaceId?: string;
+  puiPaneId?: string;
+  puiTerminalSessionId?: string;
+  cwd?: string;
+};
+
+export type CodexHookInstallResult = {
+  installed: boolean;
+  hooksPath: string;
+  configPath: string;
+};
+
 export type GitFileStatus = {
   path: string;
   indexStatus: string;
@@ -220,6 +237,7 @@ export type AppPreferences = {
   updateChecksEnabled: boolean;
   codeAutocompleteEnabled: boolean;
   resumeTerminalSessions: boolean;
+  codexSubagentTerminalsEnabled: boolean;
   onboardingCompletedVersion?: string;
 };
 
@@ -230,7 +248,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   gitPanelDefault: "open",
   updateChecksEnabled: true,
   codeAutocompleteEnabled: true,
-  resumeTerminalSessions: false
+  resumeTerminalSessions: false,
+  codexSubagentTerminalsEnabled: false
 };
 
 export type TerminalPaneSnapshot = {

@@ -657,6 +657,7 @@ function WorkflowSettings({
   const [cwd, setCwd] = useState("");
   const [splitDirection, setSplitDirection] = useState<"right" | "down">("down");
   const [status, setStatus] = useState("idle");
+  const [codexStatus, setCodexStatus] = useState("");
 
   const saveQuickCommand = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -709,6 +710,30 @@ function WorkflowSettings({
           <TerminalSquare size={14} />
           <span>Restore terminal history when Pui opens</span>
         </label>
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={preferences.codexSubagentTerminalsEnabled}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              void (async () => {
+                if (enabled) {
+                  setCodexStatus("Installing Codex hooks");
+                  const result = await pui.codex.installHooks();
+                  setCodexStatus(result.installed ? "Codex hooks installed" : "Codex hooks unavailable");
+                } else {
+                  setCodexStatus("");
+                }
+                await onSavePreferences({ codexSubagentTerminalsEnabled: enabled });
+              })().catch((error: unknown) => {
+                setCodexStatus(error instanceof Error ? error.message : String(error));
+              });
+            }}
+          />
+          <TerminalSquare size={14} />
+          <span>Open companion terminals for Codex subagents</span>
+        </label>
+        {codexStatus ? <p>{codexStatus}</p> : null}
       </SettingGroup>
       <form className="settings-form" onSubmit={saveQuickCommand}>
         <label htmlFor="quick-command-name">Quick command</label>

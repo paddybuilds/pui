@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type {
   AppSettings,
+  CodexHookEvent,
   ConsoleProfile,
   FileSystemEntry,
   GitStatus,
@@ -118,6 +119,7 @@ export function App() {
   const didHydrateRef = useRef(false);
   const terminalSnapshotsRef = useRef<Record<string, Record<string, TerminalPaneSnapshot>>>({});
   const terminalSnapshotSaveTimeoutRef = useRef<number>();
+  const codexCompanionPaneKeysRef = useRef(new Set<string>());
   const workspaceFilePathCacheRef = useRef<Record<string, string[]>>({});
   const activeGitWorkspaceRef = useRef<string | null>(null);
   const gitRefreshRequestRef = useRef(0);
@@ -563,6 +565,75 @@ export function App() {
     },
     [activeWorkspace, layoutRoot]
   );
+
+  const openCodexCompanionPane = useCallback(
+    (event: CodexHookEvent) => {
+      if (
+        !appPreferences.codexSubagentTerminalsEnabled ||
+        !layoutRoot ||
+        !activeWorkspace ||
+        event.puiWorkspaceId !== activeWorkspace.id ||
+        !event.puiPaneId
+      ) {
+        return;
+      }
+
+      const sourcePane = panes.find((pane) => pane.id === event.puiPaneId);
+      if (!sourcePane) {
+        return;
+      }
+
+      const sourceProfile = profilesById.get(sourcePane.profileId ?? "") ?? profiles[0];
+      if (!sourceProfile) {
+        return;
+      }
+
+      const agentId = event.agentId || event.codexSessionId;
+      const companionKey = `${activeWorkspace.id}:${event.puiTerminalSessionId ?? event.puiPaneId}:${agentId}`;
+      if (codexCompanionPaneKeysRef.current.has(companionKey)) {
+        return;
+      }
+      codexCompanionPaneKeysRef.current.add(companionKey);
+
+      const paneId = newId();
+      const shortId = shortCodexId(agentId);
+      const profile: ConsoleProfile = {
+        ...sourceProfile,
+        id: `codex-subagent-${shortId}-${paneId}`,
+        name: `Codex subagent ${shortId}`,
+        cwd: event.cwd || sourceProfile.cwd,
+        shortcut: "",
+        appearance: { color: "#22c55e", icon: "terminal" }
+      };
+      const nextRoot = splitPane(layoutRoot, event.puiPaneId, "right", { id: paneId, profileId: profile.id }, newId);
+      const nextWorkspace: TerminalWorkspace = {
+        ...activeWorkspace,
+        profiles: [...activeWorkspace.profiles, profile],
+        layout: {
+          activePaneId: paneId,
+          root: nextRoot
+        }
+      };
+
+      setSettings((current) =>
+        current
+          ? {
+              ...current,
+              workspaces: (current.workspaces ?? []).map((workspace) =>
+                workspace.id === activeWorkspace.id ? nextWorkspace : workspace
+              )
+            }
+          : current
+      );
+      setLayoutRoot(nextRoot);
+      setActivePaneId(paneId);
+    },
+    [activeWorkspace, appPreferences.codexSubagentTerminalsEnabled, layoutRoot, panes, profiles, profilesById]
+  );
+
+  useEffect(() => {
+    return pui.codex.onSubagentDetected(openCodexCompanionPane);
+  }, [openCodexCompanionPane]);
 
   const closePane = useCallback(
     (paneId: string) => {
@@ -1519,6 +1590,10 @@ function cloneTerminalSnapshots(
   return Object.fromEntries(
     Object.entries(snapshots).map(([workspaceId, workspaceSnapshots]) => [workspaceId, { ...workspaceSnapshots }])
   );
+}
+
+function shortCodexId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "agent";
 }
 
 function startPanelResize(

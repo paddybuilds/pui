@@ -259,6 +259,7 @@ describe("workspace settings helpers", () => {
       updateChecksEnabled: false,
       codeAutocompleteEnabled: false,
       resumeTerminalSessions: false,
+      codexSubagentTerminalsEnabled: false,
       onboardingCompletedVersion: "0.2.0"
     });
     expect(normalizeAppPreferences({ resumeTerminalSessions: true }).resumeTerminalSessions).toBe(true);

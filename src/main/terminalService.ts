@@ -24,7 +24,7 @@ export class TerminalService {
 
   constructor(private readonly window: BrowserWindow) {}
 
-  create(profile: ConsoleProfile, paneId: string, cols: number, rows: number): TerminalSession {
+  create(profile: ConsoleProfile, workspaceId: string, paneId: string, cols: number, rows: number): TerminalSession {
     const sessionId = crypto.randomUUID();
     const cwd = profile.cwd || process.cwd();
     const shell = resolveProfileShell(profile.command, profile.args);
@@ -33,7 +33,10 @@ export class TerminalService {
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
       PROMPT_EOL_MARK: "",
-      ...profile.env
+      ...profile.env,
+      PUI_WORKSPACE_ID: workspaceId,
+      PUI_PANE_ID: paneId,
+      PUI_TERMINAL_SESSION_ID: sessionId
     };
 
     const child = pty.spawn(shell.command, shell.args, {

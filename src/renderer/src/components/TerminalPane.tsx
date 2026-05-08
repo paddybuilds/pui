@@ -500,6 +500,7 @@ function getOrCreateTerminalRecord(
     void pui.terminal
       .create({
         profile,
+        workspaceId,
         paneId,
         cols: terminal.cols,
         rows: terminal.rows

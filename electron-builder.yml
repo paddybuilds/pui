@@ -4,6 +4,7 @@ directories:
   output: release
 files:
   - out/**
+  - scripts/pui-codex-hook.mjs
   - node_modules/**
   - package.json
 asarUnpack:

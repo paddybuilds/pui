@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AppUpdateSnapshot,
   AppVersionInfo,
+  CodexHookInstallResult,
   ConsoleProfile,
   FileSystemEntry,
   FileReadResult,
@@ -253,6 +254,14 @@ const browserPreviewApi: PuiApi = {
     kill: (sessionId) => terminalBridge.kill(sessionId),
     onData: (callback) => terminalBridge.onData(callback),
     onExit: (callback) => terminalBridge.onExit(callback)
+  },
+  codex: {
+    installHooks: async (): Promise<CodexHookInstallResult> => ({
+      installed: false,
+      hooksPath: "",
+      configPath: ""
+    }),
+    onSubagentDetected: () => noopUnsubscribe
   },
   git: {
     status: (gitWorkspace) => bridgeGet<GitStatus>("/git/status", { workspace: gitWorkspace }),

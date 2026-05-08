@@ -41,6 +41,10 @@ export const ipc = {
     data: "terminal:data",
     exit: "terminal:exit"
   },
+  codex: {
+    installHooks: "codex:install-hooks",
+    subagentDetected: "codex:subagent-detected"
+  },
   git: {
     status: "git:status",
     diff: "git:diff",

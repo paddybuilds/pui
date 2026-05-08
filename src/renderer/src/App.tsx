@@ -11,6 +11,7 @@ import {
 import type { ITheme } from "@xterm/xterm";
 import {
   ClipboardPaste,
+  Copy,
   Edit3,
   Files,
   GitCompare,
@@ -45,8 +46,10 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { OnboardingPanel } from "./components/OnboardingPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import {
+  copyTerminalPaneSelection,
   disposeTerminalPane,
   disposeTerminalPanes,
+  hasTerminalPaneSelection,
   moveTerminalPaneRecord,
   pasteIntoTerminalPane,
   TerminalPane
@@ -1012,6 +1015,21 @@ export function App() {
   const openPaneContextMenu = (event: MouseEvent, paneId: string) => {
     setActivePaneId(paneId);
     openContextMenu(event, [
+      {
+        id: "copy",
+        label: "Copy",
+        shortcut:
+          pui.platform === "darwin"
+            ? shortcutLabel("Cmd+C", pui.platform)
+            : shortcutLabel("CmdOrCtrl+Shift+C", pui.platform),
+        icon: <Copy size={14} />,
+        disabled: activeWorkspace ? !hasTerminalPaneSelection(activeWorkspace.id, paneId) : true,
+        onSelect: () => {
+          if (activeWorkspace) {
+            copyTerminalPaneSelection(activeWorkspace.id, paneId);
+          }
+        }
+      },
       {
         id: "paste",
         label: "Paste",

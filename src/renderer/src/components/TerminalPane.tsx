@@ -119,6 +119,20 @@ export function pasteIntoTerminalPane(workspaceId: string, paneId: string): void
   void pasteClipboardIntoTerminal(record);
 }
 
+export function copyTerminalPaneSelection(workspaceId: string, paneId: string): void {
+  const record = terminalRecords.get(terminalRecordKey(workspaceId, paneId));
+  if (!record) {
+    return;
+  }
+
+  void copyTerminalSelection(record);
+}
+
+export function hasTerminalPaneSelection(workspaceId: string, paneId: string): boolean {
+  const record = terminalRecords.get(terminalRecordKey(workspaceId, paneId));
+  return record?.terminal.hasSelection() ?? false;
+}
+
 export function TerminalPane({
   pane,
   workspaceId,
@@ -198,6 +212,12 @@ export function TerminalPane({
     record.onSnapshot = onSnapshotRef.current;
     record.shortcutHandler.current = (event) => {
       const actions = shortcutActionsRef.current;
+      if (isTerminalCopyShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTerminalSelection(record);
+        return false;
+      }
       if (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V")) {
         event.preventDefault();
         event.stopPropagation();
@@ -235,6 +255,16 @@ export function TerminalPane({
       pasteTextIntoTerminal(record, text);
     };
     mount.addEventListener("paste", handlePaste, { capture: true });
+    const handleCopy = (event: ClipboardEvent) => {
+      const text = record.terminal.getSelection();
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      event.clipboardData?.setData("text/plain", text);
+      void pui.clipboard.writeText(text);
+    };
+    mount.addEventListener("copy", handleCopy, { capture: true });
     record.terminal.options.cursorBlink = activeRef.current;
     applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
     scheduleFitAndResize(record);
@@ -250,6 +280,7 @@ export function TerminalPane({
     return () => {
       observer.disconnect();
       mount.removeEventListener("paste", handlePaste, { capture: true });
+      mount.removeEventListener("copy", handleCopy, { capture: true });
       captureTerminalSnapshot(record);
       if (recordRef.current === record) {
         record.shortcutHandler.current = undefined;
@@ -326,6 +357,17 @@ async function pasteClipboardIntoTerminal(record: TerminalRecord): Promise<void>
   pasteTextIntoTerminal(record, text);
 }
 
+function copyTerminalSelection(record: TerminalRecord): void {
+  if (record.disposed) {
+    return;
+  }
+
+  const text = record.terminal.getSelection();
+  if (text) {
+    void pui.clipboard.writeText(text);
+  }
+}
+
 function pasteIntoTerminalRecord(record: TerminalRecord): void {
   void pasteClipboardIntoTerminal(record);
 }
@@ -336,7 +378,27 @@ function pasteTextIntoTerminal(record: TerminalRecord, text: string): void {
   }
 
   record.terminal.focus();
-  record.terminal.paste(text);
+  queueTerminalInput(record, prepareTerminalPasteData(text, record.terminal.modes.bracketedPasteMode));
+}
+
+export function prepareTerminalPasteData(text: string, bracketedPasteMode: boolean): string {
+  const prepared = text.replace(/\r?\n/g, "\r");
+  return bracketedPasteMode ? `\x1b[200~${prepared}\x1b[201~` : prepared;
+}
+
+function isTerminalCopyShortcut(event: KeyboardEvent): boolean {
+  if (matchesShortcut(event, "CmdOrCtrl+Shift+C")) {
+    return true;
+  }
+
+  return (
+    pui.platform === "darwin" &&
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "c"
+  );
 }
 
 function getOrCreateTerminalRecord(

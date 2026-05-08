@@ -61,7 +61,8 @@ const api = {
     listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
   },
   clipboard: {
-    readText: () => Promise.resolve(clipboard.readText())
+    readText: () => Promise.resolve(clipboard.readText()),
+    writeText: (text: string) => Promise.resolve(clipboard.writeText(text))
   },
   fileSystem: {
     readDirectory: (workspace: string, directory?: string) =>

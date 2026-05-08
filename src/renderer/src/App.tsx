@@ -117,6 +117,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber(SIDEBAR_WIDTH_KEY, 224));
   const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 360));
   const didHydrateRef = useRef(false);
+  const codexHooksInstallAttemptedRef = useRef(false);
   const terminalSnapshotsRef = useRef<Record<string, Record<string, TerminalPaneSnapshot>>>({});
   const terminalSnapshotSaveTimeoutRef = useRef<number>();
   const codexCompanionPaneKeysRef = useRef(new Set<string>());
@@ -634,6 +635,21 @@ export function App() {
   useEffect(() => {
     return pui.codex.onSubagentDetected(openCodexCompanionPane);
   }, [openCodexCompanionPane]);
+
+  useEffect(() => {
+    if (!appPreferences.codexSubagentTerminalsEnabled) {
+      codexHooksInstallAttemptedRef.current = false;
+      return;
+    }
+    if (codexHooksInstallAttemptedRef.current) {
+      return;
+    }
+
+    codexHooksInstallAttemptedRef.current = true;
+    void pui.codex.installHooks().catch(() => {
+      codexHooksInstallAttemptedRef.current = false;
+    });
+  }, [appPreferences.codexSubagentTerminalsEnabled]);
 
   const closePane = useCallback(
     (paneId: string) => {

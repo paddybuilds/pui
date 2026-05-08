@@ -74,7 +74,11 @@ function createWindow(): void {
   terminalService = new TerminalService(mainWindow);
   gitService = new GitWorkspaceService(mainWindow);
   codexHookService = new CodexHookService(mainWindow);
-  void codexHookService.start();
+  void codexHookService.start().then(() => {
+    if (storeService.loadSettings().appPreferences?.codexSubagentTerminalsEnabled) {
+      void codexHookService?.installHooks();
+    }
+  });
   appUpdateService = new AppUpdateService({
     getVersion: () => app.getVersion(),
     platform: process.platform,

@@ -1,6 +1,7 @@
 import type { CodexHookEvent } from "./types";
 
 export type IncomingCodexHookPayload = {
+  [key: string]: unknown;
   hook?: unknown;
   rawInput?: string;
   env?: {
@@ -57,7 +58,7 @@ export class CodexSubagentTracker {
 }
 
 export function normalizeCodexHookEvent(payload: IncomingCodexHookPayload): CodexHookEvent | undefined {
-  const hook = isRecord(payload.hook) ? payload.hook : {};
+  const hook = isRecord(payload.hook) ? payload.hook : isRecord(payload) ? payload : {};
   const eventName =
     readString(hook, "hook_event_name") || readString(hook, "event_name") || readString(hook, "eventName");
   const codexSessionId =
@@ -72,10 +73,14 @@ export function normalizeCodexHookEvent(payload: IncomingCodexHookPayload): Code
     codexSessionId,
     agentId: readString(hook, "agent_id") || readString(hook, "agentId"),
     agentType: readString(hook, "agent_type") || readString(hook, "agentType"),
-    puiWorkspaceId: payload.env?.puiWorkspaceId,
-    puiPaneId: payload.env?.puiPaneId,
-    puiTerminalSessionId: payload.env?.puiTerminalSessionId,
-    cwd: payload.env?.cwd
+    puiWorkspaceId:
+      payload.env?.puiWorkspaceId || readString(hook, "pui_workspace_id") || readString(hook, "puiWorkspaceId"),
+    puiPaneId: payload.env?.puiPaneId || readString(hook, "pui_pane_id") || readString(hook, "puiPaneId"),
+    puiTerminalSessionId:
+      payload.env?.puiTerminalSessionId ||
+      readString(hook, "pui_terminal_session_id") ||
+      readString(hook, "puiTerminalSessionId"),
+    cwd: payload.env?.cwd || readString(hook, "cwd")
   };
 }
 

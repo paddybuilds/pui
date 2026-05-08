@@ -13,7 +13,7 @@ type HookReceiverConfig = {
   url: string;
 };
 
-const HOOK_EVENTS = ["SessionStart", "Stop"] as const;
+const HOOK_EVENTS = ["session_start", "stop"] as const;
 const HOOK_MARKER = "pui-codex-subagent-hook";
 const HOOK_CONFIG_FILE = "pui-codex-hook.json";
 const CODEX_CONFIG_DIR = ".codex";
@@ -142,10 +142,19 @@ async function writeCodexHooks(path: string, command: string): Promise<void> {
   const current = existsSync(path) ? JSON.parse(await readFile(path, "utf8")) : {};
   const root = isRecord(current) ? current : {};
   const hooks = isRecord(root.hooks) ? root.hooks : {};
+  for (const eventName of Object.keys(hooks)) {
+    const entries = Array.isArray(hooks[eventName]) ? hooks[eventName] : [];
+    const nextEntries = entries.filter((entry) => !isPuiHookEntry(entry));
+    if (nextEntries.length > 0) {
+      hooks[eventName] = nextEntries;
+    } else {
+      delete hooks[eventName];
+    }
+  }
   for (const eventName of HOOK_EVENTS) {
     const entries = Array.isArray(hooks[eventName]) ? hooks[eventName] : [];
     hooks[eventName] = [
-      ...entries.filter((entry) => !isPuiHookEntry(entry)),
+      ...entries,
       {
         hooks: [{ type: "command", command, marker: HOOK_MARKER }]
       }
@@ -161,23 +170,31 @@ async function enableCodexHooks(path: string): Promise<void> {
   const featuresIndex = lines.findIndex((line) => line.trim() === "[features]");
   if (featuresIndex === -1) {
     const prefix = current.trimEnd();
-    await writeFile(path, `${prefix ? `${prefix}\n\n` : ""}[features]\ncodex_hooks = true\n`, "utf8");
+    await writeFile(path, `${prefix ? `${prefix}\n\n` : ""}[features]\nhooks = true\n`, "utf8");
     return;
   }
 
   let insertAt = lines.length;
+  let hasHooksFlag = false;
   for (let index = featuresIndex + 1; index < lines.length; index += 1) {
     if (/^\s*\[/.test(lines[index])) {
       insertAt = index;
       break;
     }
+    if (/^\s*hooks\s*=/.test(lines[index])) {
+      lines[index] = "hooks = true";
+      hasHooksFlag = true;
+      continue;
+    }
     if (/^\s*codex_hooks\s*=/.test(lines[index])) {
-      lines[index] = "codex_hooks = true";
-      await writeFile(path, `${lines.join("\n").trimEnd()}\n`, "utf8");
-      return;
+      lines.splice(index, 1);
+      index -= 1;
+      insertAt -= 1;
     }
   }
-  lines.splice(insertAt, 0, "codex_hooks = true");
+  if (!hasHooksFlag) {
+    lines.splice(insertAt, 0, "hooks = true");
+  }
   await writeFile(path, `${lines.join("\n").trimEnd()}\n`, "utf8");
 }
 

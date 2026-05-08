@@ -30,6 +30,30 @@ describe("codex hook helpers", () => {
     });
   });
 
+  it("normalizes direct Codex hook stdin payloads", () => {
+    expect(
+      normalizeCodexHookEvent({
+        hook_event_name: "session_start",
+        session_id: "codex-session",
+        agent_id: "agent-session",
+        agent_type: "default",
+        pui_workspace_id: "workspace-a",
+        pui_pane_id: "pane-a",
+        pui_terminal_session_id: "terminal-a",
+        cwd: "C:\\repo"
+      })
+    ).toEqual({
+      eventName: "SessionStart",
+      codexSessionId: "codex-session",
+      agentId: "agent-session",
+      agentType: "default",
+      puiWorkspaceId: "workspace-a",
+      puiPaneId: "pane-a",
+      puiTerminalSessionId: "terminal-a",
+      cwd: "C:\\repo"
+    });
+  });
+
   it("treats the first session as parent and later sessions as subagents", () => {
     const tracker = new CodexSubagentTracker();
     const parent = normalizeCodexHookEvent({

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import electronUpdater from "electron-updater";
@@ -142,6 +142,10 @@ function registerIpc(): void {
   );
 
   ipcMain.handle(ipc.system.listShells, () => listShells());
+  ipcMain.handle(ipc.clipboard.readText, () => clipboard.readText());
+  ipcMain.handle(ipc.clipboard.writeText, (_event, text: string) => {
+    clipboard.writeText(text);
+  });
   ipcMain.handle(ipc.fileSystem.readDirectory, (_event, payload: { workspace: string; directory?: string }) => {
     return fileExplorerService.readDirectory(payload.workspace, payload.directory);
   });

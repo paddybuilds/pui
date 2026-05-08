@@ -49,7 +49,6 @@ import {
   copyTerminalPaneSelection,
   disposeTerminalPane,
   disposeTerminalPanes,
-  hasTerminalPaneSelection,
   moveTerminalPaneRecord,
   pasteIntoTerminalPane,
   TerminalPane
@@ -638,21 +637,32 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        activeWorkspaceView === "terminal" &&
+        activeWorkspace &&
+        isTerminalShortcutTarget(event.target) &&
+        isTerminalCopyShortcut(event)
+      ) {
+        event.preventDefault();
+        copyTerminalPaneSelection(activeWorkspace.id, activePaneId);
+        return;
+      }
+      if (
+        activeWorkspaceView === "terminal" &&
+        activeWorkspace &&
+        isTerminalShortcutTarget(event.target) &&
+        (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V"))
+      ) {
+        event.preventDefault();
+        pasteIntoTerminalPane(activeWorkspace.id, activePaneId);
+        return;
+      }
       if (isEditableShortcutTarget(event.target) && !matchesShortcut(event, "CmdOrCtrl+K")) {
         return;
       }
       if (matchesShortcut(event, "CmdOrCtrl+K")) {
         event.preventDefault();
         setPaletteOpen(true);
-        return;
-      }
-      if (
-        activeWorkspaceView === "terminal" &&
-        activeWorkspace &&
-        (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V"))
-      ) {
-        event.preventDefault();
-        pasteIntoTerminalPane(activeWorkspace.id, activePaneId);
         return;
       }
       if (matchesShortcut(event, "CmdOrCtrl+D")) {
@@ -1032,7 +1042,6 @@ export function App() {
             ? shortcutLabel("Cmd+C", pui.platform)
             : shortcutLabel("CmdOrCtrl+Shift+C", pui.platform),
         icon: <Copy size={14} />,
-        disabled: activeWorkspace ? !hasTerminalPaneSelection(activeWorkspace.id, paneId) : true,
         onSelect: () => {
           if (activeWorkspace) {
             copyTerminalPaneSelection(activeWorkspace.id, paneId);
@@ -1756,4 +1765,26 @@ function isEditableShortcutTarget(target: EventTarget | null): boolean {
     return false;
   }
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function isTerminalShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest(".terminal-pane"));
+}
+
+function isTerminalCopyShortcut(event: KeyboardEvent): boolean {
+  if (matchesShortcut(event, "CmdOrCtrl+Shift+C")) {
+    return true;
+  }
+
+  return (
+    pui.platform === "darwin" &&
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "c"
+  );
 }

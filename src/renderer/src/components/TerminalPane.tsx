@@ -128,11 +128,6 @@ export function copyTerminalPaneSelection(workspaceId: string, paneId: string): 
   void copyTerminalSelection(record);
 }
 
-export function hasTerminalPaneSelection(workspaceId: string, paneId: string): boolean {
-  const record = terminalRecords.get(terminalRecordKey(workspaceId, paneId));
-  return record?.terminal.hasSelection() ?? false;
-}
-
 export function TerminalPane({
   pane,
   workspaceId,
@@ -378,12 +373,7 @@ function pasteTextIntoTerminal(record: TerminalRecord, text: string): void {
   }
 
   record.terminal.focus();
-  queueTerminalInput(record, prepareTerminalPasteData(text, record.terminal.modes.bracketedPasteMode));
-}
-
-export function prepareTerminalPasteData(text: string, bracketedPasteMode: boolean): string {
-  const prepared = text.replace(/\r?\n/g, "\r");
-  return bracketedPasteMode ? `\x1b[200~${prepared}\x1b[201~` : prepared;
+  record.terminal.paste(text);
 }
 
 function isTerminalCopyShortcut(event: KeyboardEvent): boolean {

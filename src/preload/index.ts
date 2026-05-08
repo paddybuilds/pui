@@ -60,6 +60,10 @@ const api = {
   system: {
     listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
   },
+  clipboard: {
+    readText: () => ipcRenderer.invoke(ipc.clipboard.readText) as Promise<string>,
+    writeText: (text: string) => ipcRenderer.invoke(ipc.clipboard.writeText, text) as Promise<void>
+  },
   fileSystem: {
     readDirectory: (workspace: string, directory?: string) =>
       ipcRenderer.invoke(ipc.fileSystem.readDirectory, { workspace, directory }) as Promise<FileSystemEntry[]>,

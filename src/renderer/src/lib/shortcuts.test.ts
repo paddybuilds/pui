@@ -19,6 +19,7 @@ describe("shortcuts", () => {
 
   it("formats macOS shortcut labels", () => {
     expect(shortcutLabel("CmdOrCtrl+Shift+K")).toBe("⌘+⇧+K");
+    expect(shortcutLabel("Cmd+C")).toBe("⌘+C");
   });
 
   it("formats Windows shortcut labels", () => {

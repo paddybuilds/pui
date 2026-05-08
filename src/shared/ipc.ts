@@ -19,6 +19,10 @@ export const ipc = {
   system: {
     listShells: "system:list-shells"
   },
+  clipboard: {
+    readText: "clipboard:read-text",
+    writeText: "clipboard:write-text"
+  },
   fileSystem: {
     readDirectory: "file-system:read-directory",
     listFilePaths: "file-system:list-file-paths",

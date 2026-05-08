@@ -110,6 +110,24 @@ export function moveTerminalPaneRecord(fromWorkspaceId: string, toWorkspaceId: s
   terminalRecords.set(terminalRecordKey(toWorkspaceId, paneId), record);
 }
 
+export function pasteIntoTerminalPane(workspaceId: string, paneId: string): void {
+  const record = terminalRecords.get(terminalRecordKey(workspaceId, paneId));
+  if (!record) {
+    return;
+  }
+
+  void pasteClipboardIntoTerminal(record);
+}
+
+export function copyTerminalPaneSelection(workspaceId: string, paneId: string): void {
+  const record = terminalRecords.get(terminalRecordKey(workspaceId, paneId));
+  if (!record) {
+    return;
+  }
+
+  void copyTerminalSelection(record);
+}
+
 export function TerminalPane({
   pane,
   workspaceId,
@@ -189,6 +207,18 @@ export function TerminalPane({
     record.onSnapshot = onSnapshotRef.current;
     record.shortcutHandler.current = (event) => {
       const actions = shortcutActionsRef.current;
+      if (isTerminalCopyShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTerminalSelection(record);
+        return false;
+      }
+      if (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V")) {
+        event.preventDefault();
+        event.stopPropagation();
+        pasteIntoTerminalRecord(record);
+        return false;
+      }
       if (matchesShortcut(event, "CmdOrCtrl+D")) {
         event.preventDefault();
         event.stopPropagation();
@@ -211,6 +241,25 @@ export function TerminalPane({
     };
     const mount = xtermMountRef.current;
     attachTerminalElement(record.terminal, mount);
+    const handlePaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!text) {
+        return;
+      }
+      consumeTerminalClipboardEvent(event);
+      pasteTextIntoTerminal(record, text);
+    };
+    mount.addEventListener("paste", handlePaste, { capture: true });
+    const handleCopy = (event: ClipboardEvent) => {
+      const text = record.terminal.getSelection();
+      if (!text) {
+        return;
+      }
+      consumeTerminalClipboardEvent(event);
+      event.clipboardData?.setData("text/plain", text);
+      void pui.clipboard.writeText(text);
+    };
+    mount.addEventListener("copy", handleCopy, { capture: true });
     record.terminal.options.cursorBlink = activeRef.current;
     applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
     scheduleFitAndResize(record);
@@ -225,6 +274,8 @@ export function TerminalPane({
 
     return () => {
       observer.disconnect();
+      mount.removeEventListener("paste", handlePaste, { capture: true });
+      mount.removeEventListener("copy", handleCopy, { capture: true });
       captureTerminalSnapshot(record);
       if (recordRef.current === record) {
         record.shortcutHandler.current = undefined;
@@ -290,6 +341,60 @@ export function TerminalPane({
       </div>
     </div>
   );
+}
+
+async function pasteClipboardIntoTerminal(record: TerminalRecord): Promise<void> {
+  if (record.disposed) {
+    return;
+  }
+
+  const text = await pui.clipboard.readText();
+  pasteTextIntoTerminal(record, text);
+}
+
+function copyTerminalSelection(record: TerminalRecord): void {
+  if (record.disposed) {
+    return;
+  }
+
+  const text = record.terminal.getSelection();
+  if (text) {
+    void pui.clipboard.writeText(text);
+  }
+}
+
+function pasteIntoTerminalRecord(record: TerminalRecord): void {
+  void pasteClipboardIntoTerminal(record);
+}
+
+function pasteTextIntoTerminal(record: TerminalRecord, text: string): void {
+  if (!text || record.disposed) {
+    return;
+  }
+
+  record.terminal.focus();
+  record.terminal.paste(text);
+}
+
+function isTerminalCopyShortcut(event: KeyboardEvent): boolean {
+  if (matchesShortcut(event, "CmdOrCtrl+Shift+C")) {
+    return true;
+  }
+
+  return (
+    pui.platform === "darwin" &&
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "c"
+  );
+}
+
+function consumeTerminalClipboardEvent(event: ClipboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }
 
 function getOrCreateTerminalRecord(
@@ -435,6 +540,7 @@ function assignTerminalSession(record: TerminalRecord, sessionId: string): void 
   record.sessionId = sessionId;
   record.exited = false;
   terminalRecordsBySession.set(sessionId, record);
+  scheduleTerminalInputFlush(record);
 }
 
 function unregisterTerminalSession(record: TerminalRecord): void {
@@ -444,14 +550,16 @@ function unregisterTerminalSession(record: TerminalRecord): void {
 }
 
 function queueTerminalInput(record: TerminalRecord, data: string): void {
-  if (record.disposed || !record.sessionId) {
+  if (record.disposed) {
     return;
   }
 
   record.inputChunks.push(data);
   record.inputBytes += data.length;
   trimTerminalInputBuffer(record);
-  scheduleTerminalInputFlush(record);
+  if (record.sessionId) {
+    scheduleTerminalInputFlush(record);
+  }
 }
 
 function scheduleTerminalInputFlush(record: TerminalRecord): void {

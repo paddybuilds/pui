@@ -140,6 +140,10 @@ const browserPreviewApi: PuiApi = {
   system: {
     listShells: async () => previewShellCandidates(browserPreviewApi.platform)
   },
+  clipboard: {
+    readText: () => navigator.clipboard?.readText() ?? Promise.resolve(""),
+    writeText: (text) => navigator.clipboard?.writeText(text) ?? Promise.resolve()
+  },
   fileSystem: {
     readDirectory: async (workspacePath, directory): Promise<FileSystemEntry[]> => {
       const isRoot = !directory || directory === workspacePath;

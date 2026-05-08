@@ -24,5 +24,11 @@ export function shortcutLabel(shortcut: string, platform = "darwin"): string {
       .replace(/\+/g, " + ");
   }
 
-  return shortcut.replace("CmdOrCtrl", "⌘").replace("Ctrl", "⌃").replace("Alt", "⌥").replace("Shift", "⇧");
+  return shortcut
+    .replace("CmdOrCtrl", "⌘")
+    .replace("Command", "⌘")
+    .replace("Cmd", "⌘")
+    .replace("Ctrl", "⌃")
+    .replace("Alt", "⌥")
+    .replace("Shift", "⇧");
 }

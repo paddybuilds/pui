@@ -10,6 +10,8 @@ import {
 } from "react";
 import type { ITheme } from "@xterm/xterm";
 import {
+  ClipboardPaste,
+  Copy,
   Edit3,
   Files,
   GitCompare,
@@ -44,9 +46,11 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { OnboardingPanel } from "./components/OnboardingPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import {
+  copyTerminalPaneSelection,
   disposeTerminalPane,
   disposeTerminalPanes,
   moveTerminalPaneRecord,
+  pasteIntoTerminalPane,
   TerminalPane
 } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
@@ -633,6 +637,26 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        activeWorkspaceView === "terminal" &&
+        activeWorkspace &&
+        isTerminalShortcutTarget(event.target) &&
+        isTerminalCopyShortcut(event)
+      ) {
+        consumeTerminalClipboardEvent(event);
+        copyTerminalPaneSelection(activeWorkspace.id, activePaneId);
+        return;
+      }
+      if (
+        activeWorkspaceView === "terminal" &&
+        activeWorkspace &&
+        isTerminalShortcutTarget(event.target) &&
+        (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V"))
+      ) {
+        consumeTerminalClipboardEvent(event);
+        pasteIntoTerminalPane(activeWorkspace.id, activePaneId);
+        return;
+      }
       if (isEditableShortcutTarget(event.target) && !matchesShortcut(event, "CmdOrCtrl+K")) {
         return;
       }
@@ -658,7 +682,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [activePaneId, closePane, splitActivePane]);
+  }, [activePaneId, activeWorkspace, activeWorkspaceView, closePane, splitActivePane]);
 
   const openFolder = async () => {
     if (!settings) {
@@ -1010,6 +1034,31 @@ export function App() {
   const openPaneContextMenu = (event: MouseEvent, paneId: string) => {
     setActivePaneId(paneId);
     openContextMenu(event, [
+      {
+        id: "copy",
+        label: "Copy",
+        shortcut:
+          pui.platform === "darwin"
+            ? shortcutLabel("Cmd+C", pui.platform)
+            : shortcutLabel("CmdOrCtrl+Shift+C", pui.platform),
+        icon: <Copy size={14} />,
+        onSelect: () => {
+          if (activeWorkspace) {
+            copyTerminalPaneSelection(activeWorkspace.id, paneId);
+          }
+        }
+      },
+      {
+        id: "paste",
+        label: "Paste",
+        shortcut: shortcutLabel("CmdOrCtrl+V", pui.platform),
+        icon: <ClipboardPaste size={14} />,
+        onSelect: () => {
+          if (activeWorkspace) {
+            pasteIntoTerminalPane(activeWorkspace.id, paneId);
+          }
+        }
+      },
       {
         id: "split-right",
         label: "Split right",
@@ -1716,4 +1765,32 @@ function isEditableShortcutTarget(target: EventTarget | null): boolean {
     return false;
   }
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function isTerminalShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest(".terminal-pane"));
+}
+
+function isTerminalCopyShortcut(event: KeyboardEvent): boolean {
+  if (matchesShortcut(event, "CmdOrCtrl+Shift+C")) {
+    return true;
+  }
+
+  return (
+    pui.platform === "darwin" &&
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "c"
+  );
+}
+
+function consumeTerminalClipboardEvent(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }

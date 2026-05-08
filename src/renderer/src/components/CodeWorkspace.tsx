@@ -497,7 +497,11 @@ function CodeEditorGroupView({
   const allTabsRef = useRef(allTabs);
   const workspaceFilePathsRef = useRef(workspaceFilePaths);
   const autocompleteExtension = useMemo(
-    () => liveCodeAutocompleteExtension(() => allTabsRef.current, () => workspaceFilePathsRef.current),
+    () =>
+      liveCodeAutocompleteExtension(
+        () => allTabsRef.current,
+        () => workspaceFilePathsRef.current
+      ),
     []
   );
 

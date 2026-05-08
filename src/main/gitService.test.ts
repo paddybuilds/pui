@@ -65,9 +65,7 @@ describe("GitWorkspaceService operations", () => {
   });
 
   it("loads branch and status files from one coalesced status process", async () => {
-    let callback:
-      | ((error: Error | null, result: { stdout: string; stderr: string }) => void)
-      | undefined;
+    let callback: ((error: Error | null, result: { stdout: string; stderr: string }) => void) | undefined;
     execFileMock.mockImplementation((_command, _args, _options, statusCallback) => {
       callback = statusCallback as typeof callback;
       return {} as ReturnType<typeof execFile>;

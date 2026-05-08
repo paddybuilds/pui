@@ -349,13 +349,7 @@ export function App() {
     }
 
     const timeout = window.setTimeout(() => {
-      void persistWorkspaceLayout(
-        settings,
-        activeWorkspace.id,
-        layoutRoot,
-        activePaneId,
-        terminalSnapshotsRef.current
-      );
+      void persistWorkspaceLayout(settings, activeWorkspace.id, layoutRoot, activePaneId, terminalSnapshotsRef.current);
     }, 250);
 
     return () => window.clearTimeout(timeout);
@@ -968,7 +962,10 @@ export function App() {
     const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     const normalized = normalizeSettings(saved, pui.platform, newId);
     setSettings(normalized);
-    if (activeGitWorkspaceRef.current && (workspace.kind === "quick" || activeGitWorkspaceRef.current !== workspace.path)) {
+    if (
+      activeGitWorkspaceRef.current &&
+      (workspace.kind === "quick" || activeGitWorkspaceRef.current !== workspace.path)
+    ) {
       void pui.git.unwatch(activeGitWorkspaceRef.current);
     }
     activeGitWorkspaceRef.current = workspace.kind === "quick" ? null : workspace.path;

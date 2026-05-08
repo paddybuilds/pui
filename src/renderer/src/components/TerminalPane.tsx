@@ -129,7 +129,6 @@ export function TerminalPane({
       pane.id,
       pane.sessionId,
       profile,
-      active,
       terminalTheme,
       (sessionId) => {
         onSessionRef.current(sessionId);
@@ -160,7 +159,6 @@ export function TerminalPane({
     };
     const mount = xtermMountRef.current;
     attachTerminalElement(record.terminal, mount);
-    record.terminal.options.cursorBlink = active;
     applyTerminalAppearance(record.terminal, terminalTheme, terminalFontSize);
     scheduleFitAndResize(record);
     if (record.sessionId) {
@@ -180,14 +178,11 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [active, pane.id, pane.sessionId, profile, terminalFontSize, terminalTheme, terminalThemeKey, workspaceId]);
+  }, [pane.id, pane.sessionId, profile, terminalFontSize, terminalTheme, terminalThemeKey, workspaceId]);
 
   useEffect(() => {
-    if (recordRef.current) {
-      recordRef.current.terminal.options.cursorBlink = active;
-      if (active) {
-        recordRef.current.terminal.focus();
-      }
+    if (active) {
+      recordRef.current?.terminal.focus();
     }
   }, [active]);
 
@@ -238,7 +233,6 @@ function getOrCreateTerminalRecord(
   paneId: string,
   existingSessionId: string | undefined,
   profile: ConsoleProfile,
-  active: boolean,
   terminalTheme: ITheme,
   onSession: (sessionId: string) => void
 ): TerminalRecord {
@@ -253,7 +247,7 @@ function getOrCreateTerminalRecord(
 
   ensureTerminalEventRouter();
   const terminal = new Terminal({
-    cursorBlink: active,
+    cursorBlink: false,
     convertEol: true,
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,

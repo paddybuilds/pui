@@ -192,7 +192,13 @@ function registerIpc(): void {
       _event,
       payload: { profile: ConsoleProfile; workspaceId?: string; paneId: string; cols: number; rows: number }
     ) => {
-      return terminalService?.create(payload.profile, payload.workspaceId ?? "", payload.paneId, payload.cols, payload.rows);
+      return terminalService?.create(
+        payload.profile,
+        payload.workspaceId ?? "",
+        payload.paneId,
+        payload.cols,
+        payload.rows
+      );
     }
   );
 

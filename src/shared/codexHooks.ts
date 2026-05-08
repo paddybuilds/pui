@@ -58,7 +58,8 @@ export class CodexSubagentTracker {
 
 export function normalizeCodexHookEvent(payload: IncomingCodexHookPayload): CodexHookEvent | undefined {
   const hook = isRecord(payload.hook) ? payload.hook : {};
-  const eventName = readString(hook, "hook_event_name") || readString(hook, "event_name") || readString(hook, "eventName");
+  const eventName =
+    readString(hook, "hook_event_name") || readString(hook, "event_name") || readString(hook, "eventName");
   const codexSessionId =
     readString(hook, "session_id") || readString(hook, "sessionId") || readString(hook, "thread_id");
   const normalizedName = normalizeEventName(eventName);

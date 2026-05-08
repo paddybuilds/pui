@@ -544,6 +544,7 @@ function assignTerminalSession(record: TerminalRecord, sessionId: string): void 
   record.sessionId = sessionId;
   record.exited = false;
   terminalRecordsBySession.set(sessionId, record);
+  scheduleTerminalInputFlush(record);
 }
 
 function unregisterTerminalSession(record: TerminalRecord): void {
@@ -553,14 +554,16 @@ function unregisterTerminalSession(record: TerminalRecord): void {
 }
 
 function queueTerminalInput(record: TerminalRecord, data: string): void {
-  if (record.disposed || !record.sessionId) {
+  if (record.disposed) {
     return;
   }
 
   record.inputChunks.push(data);
   record.inputBytes += data.length;
   trimTerminalInputBuffer(record);
-  scheduleTerminalInputFlush(record);
+  if (record.sessionId) {
+    scheduleTerminalInputFlush(record);
+  }
 }
 
 function scheduleTerminalInputFlush(record: TerminalRecord): void {

@@ -646,6 +646,15 @@ export function App() {
         setPaletteOpen(true);
         return;
       }
+      if (
+        activeWorkspaceView === "terminal" &&
+        activeWorkspace &&
+        (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V"))
+      ) {
+        event.preventDefault();
+        pasteIntoTerminalPane(activeWorkspace.id, activePaneId);
+        return;
+      }
       if (matchesShortcut(event, "CmdOrCtrl+D")) {
         event.preventDefault();
         splitActivePane("right");
@@ -663,7 +672,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [activePaneId, closePane, splitActivePane]);
+  }, [activePaneId, activeWorkspace, activeWorkspaceView, closePane, splitActivePane]);
 
   const openFolder = async () => {
     if (!settings) {

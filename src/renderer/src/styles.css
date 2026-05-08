@@ -1011,11 +1011,6 @@ kbd {
   white-space: nowrap;
 }
 
-.terminal-host .xterm-rows span.xterm-bold.xterm-bg-257.xterm-fg-257:not(.xterm-cursor) {
-  color: transparent !important;
-  background-color: transparent !important;
-}
-
 .workspace-button {
   height: 34px;
   border-radius: 7px;

@@ -82,8 +82,10 @@ describe("FileExplorerService", () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "pui-files-"));
     await mkdir(path.join(workspace, "src"));
     await mkdir(path.join(workspace, "node_modules"));
+    await mkdir(path.join(workspace, "build"));
     await writeFile(path.join(workspace, "README.md"), "");
     await writeFile(path.join(workspace, "src", "App.tsx"), "");
+    await writeFile(path.join(workspace, "build", "generated.js"), "");
     await writeFile(path.join(workspace, "node_modules", "ignored.js"), "");
     const service = new FileExplorerService();
 

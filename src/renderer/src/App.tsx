@@ -30,6 +30,7 @@ import type {
   GitStatus,
   LayoutPreset,
   QuickCommand,
+  TerminalPaneSnapshot,
   TerminalWorkspace,
   WorkbenchNode
 } from "../../shared/types";
@@ -111,6 +112,9 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber(SIDEBAR_WIDTH_KEY, 224));
   const [gitPanelWidth, setGitPanelWidth] = useState(() => readStoredNumber(GIT_PANEL_WIDTH_KEY, 360));
   const didHydrateRef = useRef(false);
+  const terminalSnapshotsRef = useRef<Record<string, Record<string, TerminalPaneSnapshot>>>({});
+  const terminalSnapshotSaveTimeoutRef = useRef<number>();
+  const workspaceFilePathCacheRef = useRef<Record<string, string[]>>({});
   const activeGitWorkspaceRef = useRef<string | null>(null);
   const gitRefreshRequestRef = useRef(0);
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
@@ -138,6 +142,8 @@ export function App() {
   const activeCodeTabs = activeWorkspace ? (codeTabsByWorkspace[activeWorkspace.id] ?? []) : [];
   const activeCodePath = activeWorkspace ? activeCodePathByWorkspace[activeWorkspace.id] : undefined;
   const activeWorkspaceFilePaths = activeWorkspace ? (workspaceFilePathsByWorkspace[activeWorkspace.id] ?? []) : [];
+  const activeFileIndexWorkspaceId = activeWorkspace?.kind === "quick" ? undefined : activeWorkspace?.id;
+  const activeFileIndexWorkspacePath = activeWorkspace?.kind === "quick" ? undefined : activeWorkspace?.path;
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
   const fileExplorerVisible = Boolean(activeWorkspace?.kind !== "quick" && activeSidePanel === "files");
   const gitSidebarVisible = Boolean(
@@ -148,6 +154,10 @@ export function App() {
     () => normalizeAppPreferences(settings?.appPreferences, { defaultTerminalProfileId: settings?.profiles[0]?.id }),
     [settings?.appPreferences, settings?.profiles]
   );
+  const activeWorkspaceSnapshots =
+    activeWorkspace && appPreferences.resumeTerminalSessions
+      ? (terminalSnapshotsRef.current[activeWorkspace.id] ?? {})
+      : {};
   const terminalThemeKey = useMemo(() => themeKey(appPreferences), [appPreferences]);
   const terminalTheme = useMemo(() => resolveTerminalTheme(appPreferences), [appPreferences]);
 
@@ -201,12 +211,22 @@ export function App() {
     );
   }, []);
 
+  const saveSettingsWithTerminalSnapshots = useCallback(async (nextSettings: AppSettings) => {
+    const saved = await pui.settings.save({
+      ...nextSettings,
+      terminalSnapshots: terminalSnapshotsRef.current
+    });
+    terminalSnapshotsRef.current = saved.terminalSnapshots ?? terminalSnapshotsRef.current;
+    return saved;
+  }, []);
+
   useEffect(() => {
     void pui.settings.loadState().then(async ({ settings: loaded, isFirstLaunch }) => {
       const normalized = normalizeSettings(loaded, pui.platform, newId);
       const initialWorkspace =
         normalized.workspaces?.find((workspace) => workspace.id === normalized.activeWorkspaceId) ??
         normalized.workspaces?.[0];
+      terminalSnapshotsRef.current = normalized.terminalSnapshots ?? {};
       setSettings(normalized);
       if (isFirstLaunch) {
         setOnboardingDismissible(false);
@@ -225,7 +245,7 @@ export function App() {
       }
       didHydrateRef.current = true;
       if (!loaded.workspaces) {
-        await pui.settings.save(normalized);
+        await saveSettingsWithTerminalSnapshots(normalized);
       }
     });
 
@@ -235,16 +255,25 @@ export function App() {
     return () => {
       offGit();
     };
-  }, [hydrateWorkspace, refreshGit, refreshWorkspaceGit]);
+  }, [hydrateWorkspace, refreshGit, refreshWorkspaceGit, saveSettingsWithTerminalSnapshots]);
 
   useEffect(() => {
     applyThemePreferences(appPreferences);
     void pui.app.setTitleBarTheme(readTitleBarTheme());
   }, [appPreferences]);
 
+  useEffect(
+    () => () => {
+      if (terminalSnapshotSaveTimeoutRef.current !== undefined) {
+        window.clearTimeout(terminalSnapshotSaveTimeoutRef.current);
+      }
+    },
+    []
+  );
+
   const completeOnboarding = async (nextSettings: AppSettings) => {
     const normalized = normalizeSettings(nextSettings, pui.platform, newId);
-    const saved = normalizeSettings(await pui.settings.save(normalized), pui.platform, newId);
+    const saved = normalizeSettings(await saveSettingsWithTerminalSnapshots(normalized), pui.platform, newId);
     const initialWorkspace =
       saved.workspaces?.find((workspace) => workspace.id === saved.activeWorkspaceId) ?? saved.workspaces?.[0];
     setSettings(saved);
@@ -282,26 +311,37 @@ export function App() {
   }, [activeWorkspace?.kind, activeWorkspace?.path]);
 
   useEffect(() => {
-    if (!activeWorkspace || activeWorkspace.kind === "quick" || !appPreferences.codeAutocompleteEnabled) {
+    if (!activeFileIndexWorkspaceId || !activeFileIndexWorkspacePath || !appPreferences.codeAutocompleteEnabled) {
+      return;
+    }
+    const workspaceId = activeFileIndexWorkspaceId;
+    const workspacePath = activeFileIndexWorkspacePath;
+    const cachedPaths = workspaceFilePathCacheRef.current[workspaceId];
+    if (cachedPaths) {
+      setWorkspaceFilePathsByWorkspace((current) =>
+        current[workspaceId] === cachedPaths ? current : { ...current, [workspaceId]: cachedPaths }
+      );
       return;
     }
     let canceled = false;
     void pui.fileSystem
-      .listFilePaths(activeWorkspace.path)
+      .listFilePaths(workspacePath)
       .then((result) => {
         if (!canceled) {
-          setWorkspaceFilePathsByWorkspace((current) => ({ ...current, [activeWorkspace.id]: result.paths }));
+          workspaceFilePathCacheRef.current = { ...workspaceFilePathCacheRef.current, [workspaceId]: result.paths };
+          setWorkspaceFilePathsByWorkspace((current) => ({ ...current, [workspaceId]: result.paths }));
         }
       })
       .catch(() => {
         if (!canceled) {
-          setWorkspaceFilePathsByWorkspace((current) => ({ ...current, [activeWorkspace.id]: [] }));
+          workspaceFilePathCacheRef.current = { ...workspaceFilePathCacheRef.current, [workspaceId]: [] };
+          setWorkspaceFilePathsByWorkspace((current) => ({ ...current, [workspaceId]: [] }));
         }
       });
     return () => {
       canceled = true;
     };
-  }, [activeWorkspace, appPreferences.codeAutocompleteEnabled]);
+  }, [activeFileIndexWorkspaceId, activeFileIndexWorkspacePath, appPreferences.codeAutocompleteEnabled]);
 
   useEffect(() => {
     if (!settings || !activeWorkspace || !didHydrateRef.current || !layoutRoot) {
@@ -309,16 +349,56 @@ export function App() {
     }
 
     const timeout = window.setTimeout(() => {
-      void persistWorkspaceLayout(settings, activeWorkspace.id, layoutRoot, activePaneId);
+      void persistWorkspaceLayout(
+        settings,
+        activeWorkspace.id,
+        layoutRoot,
+        activePaneId,
+        terminalSnapshotsRef.current
+      );
     }, 250);
 
     return () => window.clearTimeout(timeout);
   }, [activePaneId, activeWorkspace, layoutRoot, settings]);
 
+  const updateTerminalSnapshot = useCallback(
+    (workspaceId: string, paneId: string, snapshot: TerminalPaneSnapshot) => {
+      if (!appPreferences.resumeTerminalSessions) {
+        return;
+      }
+
+      const current = terminalSnapshotsRef.current;
+      const workspaceSnapshots = current[workspaceId] ?? {};
+      if (workspaceSnapshots[paneId]?.content === snapshot.content) {
+        return;
+      }
+
+      terminalSnapshotsRef.current = {
+        ...current,
+        [workspaceId]: {
+          ...workspaceSnapshots,
+          [paneId]: snapshot
+        }
+      };
+      scheduleTerminalSnapshotSave(terminalSnapshotsRef, terminalSnapshotSaveTimeoutRef);
+    },
+    [appPreferences.resumeTerminalSessions]
+  );
+
   const switchWorkspace = async (workspace: TerminalWorkspace) => {
     if (settings && activeWorkspace && layoutRoot) {
-      const saved = await persistWorkspaceLayout(settings, activeWorkspace.id, layoutRoot, activePaneId);
+      const saved = await persistWorkspaceLayout(
+        settings,
+        activeWorkspace.id,
+        layoutRoot,
+        activePaneId,
+        terminalSnapshotsRef.current
+      );
       setSettings(saved);
+    }
+    const previousGitWorkspace = activeGitWorkspaceRef.current;
+    if (previousGitWorkspace && (workspace.kind === "quick" || previousGitWorkspace !== workspace.path)) {
+      void pui.git.unwatch(previousGitWorkspace);
     }
     activeGitWorkspaceRef.current = workspace.kind === "quick" ? null : workspace.path;
     setActiveWorkspaceId(workspace.id);
@@ -513,11 +593,16 @@ export function App() {
   );
 
   const resizeSplit = useCallback(
-    (splitId: string, sizes: number[]) => {
+    (splitId: string, sizes: number[], commit = false) => {
       if (!layoutRoot) {
         return;
       }
-      applyWorkspaceLayout(updateSplitSizes(layoutRoot, splitId, sizes), activePaneId);
+      const nextRoot = updateSplitSizes(layoutRoot, splitId, sizes);
+      if (commit) {
+        applyWorkspaceLayout(nextRoot, activePaneId);
+        return;
+      }
+      setLayoutRoot(nextRoot);
     },
     [activePaneId, applyWorkspaceLayout, layoutRoot]
   );
@@ -530,6 +615,8 @@ export function App() {
       calculate: (initialValue, deltaX) => initialValue + deltaX,
       onChange: (width) => {
         setSidebarWidth(width);
+      },
+      onCommit: (width) => {
         writeStoredNumber(SIDEBAR_WIDTH_KEY, width);
       }
     });
@@ -543,6 +630,8 @@ export function App() {
       calculate: (initialValue, deltaX) => initialValue - deltaX,
       onChange: (width) => {
         setGitPanelWidth(width);
+      },
+      onCommit: (width) => {
         writeStoredNumber(GIT_PANEL_WIDTH_KEY, width);
       }
     });
@@ -623,8 +712,11 @@ export function App() {
       activeWorkspaceId: quickTerminal.id,
       workspaces: [quickTerminal, ...(settings.workspaces ?? [])]
     };
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     setSettings(normalizeSettings(saved, pui.platform, newId));
+    if (activeGitWorkspaceRef.current) {
+      void pui.git.unwatch(activeGitWorkspaceRef.current);
+    }
     activeGitWorkspaceRef.current = null;
     setActiveWorkspaceId(quickTerminal.id);
     setActiveWorkspaceView("terminal");
@@ -664,8 +756,11 @@ export function App() {
       recentWorkspaces: Array.from(new Set([defaultCwd, ...settings.recentWorkspaces])).slice(0, 12)
     };
 
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     setSettings(normalizeSettings(saved, pui.platform, newId));
+    if (activeGitWorkspaceRef.current && activeGitWorkspaceRef.current !== workspace.path) {
+      void pui.git.unwatch(activeGitWorkspaceRef.current);
+    }
     activeGitWorkspaceRef.current = workspace.path;
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
@@ -692,7 +787,7 @@ export function App() {
       ...settings,
       workspaces: (settings.workspaces ?? []).map((item) => (item.id === workspace.id ? renamedWorkspace : item))
     };
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     setSettings(normalizeSettings(saved, pui.platform, newId));
     closeContextMenu();
   };
@@ -766,6 +861,9 @@ export function App() {
       workspace.id,
       collectPanes(workspace.layout.root).map((pane) => pane.id)
     );
+    if (workspace.kind !== "quick") {
+      void pui.git.unwatch(workspace.path);
+    }
     const remainingWorkspaces = workspaces.filter((item) => item.id !== workspace.id);
     const nextActiveWorkspace = workspace.id === activeWorkspace?.id ? remainingWorkspaces[0] : activeWorkspace;
     const nextSettings = {
@@ -774,7 +872,7 @@ export function App() {
       workspace: nextActiveWorkspace?.path ?? settings.workspace,
       workspaces: remainingWorkspaces
     };
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     setSettings(saved);
     setSessionsByWorkspace((current) => {
       const next = { ...current };
@@ -849,7 +947,7 @@ export function App() {
       return next;
     });
 
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     setSettings(normalizeSettings(saved, pui.platform, newId));
     activeGitWorkspaceRef.current = folder.path;
     setActiveWorkspaceId(folder.id);
@@ -867,9 +965,12 @@ export function App() {
       recentWorkspaces: Array.from(new Set([workspace.path, ...settings.recentWorkspaces])).slice(0, 12),
       workspaces: (settings.workspaces ?? []).map((item) => (item.id === workspace.id ? workspace : item))
     };
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     const normalized = normalizeSettings(saved, pui.platform, newId);
     setSettings(normalized);
+    if (activeGitWorkspaceRef.current && (workspace.kind === "quick" || activeGitWorkspaceRef.current !== workspace.path)) {
+      void pui.git.unwatch(activeGitWorkspaceRef.current);
+    }
     activeGitWorkspaceRef.current = workspace.kind === "quick" ? null : workspace.path;
     setActiveWorkspaceId(workspace.id);
     hydrateWorkspace(workspace);
@@ -881,7 +982,7 @@ export function App() {
   };
 
   const updateSettings = async (nextSettings: AppSettings) => {
-    const saved = await pui.settings.save(nextSettings);
+    const saved = await saveSettingsWithTerminalSnapshots(nextSettings);
     const normalized = normalizeSettings(saved, pui.platform, newId);
     setSettings(normalized);
   };
@@ -1197,44 +1298,47 @@ export function App() {
         >
           {activeWorkspace && layoutRoot ? (
             <section className="workspace-main-stack">
-              <div className={activeWorkspaceView === "terminal" ? "terminal-grid" : "terminal-grid hidden-view"}>
-                <PaneTree
-                  node={layoutRoot}
-                  profilesById={profilesById}
-                  fallbackProfile={profiles[0]}
-                  workspaceName={activeFolderTitle}
-                  terminalFontSize={activeWorkspace.terminalFontSize}
-                  terminalTheme={terminalTheme}
-                  terminalThemeKey={terminalThemeKey}
-                  activePaneId={activePaneId}
-                  workspaceId={activeWorkspace.id}
-                  showHeaders={panes.length > 1}
-                  canClosePanes={panes.length > 1}
-                  sessionsByPane={activeWorkspaceSessions}
-                  onFocus={setActivePaneId}
-                  onClosePane={closePane}
-                  onPaneContextMenu={openPaneContextMenu}
-                  onSplitPane={splitPaneById}
-                  onResizeSplit={resizeSplit}
-                  onSession={(paneId, sessionId) =>
-                    setSessionsByWorkspace((current) => {
-                      const workspaceSessions = current[activeWorkspace.id] ?? {};
-                      if (workspaceSessions[paneId] === sessionId) {
-                        return current;
-                      }
-                      return {
-                        ...current,
-                        [activeWorkspace.id]: {
-                          ...workspaceSessions,
-                          [paneId]: sessionId
+              {activeWorkspaceView === "terminal" ? (
+                <div className="terminal-grid">
+                  <PaneTree
+                    node={layoutRoot}
+                    profilesById={profilesById}
+                    fallbackProfile={profiles[0]}
+                    workspaceName={activeFolderTitle}
+                    terminalFontSize={activeWorkspace.terminalFontSize}
+                    terminalTheme={terminalTheme}
+                    terminalThemeKey={terminalThemeKey}
+                    activePaneId={activePaneId}
+                    workspaceId={activeWorkspace.id}
+                    showHeaders={panes.length > 1}
+                    canClosePanes={panes.length > 1}
+                    sessionsByPane={activeWorkspaceSessions}
+                    snapshotsByPane={activeWorkspaceSnapshots}
+                    onFocus={setActivePaneId}
+                    onClosePane={closePane}
+                    onPaneContextMenu={openPaneContextMenu}
+                    onSplitPane={splitPaneById}
+                    onResizeSplit={resizeSplit}
+                    onSession={(paneId, sessionId) =>
+                      setSessionsByWorkspace((current) => {
+                        const workspaceSessions = current[activeWorkspace.id] ?? {};
+                        if (workspaceSessions[paneId] === sessionId) {
+                          return current;
                         }
-                      };
-                    })
-                  }
-                />
-              </div>
-              {activeWorkspace.kind !== "quick" ? (
-                <div className={activeWorkspaceView === "code" ? "code-grid" : "code-grid hidden-view"}>
+                        return {
+                          ...current,
+                          [activeWorkspace.id]: {
+                            ...workspaceSessions,
+                            [paneId]: sessionId
+                          }
+                        };
+                      })
+                    }
+                    onSnapshot={(paneId, snapshot) => updateTerminalSnapshot(activeWorkspace.id, paneId, snapshot)}
+                  />
+                </div>
+              ) : activeWorkspace.kind !== "quick" ? (
+                <div className="code-grid">
                   <CodeWorkspace
                     platform={pui.platform}
                     autocompleteEnabled={appPreferences.codeAutocompleteEnabled}
@@ -1339,9 +1443,35 @@ async function persistWorkspaceLayout(
   settings: AppSettings,
   workspaceId: string,
   root: WorkbenchNode,
-  activePaneId: string
+  activePaneId: string,
+  terminalSnapshots: Record<string, Record<string, TerminalPaneSnapshot>>
 ): Promise<AppSettings> {
-  return pui.settings.save(updateWorkspaceLayoutInSettings(settings, workspaceId, root, activePaneId));
+  return pui.settings.save({
+    ...updateWorkspaceLayoutInSettings(settings, workspaceId, root, activePaneId),
+    terminalSnapshots
+  });
+}
+
+function scheduleTerminalSnapshotSave(
+  snapshotsRef: { current: Record<string, Record<string, TerminalPaneSnapshot>> },
+  timeoutRef: { current: number | undefined }
+): void {
+  if (timeoutRef.current !== undefined) {
+    window.clearTimeout(timeoutRef.current);
+  }
+
+  timeoutRef.current = window.setTimeout(() => {
+    timeoutRef.current = undefined;
+    void pui.settings.saveTerminalSnapshots(cloneTerminalSnapshots(snapshotsRef.current));
+  }, 2_000);
+}
+
+function cloneTerminalSnapshots(
+  snapshots: Record<string, Record<string, TerminalPaneSnapshot>>
+): Record<string, Record<string, TerminalPaneSnapshot>> {
+  return Object.fromEntries(
+    Object.entries(snapshots).map(([workspaceId, workspaceSnapshots]) => [workspaceId, { ...workspaceSnapshots }])
+  );
 }
 
 function startPanelResize(
@@ -1352,6 +1482,7 @@ function startPanelResize(
     max: number;
     calculate: (initialValue: number, deltaX: number, deltaY: number) => number;
     onChange: (value: number) => void;
+    onCommit?: (value: number) => void;
   }
 ) {
   event.preventDefault();
@@ -1364,13 +1495,31 @@ function startPanelResize(
   document.body.style.cursor =
     event.currentTarget.getAttribute("aria-orientation") === "horizontal" ? "row-resize" : "col-resize";
   document.body.style.userSelect = "none";
+  let latestValue = options.initialValue;
+  let resizeFrame: number | undefined;
 
   const onMove = (moveEvent: PointerEvent) => {
-    const nextValue = options.calculate(options.initialValue, moveEvent.clientX - startX, moveEvent.clientY - startY);
-    options.onChange(clamp(nextValue, options.min, options.max));
+    latestValue = clamp(
+      options.calculate(options.initialValue, moveEvent.clientX - startX, moveEvent.clientY - startY),
+      options.min,
+      options.max
+    );
+    if (resizeFrame !== undefined) {
+      return;
+    }
+    resizeFrame = window.requestAnimationFrame(() => {
+      resizeFrame = undefined;
+      options.onChange(latestValue);
+    });
   };
 
   const onUp = () => {
+    if (resizeFrame !== undefined) {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = undefined;
+    }
+    options.onChange(latestValue);
+    options.onCommit?.(latestValue);
     document.body.style.cursor = previousCursor;
     document.body.style.userSelect = previousUserSelect;
     window.removeEventListener("pointermove", onMove);
@@ -1403,12 +1552,14 @@ function PaneTree({
   showHeaders,
   canClosePanes,
   sessionsByPane,
+  snapshotsByPane,
   onFocus,
   onClosePane,
   onPaneContextMenu,
   onSplitPane,
   onResizeSplit,
-  onSession
+  onSession,
+  onSnapshot
 }: {
   node: WorkbenchNode;
   profilesById: Map<string, ConsoleProfile>;
@@ -1422,12 +1573,14 @@ function PaneTree({
   showHeaders: boolean;
   canClosePanes: boolean;
   sessionsByPane: Record<string, string>;
+  snapshotsByPane: Record<string, TerminalPaneSnapshot>;
   onFocus: (paneId: string) => void;
   onClosePane: (paneId: string) => void;
   onPaneContextMenu: (event: MouseEvent, paneId: string) => void;
   onSplitPane: (paneId: string, direction: "right" | "down") => void;
-  onResizeSplit: (splitId: string, sizes: number[]) => void;
+  onResizeSplit: (splitId: string, sizes: number[], commit?: boolean) => void;
   onSession: (paneId: string, sessionId: string) => void;
+  onSnapshot: (paneId: string, snapshot: TerminalPaneSnapshot) => void;
 }) {
   const splitRef = useRef<HTMLDivElement | null>(null);
 
@@ -1451,6 +1604,9 @@ function PaneTree({
         calculate: (_initialValue, deltaX, deltaY) => (node.direction === "right" ? deltaX : deltaY),
         onChange: (delta) => {
           onResizeSplit(node.id, resizeAdjacentSplitSizes(startSizes, boundaryIndex, delta, dimension));
+        },
+        onCommit: (delta) => {
+          onResizeSplit(node.id, resizeAdjacentSplitSizes(startSizes, boundaryIndex, delta, dimension), true);
         }
       });
     };
@@ -1476,12 +1632,14 @@ function PaneTree({
               showHeaders={showHeaders}
               canClosePanes={canClosePanes}
               sessionsByPane={sessionsByPane}
+              snapshotsByPane={snapshotsByPane}
               onFocus={onFocus}
               onClosePane={onClosePane}
               onPaneContextMenu={onPaneContextMenu}
               onSplitPane={onSplitPane}
               onResizeSplit={onResizeSplit}
               onSession={onSession}
+              onSnapshot={onSnapshot}
             />
             {index < node.children.length - 1 ? (
               <div
@@ -1522,6 +1680,8 @@ function PaneTree({
       onSplitDown={() => onSplitPane(node.id, "down")}
       onContextMenu={(event) => onPaneContextMenu(event, node.id)}
       onSession={(sessionId) => onSession(node.id, sessionId)}
+      initialSnapshot={snapshotsByPane[node.id]}
+      onSnapshot={(snapshot) => onSnapshot(node.id, snapshot)}
     />
   );
 }

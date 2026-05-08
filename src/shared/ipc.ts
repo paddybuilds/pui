@@ -13,7 +13,8 @@ export const ipc = {
   settings: {
     loadState: "settings:load-state",
     load: "settings:load",
-    save: "settings:save"
+    save: "settings:save",
+    saveTerminalSnapshots: "settings:save-terminal-snapshots"
   },
   system: {
     listShells: "system:list-shells"
@@ -48,6 +49,7 @@ export const ipc = {
     commit: "git:commit",
     push: "git:push",
     watch: "git:watch",
+    unwatch: "git:unwatch",
     changed: "git:changed"
   }
 } as const;

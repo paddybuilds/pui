@@ -6,6 +6,7 @@ type ExitCallback = (payload: { sessionId: string; exitCode: number; signal?: nu
 type PendingRequest = {
   resolve: (session: TerminalSession) => void;
   reject: (error: Error) => void;
+  timeout: number;
 };
 
 class TerminalBridge {
@@ -21,7 +22,11 @@ class TerminalBridge {
       (socket) =>
         new Promise<TerminalSession>((resolve, reject) => {
           const requestId = crypto.randomUUID();
-          this.pending.set(requestId, { resolve, reject });
+          const timeout = window.setTimeout(() => {
+            this.pending.delete(requestId);
+            reject(new Error("Terminal creation timed out"));
+          }, 5_000);
+          this.pending.set(requestId, { resolve, reject, timeout });
           socket.send(JSON.stringify({ type: "create", requestId, ...payload }));
         })
     );
@@ -84,6 +89,8 @@ class TerminalBridge {
     this.connectPromise = new Promise((resolve, reject) => {
       const socket = new WebSocket("ws://127.0.0.1:4317");
       const timeout = window.setTimeout(() => {
+        socket.close();
+        this.resetSocket(new Error("Terminal bridge timed out"));
         reject(new Error("Terminal bridge timed out"));
       }, 2500);
 
@@ -99,14 +106,13 @@ class TerminalBridge {
       });
 
       socket.addEventListener("close", () => {
-        this.socket = null;
-        this.connectPromise = null;
+        window.clearTimeout(timeout);
+        this.resetSocket(new Error("Terminal bridge closed"));
       });
 
       socket.addEventListener("error", () => {
         window.clearTimeout(timeout);
-        this.socket = null;
-        this.connectPromise = null;
+        this.resetSocket(new Error("Terminal bridge is not running"));
         reject(new Error("Terminal bridge is not running"));
       });
     });
@@ -125,8 +131,12 @@ class TerminalBridge {
       | { type: "exit"; sessionId: string; exitCode: number; signal?: number };
 
     if (message.type === "created") {
-      this.pending.get(message.requestId)?.resolve(message.session);
-      this.pending.delete(message.requestId);
+      const pending = this.pending.get(message.requestId);
+      if (pending) {
+        window.clearTimeout(pending.timeout);
+        pending.resolve(message.session);
+        this.pending.delete(message.requestId);
+      }
       return;
     }
 
@@ -141,6 +151,16 @@ class TerminalBridge {
       for (const callback of this.exitCallbacks) {
         callback({ sessionId: message.sessionId, exitCode: message.exitCode, signal: message.signal });
       }
+    }
+  }
+
+  private resetSocket(error: Error): void {
+    this.socket = null;
+    this.connectPromise = null;
+    for (const [requestId, pending] of this.pending) {
+      window.clearTimeout(pending.timeout);
+      pending.reject(error);
+      this.pending.delete(requestId);
     }
   }
 }

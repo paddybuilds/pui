@@ -3,7 +3,13 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import electronUpdater from "electron-updater";
 import { ipc } from "../shared/ipc";
-import type { AppSettings, AppUpdateSnapshot, ConsoleProfile, TitleBarTheme } from "../shared/types";
+import type {
+  AppSettings,
+  AppUpdateSnapshot,
+  ConsoleProfile,
+  TerminalPaneSnapshot,
+  TitleBarTheme
+} from "../shared/types";
 import { FileExplorerService } from "./fileExplorerService";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
@@ -129,6 +135,11 @@ function registerIpc(): void {
   ipcMain.handle(ipc.settings.loadState, () => storeService.loadSettingsState());
   ipcMain.handle(ipc.settings.load, () => storeService.loadSettings());
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
+  ipcMain.handle(
+    ipc.settings.saveTerminalSnapshots,
+    (_event, snapshots: Record<string, Record<string, TerminalPaneSnapshot>>) =>
+      storeService.saveTerminalSnapshots(snapshots)
+  );
 
   ipcMain.handle(ipc.system.listShells, () => listShells());
   ipcMain.handle(ipc.fileSystem.readDirectory, (_event, payload: { workspace: string; directory?: string }) => {
@@ -216,6 +227,7 @@ function registerIpc(): void {
   });
   ipcMain.handle(ipc.git.push, (_event, workspace: string) => gitService?.push(workspace));
   ipcMain.handle(ipc.git.watch, (_event, workspace: string) => gitService?.watch(workspace));
+  ipcMain.handle(ipc.git.unwatch, (_event, workspace: string) => gitService?.unwatch(workspace));
 }
 
 function sendUpdateStatus(status: AppUpdateSnapshot): void {

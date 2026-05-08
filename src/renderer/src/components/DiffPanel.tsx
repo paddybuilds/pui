@@ -25,6 +25,7 @@ const COMMIT_COMPOSER_DEFAULT_HEIGHT = 230;
 const COMMIT_FILE_SIDEBAR_MIN_WIDTH = 220;
 const COMMIT_FILE_SIDEBAR_MAX_WIDTH = 520;
 const COMMIT_FILE_SIDEBAR_DEFAULT_WIDTH = 300;
+const MAX_RENDERED_DIFF_LINES = 2_500;
 
 export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [activeTab, setActiveTab] = useState<"changes" | "commits">("changes");
@@ -42,7 +43,6 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const commitDetailsRequest = useRef(0);
   const workingDiffRequest = useRef(0);
   const files = useMemo(() => status?.files ?? [], [status?.files]);
-  const fileKey = useMemo(() => files.map((file) => file.path).join("|"), [files]);
   const stagedFiles = useMemo(
     () => files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?"),
     [files]
@@ -95,8 +95,10 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
       return;
     }
 
-    void loadCommits();
-  }, [fileKey, files, loadCommits, status?.isRepo]);
+    if (activeTab === "commits") {
+      void loadCommits();
+    }
+  }, [activeTab, loadCommits, status?.isRepo]);
 
   useEffect(() => {
     const availablePaths = new Set(files.map((file) => file.path));
@@ -679,15 +681,25 @@ function startVerticalResize(
 }
 
 function DiffBlock({ text }: { text: string }) {
+  const lines = useMemo(() => splitDiff(text), [text]);
+  const visibleLines = lines.length > MAX_RENDERED_DIFF_LINES ? lines.slice(0, MAX_RENDERED_DIFF_LINES) : lines;
+
   return (
     <>
-      {splitDiff(text).map((line, index) => (
+      {visibleLines.map((line, index) => (
         <div key={index} className={`diff-line ${line.type}`}>
           <span className="diff-line-number">{line.oldLine ?? ""}</span>
           <span className="diff-line-number">{line.newLine ?? ""}</span>
           <span className="diff-line-text">{line.text || " "}</span>
         </div>
       ))}
+      {visibleLines.length < lines.length ? (
+        <div className="diff-line context">
+          <span className="diff-line-number" />
+          <span className="diff-line-number" />
+          <span className="diff-line-text">{lines.length - visibleLines.length} more lines hidden for performance</span>
+        </div>
+      ) : null}
     </>
   );
 }

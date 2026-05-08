@@ -8,11 +8,16 @@ import { defaultShell, resolveProfileShell } from "./shell";
 type SessionRecord = {
   session: TerminalSession;
   pty: IPty;
-  pendingData: string;
+  pendingChunks: string[];
+  pendingBytes: number;
+  droppedBytes: number;
   flushScheduled: boolean;
   lastCols: number;
   lastRows: number;
 };
+
+const MAX_PENDING_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_OUTPUT_FLUSH_BYTES = 128 * 1024;
 
 export class TerminalService {
   private readonly sessions = new Map<string, SessionRecord>();
@@ -66,7 +71,9 @@ export class TerminalService {
     this.sessions.set(sessionId, {
       session,
       pty: child,
-      pendingData: "",
+      pendingChunks: [],
+      pendingBytes: 0,
+      droppedBytes: 0,
       flushScheduled: false,
       lastCols: cols,
       lastRows: rows
@@ -107,7 +114,27 @@ export class TerminalService {
       return;
     }
 
-    record.pendingData += data;
+    record.pendingChunks.push(data);
+    record.pendingBytes += data.length;
+    trimPendingOutput(record);
+    this.scheduleDataFlush(sessionId, record);
+  }
+
+  private flushData(sessionId: string, record: SessionRecord): void {
+    record.flushScheduled = false;
+    const data = takePendingOutput(record, MAX_OUTPUT_FLUSH_BYTES);
+    if (!data || this.sessions.get(sessionId) !== record) {
+      clearPendingOutput(record);
+      return;
+    }
+
+    this.send(ipc.terminal.data, { sessionId, data });
+    if (record.pendingBytes > 0) {
+      this.scheduleDataFlush(sessionId, record);
+    }
+  }
+
+  private scheduleDataFlush(sessionId: string, record: SessionRecord): void {
     if (record.flushScheduled) {
       return;
     }
@@ -116,18 +143,6 @@ export class TerminalService {
     setImmediate(() => {
       this.flushData(sessionId, record);
     });
-  }
-
-  private flushData(sessionId: string, record: SessionRecord): void {
-    record.flushScheduled = false;
-    const data = record.pendingData;
-    if (!data || this.sessions.get(sessionId) !== record) {
-      record.pendingData = "";
-      return;
-    }
-
-    record.pendingData = "";
-    this.send(ipc.terminal.data, { sessionId, data });
   }
 
   private send(channel: string, payload: unknown): void {
@@ -143,4 +158,57 @@ export class TerminalService {
   static defaultShellName(): string {
     return defaultShell().name;
   }
+}
+
+function trimPendingOutput(record: SessionRecord): void {
+  while (record.pendingBytes > MAX_PENDING_OUTPUT_BYTES && record.pendingChunks.length > 0) {
+    const first = record.pendingChunks[0];
+    const overflow = record.pendingBytes - MAX_PENDING_OUTPUT_BYTES;
+    if (first.length <= overflow) {
+      record.pendingChunks.shift();
+      record.pendingBytes -= first.length;
+      record.droppedBytes += first.length;
+      continue;
+    }
+
+    record.pendingChunks[0] = first.slice(overflow);
+    record.pendingBytes -= overflow;
+    record.droppedBytes += overflow;
+  }
+}
+
+function takePendingOutput(record: SessionRecord, maxBytes: number): string {
+  const parts: string[] = [];
+  let remaining = maxBytes;
+
+  if (record.droppedBytes > 0) {
+    const notice = `\r\n[pui skipped ${record.droppedBytes} bytes of terminal output]\r\n`;
+    parts.push(notice);
+    remaining = Math.max(0, remaining - notice.length);
+    record.droppedBytes = 0;
+  }
+
+  while (remaining > 0 && record.pendingChunks.length > 0) {
+    const first = record.pendingChunks[0];
+    if (first.length <= remaining) {
+      parts.push(first);
+      record.pendingChunks.shift();
+      record.pendingBytes -= first.length;
+      remaining -= first.length;
+      continue;
+    }
+
+    parts.push(first.slice(0, remaining));
+    record.pendingChunks[0] = first.slice(remaining);
+    record.pendingBytes -= remaining;
+    remaining = 0;
+  }
+
+  return parts.join("");
+}
+
+function clearPendingOutput(record: SessionRecord): void {
+  record.pendingChunks = [];
+  record.pendingBytes = 0;
+  record.droppedBytes = 0;
 }

@@ -15,6 +15,7 @@ import type {
   GitOperationResult,
   GitStatus,
   SettingsLoadState,
+  TerminalPaneSnapshot,
   TerminalSession
 } from "../../../shared/types";
 import { terminalBridge } from "./terminalBridge";
@@ -129,6 +130,10 @@ const browserPreviewApi: PuiApi = {
     load: async () => settings,
     save: async (next) => {
       settings = next;
+      return settings;
+    },
+    saveTerminalSnapshots: async (snapshots: Record<string, Record<string, TerminalPaneSnapshot>>) => {
+      settings = { ...settings, terminalSnapshots: snapshots };
       return settings;
     }
   },
@@ -273,6 +278,7 @@ const browserPreviewApi: PuiApi = {
         error: error instanceof Error ? error.message : String(error)
       })),
     watch: async () => undefined,
+    unwatch: async () => undefined,
     onChanged: () => noopUnsubscribe
   }
 };

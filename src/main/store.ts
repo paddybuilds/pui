@@ -1,6 +1,6 @@
 import Store from "electron-store";
 import { existsSync, readFileSync } from "node:fs";
-import type { AppSettings, SettingsLoadState } from "../shared/types";
+import type { AppSettings, SettingsLoadState, TerminalPaneSnapshot } from "../shared/types";
 import { defaultSettings } from "./defaults";
 
 type Schema = {
@@ -31,6 +31,13 @@ export class StoreService {
       new Set([settings.workspace, ...settings.recentWorkspaces].filter(Boolean))
     ).slice(0, 12);
     const next = { ...settings, recentWorkspaces };
+    this.store.set("settings", next);
+    return next;
+  }
+
+  saveTerminalSnapshots(snapshots: Record<string, Record<string, TerminalPaneSnapshot>>): AppSettings {
+    const settings = this.loadSettings();
+    const next = { ...settings, terminalSnapshots: snapshots };
     this.store.set("settings", next);
     return next;
   }

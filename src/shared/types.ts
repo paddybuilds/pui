@@ -219,6 +219,7 @@ export type AppPreferences = {
   gitPanelDefault: GitPanelDefault;
   updateChecksEnabled: boolean;
   codeAutocompleteEnabled: boolean;
+  resumeTerminalSessions: boolean;
   onboardingCompletedVersion?: string;
 };
 
@@ -228,7 +229,13 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   terminalFontSize: 13,
   gitPanelDefault: "open",
   updateChecksEnabled: true,
-  codeAutocompleteEnabled: true
+  codeAutocompleteEnabled: true,
+  resumeTerminalSessions: false
+};
+
+export type TerminalPaneSnapshot = {
+  content: string;
+  capturedAt: string;
 };
 
 export type AppSettings = {
@@ -239,6 +246,7 @@ export type AppSettings = {
   activeWorkspaceId?: string;
   workspaces?: TerminalWorkspace[];
   layout?: WorkbenchLayout;
+  terminalSnapshots?: Record<string, Record<string, TerminalPaneSnapshot>>;
 };
 
 export type SettingsLoadState = {

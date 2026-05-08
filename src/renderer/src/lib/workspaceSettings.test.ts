@@ -167,7 +167,7 @@ describe("workspace settings helpers", () => {
           terminalFontSize: 15
         },
         "darwin",
-        idFactory(["shell-profile", "pane-a", "workspace-a"])
+        idFactory(["shell-profile", "codex-profile", "pane-a", "workspace-a"])
       )
     ).toEqual({
       workspace: "/repo/pui",
@@ -183,6 +183,19 @@ describe("workspace settings helpers", () => {
           appearance: {
             color: "#9ca3af",
             icon: "terminal"
+          }
+        },
+        {
+          id: "codex-profile",
+          name: "Codex",
+          cwd: "/repo/pui/app",
+          command: "codex",
+          args: [],
+          env: {},
+          shortcut: "CmdOrCtrl+2",
+          appearance: {
+            color: "#9ca3af",
+            icon: "sparkles"
           }
         }
       ],
@@ -212,6 +225,19 @@ describe("workspace settings helpers", () => {
               appearance: {
                 color: "#9ca3af",
                 icon: "terminal"
+              }
+            },
+            {
+              id: "codex-profile",
+              name: "Codex",
+              cwd: "/repo/pui/app",
+              command: "codex",
+              args: [],
+              env: {},
+              shortcut: "CmdOrCtrl+2",
+              appearance: {
+                color: "#9ca3af",
+                icon: "sparkles"
               }
             }
           ],
@@ -255,6 +281,7 @@ describe("workspace settings helpers", () => {
         text: "#111827"
       },
       defaultTerminalProfileId: "profile-a",
+      codexProfileEnabled: true,
       gitPanelDefault: "closed",
       updateChecksEnabled: false,
       codeAutocompleteEnabled: false,
@@ -293,7 +320,7 @@ describe("workspace settings helpers", () => {
           defaultCwd: "/repo/pui/app"
         },
         "darwin",
-        idFactory(["shell-profile", "pane-a", "workspace-a"])
+        idFactory(["shell-profile", "codex-profile", "pane-a", "workspace-a"])
       )
     ).toMatchObject({
       workspace: "/repo/pui",
@@ -307,6 +334,16 @@ describe("workspace settings helpers", () => {
           env: { PUI_SHELL: "fish" },
           shortcut: "CmdOrCtrl+1",
           appearance: { color: "#14b8a6", icon: "terminal" }
+        },
+        {
+          id: "codex-profile",
+          name: "Codex",
+          cwd: "/repo/pui/app",
+          command: "codex",
+          args: [],
+          env: {},
+          shortcut: "CmdOrCtrl+2",
+          appearance: { color: "#9ca3af", icon: "sparkles" }
         }
       ],
       appPreferences: {
@@ -320,6 +357,10 @@ describe("workspace settings helpers", () => {
             {
               name: "fish",
               command: "/opt/homebrew/bin/fish"
+            },
+            {
+              name: "Codex",
+              command: "codex"
             }
           ]
         }

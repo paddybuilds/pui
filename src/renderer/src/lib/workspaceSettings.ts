@@ -140,6 +140,12 @@ export function normalizeAppPreferences(
         : typeof defaults.resumeTerminalSessions === "boolean"
           ? defaults.resumeTerminalSessions
           : DEFAULT_APP_PREFERENCES.resumeTerminalSessions,
+    codexSubagentTerminalsEnabled:
+      typeof preferences?.codexSubagentTerminalsEnabled === "boolean"
+        ? preferences.codexSubagentTerminalsEnabled
+        : typeof defaults.codexSubagentTerminalsEnabled === "boolean"
+          ? defaults.codexSubagentTerminalsEnabled
+          : DEFAULT_APP_PREFERENCES.codexSubagentTerminalsEnabled,
     ...(onboardingCompletedVersion ? { onboardingCompletedVersion } : {})
   };
 }

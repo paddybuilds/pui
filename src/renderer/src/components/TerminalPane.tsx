@@ -1,7 +1,7 @@
-import { type MouseEvent, useEffect, useRef } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
-import { X } from "lucide-react";
+import { ArrowDown, X } from "lucide-react";
 import type { ConsoleProfile, TerminalPaneSnapshot } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
 import { matchesShortcut } from "../lib/shortcuts";
@@ -52,6 +52,7 @@ type TerminalRecord = {
   disposed: boolean;
   outputWriteInProgress: boolean;
   lastSnapshotAt: number;
+  appearanceKey?: string;
   snapshotFrame?: number;
   snapshotTimeout?: number;
   onSnapshot?: (snapshot: TerminalPaneSnapshot) => void;
@@ -65,6 +66,7 @@ const MAX_TERMINAL_SNAPSHOT_LINES = 300;
 const MAX_TERMINAL_SNAPSHOT_CHARS = 80_000;
 const TERMINAL_SNAPSHOT_IDLE_MS = 1_500;
 const TERMINAL_SNAPSHOT_INTERVAL_MS = 10_000;
+const JUMP_TO_RECENT_THRESHOLD_LINES = 5;
 const terminalRecords = new Map<string, TerminalRecord>();
 const terminalRecordsBySession = new Map<string, TerminalRecord>();
 let offTerminalData: (() => void) | undefined;
@@ -154,10 +156,14 @@ export function TerminalPane({
   const initialSnapshotRef = useRef(initialSnapshot);
   const onSnapshotRef = useRef(onSnapshot);
   const activeRef = useRef(active);
+  const paneSessionIdRef = useRef(pane.sessionId);
   const profileRef = useRef(profile);
   const terminalThemeRef = useRef(terminalTheme);
+  const terminalThemeKeyRef = useRef(terminalThemeKey);
   const terminalFontSizeRef = useRef(terminalFontSize);
   const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
+  const previousActiveRef = useRef<boolean>();
+  const [showJumpToRecent, setShowJumpToRecent] = useState(false);
 
   useEffect(() => {
     onSessionRef.current = onSession;
@@ -165,8 +171,10 @@ export function TerminalPane({
 
   useEffect(() => {
     activeRef.current = active;
+    paneSessionIdRef.current = pane.sessionId;
     profileRef.current = profile;
     terminalThemeRef.current = terminalTheme;
+    terminalThemeKeyRef.current = terminalThemeKey;
     terminalFontSizeRef.current = terminalFontSize;
   });
 
@@ -193,7 +201,7 @@ export function TerminalPane({
     const record = getOrCreateTerminalRecord(
       workspaceId,
       pane.id,
-      pane.sessionId,
+      paneSessionIdRef.current,
       profileRef.current,
       terminalThemeRef.current,
       initialSnapshotRef.current,
@@ -253,8 +261,14 @@ export function TerminalPane({
       void pui.clipboard.writeText(text);
     };
     mount.addEventListener("copy", handleCopy, { capture: true });
-    applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
+    const updateJumpToRecentVisibility = () => {
+      const nextVisible = isTerminalScrolledAwayFromRecent(record.terminal);
+      setShowJumpToRecent((current) => (current === nextVisible ? current : nextVisible));
+    };
+    const scrollDisposable = record.terminal.onScroll(updateJumpToRecentVisibility);
+    applyTerminalAppearance(record, terminalThemeRef.current, terminalFontSizeRef.current, terminalThemeKeyRef.current);
     scheduleFitAndResize(record);
+    updateJumpToRecentVisibility();
     if (record.sessionId) {
       onSessionRef.current(record.sessionId);
     }
@@ -268,6 +282,8 @@ export function TerminalPane({
       observer.disconnect();
       mount.removeEventListener("paste", handlePaste, { capture: true });
       mount.removeEventListener("copy", handleCopy, { capture: true });
+      scrollDisposable.dispose();
+      setShowJumpToRecent(false);
       captureTerminalSnapshot(record);
       if (recordRef.current === record) {
         record.shortcutHandler.current = undefined;
@@ -275,17 +291,27 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [pane.id, pane.sessionId, workspaceId]);
+  }, [pane.id, workspaceId]);
 
   useEffect(() => {
-    if (active) {
-      recordRef.current?.terminal.focus();
+    if (recordRef.current) {
+      if (active && previousActiveRef.current !== true) {
+        recordRef.current.terminal.focus();
+      }
+      previousActiveRef.current = active;
     }
   }, [active]);
 
   useEffect(() => {
+    const record = recordRef.current;
+    if (record && pane.sessionId && record.sessionId !== pane.sessionId) {
+      assignTerminalSession(record, pane.sessionId);
+    }
+  }, [pane.sessionId]);
+
+  useEffect(() => {
     if (recordRef.current) {
-      applyTerminalAppearance(recordRef.current.terminal, terminalTheme, terminalFontSize);
+      applyTerminalAppearance(recordRef.current, terminalTheme, terminalFontSize, terminalThemeKey);
       scheduleFitAndResize(recordRef.current);
     }
   }, [terminalFontSize, terminalTheme, terminalThemeKey]);
@@ -293,8 +319,15 @@ export function TerminalPane({
   const focusPane = () => {
     onFocus();
     recordRef.current?.terminal.focus();
-    const textarea = xtermMountRef.current?.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
-    textarea?.focus();
+  };
+
+  const jumpToRecent = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const terminal = recordRef.current?.terminal;
+    terminal?.scrollToBottom();
+    terminal?.focus();
+    setShowJumpToRecent(false);
   };
 
   return (
@@ -327,9 +360,26 @@ export function TerminalPane({
       ) : null}
       <div className="terminal-host">
         <div className="xterm-mount" ref={xtermMountRef} />
+        {showJumpToRecent ? (
+          <button
+            className="terminal-jump-to-recent"
+            type="button"
+            title="Jump to recent"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={jumpToRecent}
+          >
+            <ArrowDown size={14} />
+            <span>Jump to recent</span>
+          </button>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function isTerminalScrolledAwayFromRecent(terminal: Terminal): boolean {
+  const buffer = terminal.buffer.active;
+  return buffer.baseY - buffer.viewportY > JUMP_TO_RECENT_THRESHOLD_LINES;
 }
 
 async function pasteClipboardIntoTerminal(record: TerminalRecord): Promise<void> {
@@ -404,7 +454,8 @@ function getOrCreateTerminalRecord(
 
   ensureTerminalEventRouter();
   const terminal = new Terminal({
-    cursorBlink: false,
+    cursorBlink: true,
+    cursorInactiveStyle: "none",
     convertEol: true,
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,
@@ -447,6 +498,7 @@ function getOrCreateTerminalRecord(
     void pui.terminal
       .create({
         profile,
+        workspaceId,
         paneId,
         cols: terminal.cols,
         rows: terminal.rows
@@ -817,12 +869,21 @@ function resizeTerminalIfNeeded(record: TerminalRecord): void {
   void pui.terminal.resize(record.sessionId, cols, rows);
 }
 
-function applyTerminalAppearance(terminal: Terminal, theme: ITheme, fontSize: number): void {
+function applyTerminalAppearance(record: TerminalRecord, theme: ITheme, fontSize: number, themeKey: string): void {
+  const terminal = record.terminal;
+  const appearanceKey = `${themeKey}:${fontSize}`;
+  if (record.appearanceKey === appearanceKey) {
+    return;
+  }
+
+  record.appearanceKey = appearanceKey;
   terminal.options.theme = theme;
   if (terminal.options.fontSize !== fontSize) {
     terminal.options.fontSize = fontSize;
   }
   window.requestAnimationFrame(() => {
-    terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    if (!record.disposed) {
+      terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    }
   });
 }

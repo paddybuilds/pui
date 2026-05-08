@@ -110,6 +110,15 @@ export function moveTerminalPaneRecord(fromWorkspaceId: string, toWorkspaceId: s
   terminalRecords.set(terminalRecordKey(toWorkspaceId, paneId), record);
 }
 
+export function pasteIntoTerminalPane(workspaceId: string, paneId: string): void {
+  const record = terminalRecords.get(terminalRecordKey(workspaceId, paneId));
+  if (!record) {
+    return;
+  }
+
+  void pasteClipboardIntoTerminal(record);
+}
+
 export function TerminalPane({
   pane,
   workspaceId,
@@ -192,7 +201,7 @@ export function TerminalPane({
       if (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V")) {
         event.preventDefault();
         event.stopPropagation();
-        void pasteClipboardIntoTerminal(record);
+        pasteIntoTerminalRecord(record);
         return false;
       }
       if (matchesShortcut(event, "CmdOrCtrl+D")) {
@@ -223,7 +232,7 @@ export function TerminalPane({
         return;
       }
       event.preventDefault();
-      record.terminal.paste(text);
+      pasteTextIntoTerminal(record, text);
     };
     mount.addEventListener("paste", handlePaste, { capture: true });
     record.terminal.options.cursorBlink = activeRef.current;
@@ -314,9 +323,20 @@ async function pasteClipboardIntoTerminal(record: TerminalRecord): Promise<void>
   }
 
   const text = await pui.clipboard.readText();
-  if (text && !record.disposed) {
-    record.terminal.paste(text);
+  pasteTextIntoTerminal(record, text);
+}
+
+function pasteIntoTerminalRecord(record: TerminalRecord): void {
+  void pasteClipboardIntoTerminal(record);
+}
+
+function pasteTextIntoTerminal(record: TerminalRecord, text: string): void {
+  if (!text || record.disposed) {
+    return;
   }
+
+  record.terminal.focus();
+  record.terminal.paste(text);
 }
 
 function getOrCreateTerminalRecord(

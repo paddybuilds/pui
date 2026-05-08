@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { ITheme } from "@xterm/xterm";
 import {
+  ClipboardPaste,
   Edit3,
   Files,
   GitCompare,
@@ -47,6 +48,7 @@ import {
   disposeTerminalPane,
   disposeTerminalPanes,
   moveTerminalPaneRecord,
+  pasteIntoTerminalPane,
   TerminalPane
 } from "./components/TerminalPane";
 import { useContextMenu } from "./components/useContextMenu";
@@ -1010,6 +1012,17 @@ export function App() {
   const openPaneContextMenu = (event: MouseEvent, paneId: string) => {
     setActivePaneId(paneId);
     openContextMenu(event, [
+      {
+        id: "paste",
+        label: "Paste",
+        shortcut: shortcutLabel("CmdOrCtrl+V", pui.platform),
+        icon: <ClipboardPaste size={14} />,
+        onSelect: () => {
+          if (activeWorkspace) {
+            pasteIntoTerminalPane(activeWorkspace.id, paneId);
+          }
+        }
+      },
       {
         id: "split-right",
         label: "Split right",

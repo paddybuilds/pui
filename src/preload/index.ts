@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { clipboard, contextBridge, ipcRenderer } from "electron";
 import { ipc } from "../shared/ipc";
 import type {
   AppSettings,
@@ -59,6 +59,9 @@ const api = {
   },
   system: {
     listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
+  },
+  clipboard: {
+    readText: () => Promise.resolve(clipboard.readText())
   },
   fileSystem: {
     readDirectory: (workspace: string, directory?: string) =>

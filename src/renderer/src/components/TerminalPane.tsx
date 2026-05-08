@@ -195,7 +195,6 @@ export function TerminalPane({
       pane.id,
       pane.sessionId,
       profileRef.current,
-      activeRef.current,
       terminalThemeRef.current,
       initialSnapshotRef.current,
       onSnapshotRef.current,
@@ -254,7 +253,6 @@ export function TerminalPane({
       void pui.clipboard.writeText(text);
     };
     mount.addEventListener("copy", handleCopy, { capture: true });
-    record.terminal.options.cursorBlink = activeRef.current;
     applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
     scheduleFitAndResize(record);
     if (record.sessionId) {
@@ -280,11 +278,8 @@ export function TerminalPane({
   }, [pane.id, pane.sessionId, workspaceId]);
 
   useEffect(() => {
-    if (recordRef.current) {
-      recordRef.current.terminal.options.cursorBlink = active;
-      if (active) {
-        recordRef.current.terminal.focus();
-      }
+    if (active) {
+      recordRef.current?.terminal.focus();
     }
   }, [active]);
 
@@ -392,7 +387,6 @@ function getOrCreateTerminalRecord(
   paneId: string,
   existingSessionId: string | undefined,
   profile: ConsoleProfile,
-  active: boolean,
   terminalTheme: ITheme,
   initialSnapshot: TerminalPaneSnapshot | undefined,
   onSnapshot: ((snapshot: TerminalPaneSnapshot) => void) | undefined,
@@ -410,7 +404,7 @@ function getOrCreateTerminalRecord(
 
   ensureTerminalEventRouter();
   const terminal = new Terminal({
-    cursorBlink: active,
+    cursorBlink: false,
     convertEol: true,
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,

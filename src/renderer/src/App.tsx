@@ -41,7 +41,6 @@ import { DevSettingsModal } from "./components/DevSettingsModal";
 import { GitPanel } from "./components/DiffPanel";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { OnboardingPanel } from "./components/OnboardingPanel";
-import { PuiIcon } from "./components/PuiIcon";
 import { SettingsModal } from "./components/SettingsModal";
 import {
   disposeTerminalPane,
@@ -959,7 +958,9 @@ export function App() {
     <div className="app-shell" style={{ gridTemplateColumns: `${sidebarWidth}px ${RESIZER_SIZE}px minmax(0, 1fr)` }}>
       <aside className="sidebar">
         <div className="brand">
-          <PuiIcon size={24} />
+          <span className="brand-emoji" aria-hidden="true">
+            💩
+          </span>
           <span>Pui</span>
         </div>
 

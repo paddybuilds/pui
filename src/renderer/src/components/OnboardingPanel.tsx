@@ -9,7 +9,6 @@ import type {
   ThemePreset
 } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
-import { PuiIcon } from "./PuiIcon";
 import {
   basename,
   createInitialWorkspaceSettings,
@@ -178,7 +177,9 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
         ) : null}
         <aside className="onboarding-summary">
           <div className="brand onboarding-brand">
-            <PuiIcon size={24} />
+            <span className="brand-emoji" aria-hidden="true">
+              💩
+            </span>
             <span>Pui</span>
           </div>
           <nav className="onboarding-steps" aria-label="Onboarding steps">

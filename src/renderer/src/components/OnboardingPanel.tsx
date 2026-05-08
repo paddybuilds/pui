@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, FolderOpen, Play, TerminalSquare, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FolderOpen, Play, X } from "lucide-react";
 import type { ShellCandidate } from "../../../preload";
 import type {
   AppDensity,
@@ -177,7 +177,9 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
         ) : null}
         <aside className="onboarding-summary">
           <div className="brand onboarding-brand">
-            <TerminalSquare size={18} />
+            <span className="brand-emoji" aria-hidden="true">
+              💩
+            </span>
             <span>Pui</span>
           </div>
           <nav className="onboarding-steps" aria-label="Onboarding steps">

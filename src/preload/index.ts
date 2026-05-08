@@ -8,6 +8,11 @@ import type {
   GitCommitDetails,
   GitCommitFileDiff,
   GitDiff,
+  FilePathListResult,
+  FileSystemEntry,
+  FileSystemMutationResult,
+  FileReadResult,
+  FileWriteResult,
   GitOperationResult,
   GitStatus,
   SettingsLoadState,
@@ -51,6 +56,32 @@ const api = {
   },
   system: {
     listShells: () => ipcRenderer.invoke(ipc.system.listShells) as Promise<ShellCandidate[]>
+  },
+  fileSystem: {
+    readDirectory: (workspace: string, directory?: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.readDirectory, { workspace, directory }) as Promise<FileSystemEntry[]>,
+    listFilePaths: (workspace: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.listFilePaths, workspace) as Promise<FilePathListResult>,
+    readFile: (workspace: string, filePath: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.readFile, { workspace, filePath }) as Promise<FileReadResult>,
+    writeFile: (workspace: string, filePath: string, contents: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.writeFile, { workspace, filePath, contents }) as Promise<FileWriteResult>,
+    createFile: (workspace: string, directory: string, name: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.createFile, {
+        workspace,
+        directory,
+        name
+      }) as Promise<FileSystemMutationResult>,
+    createDirectory: (workspace: string, directory: string, name: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.createDirectory, {
+        workspace,
+        directory,
+        name
+      }) as Promise<FileSystemMutationResult>,
+    rename: (workspace: string, target: string, name: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.rename, { workspace, target, name }) as Promise<FileSystemMutationResult>,
+    delete: (workspace: string, target: string) =>
+      ipcRenderer.invoke(ipc.fileSystem.delete, { workspace, target }) as Promise<FileSystemMutationResult>
   },
   terminal: {
     create: (payload: unknown) => ipcRenderer.invoke(ipc.terminal.create, payload) as Promise<TerminalSession>,

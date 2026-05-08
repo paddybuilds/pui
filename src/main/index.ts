@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import electronUpdater from "electron-updater";
 import { ipc } from "../shared/ipc";
 import type { AppSettings, AppUpdateSnapshot, ConsoleProfile, TitleBarTheme } from "../shared/types";
+import { FileExplorerService } from "./fileExplorerService";
 import { GitWorkspaceService } from "./gitService";
 import { listShells } from "./shell";
 import { StoreService } from "./store";
@@ -21,15 +22,31 @@ const DEFAULT_TITLE_BAR_THEME: TitleBarTheme = {
 };
 
 const storeService = new StoreService();
+const fileExplorerService = new FileExplorerService();
 const { autoUpdater } = electronUpdater;
+
+const createPuiIcon = () =>
+  nativeImage.createFromDataURL(
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="14" fill="#121823"/>
+        <text x="32" y="42" font-size="40" text-anchor="middle">💩</text>
+      </svg>`
+    )}`
+  );
+
 function createWindow(): void {
   const isMac = process.platform === "darwin";
+  const appIcon = createPuiIcon();
+  app.dock?.setIcon(appIcon);
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
     minWidth: 1080,
     minHeight: 720,
     title: "Pui",
+    icon: appIcon,
     backgroundColor: DEFAULT_TITLE_BAR_THEME.color,
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     trafficLightPosition: isMac ? { x: 20, y: 20 } : undefined,
@@ -114,6 +131,39 @@ function registerIpc(): void {
   ipcMain.handle(ipc.settings.save, (_event, settings: AppSettings) => storeService.saveSettings(settings));
 
   ipcMain.handle(ipc.system.listShells, () => listShells());
+  ipcMain.handle(ipc.fileSystem.readDirectory, (_event, payload: { workspace: string; directory?: string }) => {
+    return fileExplorerService.readDirectory(payload.workspace, payload.directory);
+  });
+  ipcMain.handle(ipc.fileSystem.listFilePaths, (_event, workspace: string) => {
+    return fileExplorerService.listFilePaths(workspace);
+  });
+  ipcMain.handle(ipc.fileSystem.readFile, (_event, payload: { workspace: string; filePath: string }) => {
+    return fileExplorerService.readFile(payload.workspace, payload.filePath);
+  });
+  ipcMain.handle(
+    ipc.fileSystem.writeFile,
+    (_event, payload: { workspace: string; filePath: string; contents: string }) => {
+      return fileExplorerService.writeFile(payload.workspace, payload.filePath, payload.contents);
+    }
+  );
+  ipcMain.handle(
+    ipc.fileSystem.createFile,
+    (_event, payload: { workspace: string; directory: string; name: string }) => {
+      return fileExplorerService.createFile(payload.workspace, payload.directory, payload.name);
+    }
+  );
+  ipcMain.handle(
+    ipc.fileSystem.createDirectory,
+    (_event, payload: { workspace: string; directory: string; name: string }) => {
+      return fileExplorerService.createDirectory(payload.workspace, payload.directory, payload.name);
+    }
+  );
+  ipcMain.handle(ipc.fileSystem.rename, (_event, payload: { workspace: string; target: string; name: string }) => {
+    return fileExplorerService.renamePath(payload.workspace, payload.target, payload.name);
+  });
+  ipcMain.handle(ipc.fileSystem.delete, (_event, payload: { workspace: string; target: string }) => {
+    return fileExplorerService.deletePath(payload.workspace, payload.target);
+  });
 
   ipcMain.handle(
     ipc.terminal.create,

@@ -14,6 +14,7 @@ publish:
   repo: pui
 mac:
   category: public.app-category.developer-tools
+  icon: build/icon.icns
   target:
     - target: dmg
       arch:
@@ -28,6 +29,7 @@ mac:
   identity: null
 win:
   artifactName: ${productName}-Setup-${version}.${ext}
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:

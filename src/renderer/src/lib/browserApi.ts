@@ -5,6 +5,9 @@ import type {
   AppUpdateSnapshot,
   AppVersionInfo,
   ConsoleProfile,
+  FileSystemEntry,
+  FileReadResult,
+  FileWriteResult,
   GitCommit,
   GitCommitDetails,
   GitCommitFileDiff,
@@ -65,6 +68,10 @@ let settings: AppSettings = {
 const noopUnsubscribe = () => undefined;
 const bridgeBaseUrl = "http://127.0.0.1:4317";
 const previewVersion = "0.1.0";
+const previewFiles = new Map<string, string>([
+  ["package.json", '{\n  "name": "pui",\n  "version": "0.1.0"\n}\n'],
+  ["src/App.tsx", "export function App() {\n  return <div>Pui preview</div>;\n}\n"]
+]);
 
 export function getPuiApi(): PuiApi {
   if (!window.pui) {
@@ -127,6 +134,95 @@ const browserPreviewApi: PuiApi = {
   },
   system: {
     listShells: async () => previewShellCandidates(browserPreviewApi.platform)
+  },
+  fileSystem: {
+    readDirectory: async (workspacePath, directory): Promise<FileSystemEntry[]> => {
+      const isRoot = !directory || directory === workspacePath;
+      if (isRoot) {
+        return [
+          {
+            name: "src",
+            path: `${workspacePath}${pathSeparator()}src`,
+            relativePath: "src",
+            kind: "directory"
+          },
+          {
+            name: "package.json",
+            path: `${workspacePath}${pathSeparator()}package.json`,
+            relativePath: "package.json",
+            kind: "file"
+          }
+        ];
+      }
+      return [
+        {
+          name: "App.tsx",
+          path: `${directory}${pathSeparator()}App.tsx`,
+          relativePath: "src/App.tsx",
+          kind: "file"
+        }
+      ];
+    },
+    listFilePaths: async (workspacePath) => ({
+      workspace: workspacePath,
+      paths: Array.from(previewFiles.keys()).sort((left, right) =>
+        left.localeCompare(right, undefined, { sensitivity: "base", numeric: true })
+      ),
+      limit: 2000,
+      truncated: false
+    }),
+    readFile: async (workspacePath, filePath): Promise<FileReadResult> => {
+      const relativePath = relativePreviewPath(workspacePath, filePath);
+      const contents = previewFiles.get(relativePath);
+      if (contents === undefined) {
+        throw new Error("Preview file not found.");
+      }
+      return {
+        kind: "text",
+        path: filePath,
+        relativePath,
+        name: relativePath.split(/[\\/]/).pop() ?? relativePath,
+        contents,
+        mimeType: "text/plain",
+        size: contents.length,
+        modifiedAt: new Date().toISOString()
+      };
+    },
+    writeFile: async (workspacePath, filePath, contents): Promise<FileWriteResult> => {
+      const relativePath = relativePreviewPath(workspacePath, filePath);
+      previewFiles.set(relativePath, contents);
+      return {
+        path: filePath,
+        relativePath,
+        size: contents.length,
+        modifiedAt: new Date().toISOString()
+      };
+    },
+    createFile: async (workspacePath, directory, name) => ({
+      entry: {
+        name,
+        path: `${directory}${pathSeparator()}${name}`,
+        relativePath: relativePreviewPath(workspacePath, `${directory}${pathSeparator()}${name}`),
+        kind: "file" as const
+      }
+    }),
+    createDirectory: async (workspacePath, directory, name) => ({
+      entry: {
+        name,
+        path: `${directory}${pathSeparator()}${name}`,
+        relativePath: relativePreviewPath(workspacePath, `${directory}${pathSeparator()}${name}`),
+        kind: "directory" as const
+      }
+    }),
+    rename: async (workspacePath, target, name) => ({
+      entry: {
+        name,
+        path: target.replace(/[^\\/]+$/, name),
+        relativePath: relativePreviewPath(workspacePath, target.replace(/[^\\/]+$/, name)),
+        kind: "file" as const
+      }
+    }),
+    delete: async (_workspacePath, target) => ({ deletedPath: target })
   },
   terminal: {
     create: (payload) =>
@@ -295,4 +391,13 @@ function customShellCandidate(): ShellCandidate {
     source: "custom",
     available: true
   };
+}
+
+function pathSeparator(): string {
+  return isPreviewWindows ? "\\" : "/";
+}
+
+function relativePreviewPath(workspacePath: string, filePath: string): string {
+  const prefix = workspacePath.endsWith(pathSeparator()) ? workspacePath : `${workspacePath}${pathSeparator()}`;
+  return filePath.startsWith(prefix) ? filePath.slice(prefix.length).replace(/\\/g, "/") : filePath.replace(/\\/g, "/");
 }

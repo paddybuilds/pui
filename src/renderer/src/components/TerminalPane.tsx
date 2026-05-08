@@ -42,8 +42,11 @@ type TerminalRecord = {
   fitFrame?: number;
   lastResize?: { cols: number; rows: number };
   exited: boolean;
+  disposed: boolean;
+  outputWriteInProgress: boolean;
 };
 
+const MAX_TERMINAL_WRITE_CHUNK = 32 * 1024;
 const terminalRecords = new Map<string, TerminalRecord>();
 const terminalRecordsBySession = new Map<string, TerminalRecord>();
 let offTerminalData: (() => void) | undefined;
@@ -63,6 +66,7 @@ export function disposeTerminalPane(workspaceId: string, paneId: string): void {
 
   record.inputDisposable.dispose();
   unregisterTerminalSession(record);
+  record.disposed = true;
   cancelPendingTerminalWork(record);
   if (record.sessionId && !record.exited) {
     void pui.terminal.kill(record.sessionId);
@@ -275,7 +279,9 @@ function getOrCreateTerminalRecord(
       }
     }),
     outputBuffer: "",
-    exited: false
+    exited: false,
+    disposed: false,
+    outputWriteInProgress: false
   };
 
   terminalRecords.set(key, record);
@@ -384,19 +390,60 @@ function cancelPendingTerminalWork(record: TerminalRecord): void {
 }
 
 function queueTerminalOutput(record: TerminalRecord, data: string): void {
+  if (record.disposed) {
+    return;
+  }
+
   record.outputBuffer += data;
-  if (record.outputFlushFrame !== undefined) {
+  scheduleTerminalOutputDrain(record);
+}
+
+function scheduleTerminalOutputDrain(record: TerminalRecord): void {
+  if (record.disposed || record.outputWriteInProgress || record.outputFlushFrame !== undefined) {
     return;
   }
 
   record.outputFlushFrame = window.requestAnimationFrame(() => {
     record.outputFlushFrame = undefined;
-    const output = record.outputBuffer;
-    record.outputBuffer = "";
-    if (output) {
-      record.terminal.write(output);
+    drainTerminalOutput(record);
+  });
+}
+
+function drainTerminalOutput(record: TerminalRecord): void {
+  if (record.disposed || record.outputWriteInProgress || !record.outputBuffer) {
+    return;
+  }
+
+  const output = takeTerminalOutputChunk(record);
+  if (!output) {
+    return;
+  }
+
+  record.outputWriteInProgress = true;
+  record.terminal.write(output, () => {
+    record.outputWriteInProgress = false;
+    if (record.outputBuffer) {
+      scheduleTerminalOutputDrain(record);
     }
   });
+}
+
+function takeTerminalOutputChunk(record: TerminalRecord): string {
+  if (record.outputBuffer.length <= MAX_TERMINAL_WRITE_CHUNK) {
+    const output = record.outputBuffer;
+    record.outputBuffer = "";
+    return output;
+  }
+
+  let end = MAX_TERMINAL_WRITE_CHUNK;
+  const lastCodeUnit = record.outputBuffer.charCodeAt(end - 1);
+  if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) {
+    end -= 1;
+  }
+
+  const output = record.outputBuffer.slice(0, end);
+  record.outputBuffer = record.outputBuffer.slice(end);
+  return output;
 }
 
 function scheduleFitAndResize(record: TerminalRecord): void {

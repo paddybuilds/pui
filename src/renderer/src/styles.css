@@ -864,11 +864,6 @@ kbd {
   border-color: transparent;
 }
 
-.terminal-pane.inactive .xterm-cursor,
-.terminal-pane.inactive .xterm-cursor-layer {
-  visibility: hidden !important;
-}
-
 .pane-header {
   min-width: 0;
   overflow: hidden;

@@ -52,6 +52,7 @@ type TerminalRecord = {
   disposed: boolean;
   outputWriteInProgress: boolean;
   lastSnapshotAt: number;
+  appearanceKey?: string;
   snapshotFrame?: number;
   snapshotTimeout?: number;
   onSnapshot?: (snapshot: TerminalPaneSnapshot) => void;
@@ -155,10 +156,13 @@ export function TerminalPane({
   const initialSnapshotRef = useRef(initialSnapshot);
   const onSnapshotRef = useRef(onSnapshot);
   const activeRef = useRef(active);
+  const paneSessionIdRef = useRef(pane.sessionId);
   const profileRef = useRef(profile);
   const terminalThemeRef = useRef(terminalTheme);
+  const terminalThemeKeyRef = useRef(terminalThemeKey);
   const terminalFontSizeRef = useRef(terminalFontSize);
   const shortcutActionsRef = useRef({ canClose, onClose, onSplitRight, onSplitDown });
+  const previousActiveRef = useRef<boolean>();
   const [showJumpToRecent, setShowJumpToRecent] = useState(false);
 
   useEffect(() => {
@@ -167,8 +171,10 @@ export function TerminalPane({
 
   useEffect(() => {
     activeRef.current = active;
+    paneSessionIdRef.current = pane.sessionId;
     profileRef.current = profile;
     terminalThemeRef.current = terminalTheme;
+    terminalThemeKeyRef.current = terminalThemeKey;
     terminalFontSizeRef.current = terminalFontSize;
   });
 
@@ -195,7 +201,7 @@ export function TerminalPane({
     const record = getOrCreateTerminalRecord(
       workspaceId,
       pane.id,
-      pane.sessionId,
+      paneSessionIdRef.current,
       profileRef.current,
       activeRef.current,
       terminalThemeRef.current,
@@ -257,11 +263,11 @@ export function TerminalPane({
     };
     mount.addEventListener("copy", handleCopy, { capture: true });
     const updateJumpToRecentVisibility = () => {
-      setShowJumpToRecent(isTerminalScrolledAwayFromRecent(record.terminal));
+      const nextVisible = isTerminalScrolledAwayFromRecent(record.terminal);
+      setShowJumpToRecent((current) => (current === nextVisible ? current : nextVisible));
     };
     const scrollDisposable = record.terminal.onScroll(updateJumpToRecentVisibility);
-    record.terminal.options.cursorBlink = activeRef.current;
-    applyTerminalAppearance(record.terminal, terminalThemeRef.current, terminalFontSizeRef.current);
+    applyTerminalAppearance(record, terminalThemeRef.current, terminalFontSizeRef.current, terminalThemeKeyRef.current);
     scheduleFitAndResize(record);
     updateJumpToRecentVisibility();
     if (record.sessionId) {
@@ -286,20 +292,27 @@ export function TerminalPane({
       detachTerminalElement(record.terminal, mount);
       recordRef.current = null;
     };
-  }, [pane.id, pane.sessionId, workspaceId]);
+  }, [pane.id, workspaceId]);
 
   useEffect(() => {
     if (recordRef.current) {
-      recordRef.current.terminal.options.cursorBlink = active;
-      if (active) {
+      if (active && previousActiveRef.current !== true) {
         recordRef.current.terminal.focus();
       }
+      previousActiveRef.current = active;
     }
   }, [active]);
 
   useEffect(() => {
+    const record = recordRef.current;
+    if (record && pane.sessionId && record.sessionId !== pane.sessionId) {
+      assignTerminalSession(record, pane.sessionId);
+    }
+  }, [pane.sessionId]);
+
+  useEffect(() => {
     if (recordRef.current) {
-      applyTerminalAppearance(recordRef.current.terminal, terminalTheme, terminalFontSize);
+      applyTerminalAppearance(recordRef.current, terminalTheme, terminalFontSize, terminalThemeKey);
       scheduleFitAndResize(recordRef.current);
     }
   }, [terminalFontSize, terminalTheme, terminalThemeKey]);
@@ -307,8 +320,6 @@ export function TerminalPane({
   const focusPane = () => {
     onFocus();
     recordRef.current?.terminal.focus();
-    const textarea = xtermMountRef.current?.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
-    textarea?.focus();
   };
 
   const jumpToRecent = (event: MouseEvent<HTMLButtonElement>) => {
@@ -445,7 +456,8 @@ function getOrCreateTerminalRecord(
 
   ensureTerminalEventRouter();
   const terminal = new Terminal({
-    cursorBlink: active,
+    cursorBlink: true,
+    cursorInactiveStyle: "none",
     convertEol: true,
     fontFamily: "Geist Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,
@@ -858,12 +870,21 @@ function resizeTerminalIfNeeded(record: TerminalRecord): void {
   void pui.terminal.resize(record.sessionId, cols, rows);
 }
 
-function applyTerminalAppearance(terminal: Terminal, theme: ITheme, fontSize: number): void {
+function applyTerminalAppearance(record: TerminalRecord, theme: ITheme, fontSize: number, themeKey: string): void {
+  const terminal = record.terminal;
+  const appearanceKey = `${themeKey}:${fontSize}`;
+  if (record.appearanceKey === appearanceKey) {
+    return;
+  }
+
+  record.appearanceKey = appearanceKey;
   terminal.options.theme = theme;
   if (terminal.options.fontSize !== fontSize) {
     terminal.options.fontSize = fontSize;
   }
   window.requestAnimationFrame(() => {
-    terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    if (!record.disposed) {
+      terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    }
   });
 }

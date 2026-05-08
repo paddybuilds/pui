@@ -85,7 +85,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   -webkit-app-region: no-drag;
 }
@@ -1058,7 +1059,7 @@ kbd {
 .git-panel-header div {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 7px;
 }
 
 .git-panel-header strong {
@@ -1067,14 +1068,37 @@ kbd {
   font-weight: 600;
 }
 
-.git-panel-header span {
+.branch-select-label {
   min-width: 0;
+  height: 30px;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
   color: var(--text-faint);
+}
+
+.branch-select-label svg {
+  color: currentColor;
+}
+
+.branch-select-label select {
+  min-width: 0;
+  width: 100%;
+  height: 30px;
+  padding: 0 28px 0 8px;
+  color: var(--text-faint);
+  background: var(--surface-root);
+  border-color: var(--line-soft);
+  border-radius: 6px;
   font-family: var(--font-mono);
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.branch-select-label select:hover,
+.branch-select-label select:focus {
+  color: var(--text-strong);
+  border-color: var(--line-strong);
 }
 
 .file-explorer-panel {
@@ -1694,6 +1718,9 @@ kbd {
 
 .git-operation-message {
   margin: 0;
+  padding: 7px 10px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface-raised);
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;

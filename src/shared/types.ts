@@ -35,6 +35,13 @@ export type GitStatus = {
   error?: string;
 };
 
+export type GitBranch = {
+  name: string;
+  current: boolean;
+  remote: boolean;
+  upstream?: string;
+};
+
 export type GitDiff = {
   workspace: string;
   file?: string;

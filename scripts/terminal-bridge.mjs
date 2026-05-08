@@ -280,6 +280,16 @@ async function handleHttpRequest(request, response) {
       sendJson(response, await getGitStatus(workspace));
       return;
     }
+    if (url.pathname === "/git/branches" && request.method === "GET") {
+      const workspace = requiredWorkspace(url);
+      sendJson(response, await getGitBranches(workspace));
+      return;
+    }
+    if (url.pathname === "/git/switch-branch" && request.method === "POST") {
+      const { workspace, branch } = await readJsonBody(request);
+      sendJson(response, await switchGitBranch(workspace, branch));
+      return;
+    }
     if (url.pathname === "/git/diff" && request.method === "GET") {
       const workspace = requiredWorkspace(url);
       const file = url.searchParams.get("file") || undefined;
@@ -453,6 +463,69 @@ async function getGitDiff(workspace, file, cached = false) {
   }
   const result = await git(workspace, args);
   return { workspace, file, cached, text: limitDiffText(result.stdout) };
+}
+
+async function getGitBranches(workspace) {
+  const [currentResult, branchResult] = await Promise.all([
+    git(workspace, ["branch", "--show-current"]),
+    git(workspace, [
+      "for-each-ref",
+      "--format=%(refname)%00%(refname:short)%00%(upstream:short)%00%(HEAD)",
+      "refs/heads",
+      "refs/remotes"
+    ])
+  ]);
+  const currentBranch = currentResult.stdout.trim();
+  const seen = new Set();
+
+  return branchResult.stdout
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map(parseGitBranch)
+    .filter((branch) => branch.name !== "origin/HEAD")
+    .filter((branch) => {
+      if (seen.has(branch.name)) {
+        return false;
+      }
+      seen.add(branch.name);
+      return true;
+    })
+    .map((branch) => ({
+      ...branch,
+      current: branch.current || branch.name === currentBranch
+    }))
+    .sort(compareGitBranches);
+}
+
+async function switchGitBranch(workspace, branch) {
+  const branches = await getGitBranches(workspace);
+  const target = branches.find((item) => item.name === branch);
+  if (!target) {
+    return { ok: false, stdout: "", stderr: "", error: `Branch not found: ${branch}` };
+  }
+
+  return gitOperation(workspace, target.remote ? ["switch", "--track", target.name] : ["switch", target.name]);
+}
+
+function parseGitBranch(line) {
+  const [refname = "", name = "", upstream = "", head = ""] = line.split("\0");
+  return {
+    name,
+    upstream: upstream || undefined,
+    current: head === "*",
+    remote: refname.startsWith("refs/remotes/")
+  };
+}
+
+function compareGitBranches(left, right) {
+  if (left.current !== right.current) {
+    return left.current ? -1 : 1;
+  }
+  if (left.remote !== right.remote) {
+    return left.remote ? 1 : -1;
+  }
+  return left.name.localeCompare(right.name);
 }
 
 async function getGitCommits(workspace, limit = 16) {

@@ -5,6 +5,7 @@ import { BrowserWindow } from "electron";
 import { parseGitStatus } from "../shared/gitStatus";
 import { ipc } from "../shared/ipc";
 import type {
+  GitBranch,
   GitCommit,
   GitCommitDetails,
   GitCommitFileDiff,
@@ -71,6 +72,39 @@ export class GitWorkspaceService {
     }
     const result = await this.git(workspace, args);
     return { workspace, file, cached, text: limitDiffText(result.stdout) };
+  }
+
+  async getBranches(workspace: string): Promise<GitBranch[]> {
+    const [currentResult, branchResult] = await Promise.all([
+      this.git(workspace, ["branch", "--show-current"]),
+      this.git(workspace, [
+        "for-each-ref",
+        "--format=%(refname)%00%(refname:short)%00%(upstream:short)%00%(HEAD)",
+        "refs/heads",
+        "refs/remotes"
+      ])
+    ]);
+    const currentBranch = currentResult.stdout.trim();
+    const seen = new Set<string>();
+
+    return branchResult.stdout
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
+      .map(parseGitBranch)
+      .filter((branch) => branch.name !== "origin/HEAD")
+      .filter((branch) => {
+        if (seen.has(branch.name)) {
+          return false;
+        }
+        seen.add(branch.name);
+        return true;
+      })
+      .map((branch) => ({
+        ...branch,
+        current: branch.current || branch.name === currentBranch
+      }))
+      .sort(compareBranches);
   }
 
   async getRecentCommits(workspace: string, limit = 16): Promise<GitCommit[]> {
@@ -176,6 +210,22 @@ export class GitWorkspaceService {
     return this.gitOperation(workspace, ["push"]);
   }
 
+  async switchBranch(workspace: string, branch: string): Promise<GitOperationResult> {
+    const branches = await this.getBranches(workspace);
+    const target = branches.find((item) => item.name === branch);
+    if (!target) {
+      return {
+        ok: false,
+        stdout: "",
+        stderr: "",
+        error: `Branch not found: ${branch}`
+      };
+    }
+
+    const args = target.remote ? ["switch", "--track", target.name] : ["switch", target.name];
+    return this.gitOperation(workspace, args);
+  }
+
   watch(workspace: string): void {
     for (const [watchedWorkspace, watcher] of this.watchers) {
       if (watchedWorkspace !== workspace) {
@@ -243,6 +293,26 @@ export class GitWorkspaceService {
       };
     }
   }
+}
+
+function parseGitBranch(line: string): GitBranch {
+  const [refname = "", name = "", upstream = "", head = ""] = line.split("\0");
+  return {
+    name,
+    upstream: upstream || undefined,
+    current: head === "*",
+    remote: refname.startsWith("refs/remotes/")
+  };
+}
+
+function compareBranches(left: GitBranch, right: GitBranch): number {
+  if (left.current !== right.current) {
+    return left.current ? -1 : 1;
+  }
+  if (left.remote !== right.remote) {
+    return left.remote ? 1 : -1;
+  }
+  return left.name.localeCompare(right.name);
 }
 
 function parseCommitFiles(output: string): GitCommitDetails["files"] {

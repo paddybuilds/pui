@@ -8,6 +8,7 @@ import type {
   FileSystemEntry,
   FileReadResult,
   FileWriteResult,
+  GitBranch,
   GitCommit,
   GitCommitDetails,
   GitCommitFileDiff,
@@ -256,6 +257,14 @@ const browserPreviewApi: PuiApi = {
   },
   git: {
     status: (gitWorkspace) => bridgeGet<GitStatus>("/git/status", { workspace: gitWorkspace }),
+    branches: (gitWorkspace) => bridgeGet<GitBranch[]>("/git/branches", { workspace: gitWorkspace }),
+    switchBranch: (gitWorkspace, branch) =>
+      bridgePost<GitOperationResult>("/git/switch-branch", { workspace: gitWorkspace, branch }).catch((error) => ({
+        ok: false,
+        stdout: "",
+        stderr: "",
+        error: error instanceof Error ? error.message : String(error)
+      })),
     diff: (gitWorkspace, file, cached = false) =>
       bridgeGet<GitDiff>("/git/diff", { workspace: gitWorkspace, file: file || "", cached: String(cached) }),
     commits: (gitWorkspace, limit = 16) =>

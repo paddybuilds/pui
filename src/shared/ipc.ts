@@ -43,6 +43,8 @@ export const ipc = {
   },
   git: {
     status: "git:status",
+    branches: "git:branches",
+    switchBranch: "git:switch-branch",
     diff: "git:diff",
     commits: "git:commits",
     commitDetails: "git:commit-details",

@@ -1,6 +1,7 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitCommitHorizontal, RotateCcw, Upload, X } from "lucide-react";
+import { GitBranch as GitBranchIcon, GitCommitHorizontal, RotateCcw, Upload, X } from "lucide-react";
 import type {
+  GitBranch,
   GitCommit,
   GitCommitDetails,
   GitCommitFile,
@@ -37,12 +38,16 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
   const [commitDetailsLoading, setCommitDetailsLoading] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [operationMessage, setOperationMessage] = useState("");
+  const [branches, setBranches] = useState<GitBranch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [switchingBranch, setSwitchingBranch] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [commitComposerHeight, setCommitComposerHeight] = useState(COMMIT_COMPOSER_DEFAULT_HEIGHT);
   const commitDetailsRequest = useRef(0);
   const workingDiffRequest = useRef(0);
   const files = useMemo(() => status?.files ?? [], [status?.files]);
+  const fileKey = useMemo(() => files.map((file) => file.path).join("|"), [files]);
   const stagedFiles = useMemo(
     () => files.filter((file) => file.indexStatus.trim() && file.indexStatus !== "?"),
     [files]
@@ -60,6 +65,18 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
 
   const loadCommits = useCallback(async () => {
     setCommits(await pui.git.commits(workspace, 16));
+  }, [workspace]);
+
+  const loadBranches = useCallback(async () => {
+    setBranchesLoading(true);
+    try {
+      setBranches(await pui.git.branches(workspace));
+    } catch (error) {
+      setOperationMessage(error instanceof Error ? error.message : String(error));
+      setBranches([]);
+    } finally {
+      setBranchesLoading(false);
+    }
   }, [workspace]);
 
   const openWorkingDiff = useCallback(
@@ -95,10 +112,13 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
       return;
     }
 
-    if (activeTab === "commits") {
-      void loadCommits();
-    }
-  }, [activeTab, loadCommits, status?.isRepo]);
+    void loadCommits();
+    void loadBranches();
+  }, [fileKey, files, loadBranches, loadCommits, status?.isRepo]);
+
+  useEffect(() => {
+    setOperationMessage("");
+  }, [workspace, status?.branch]);
 
   useEffect(() => {
     const availablePaths = new Set(files.map((file) => file.path));
@@ -129,6 +149,32 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
     const confirmed = window.confirm(`Discard working tree changes in ${file}? This cannot be undone.`);
     if (confirmed) {
       onStatus(await pui.git.discard(workspace, [file]));
+    }
+  };
+
+  const switchBranch = async (branch: string) => {
+    if (!branch || branch === status?.branch || switchingBranch) {
+      return;
+    }
+
+    setSwitchingBranch(true);
+    setOperationMessage("");
+    try {
+      const result = await pui.git.switchBranch(workspace, branch);
+      if (!result.ok) {
+        setOperationMessage(result.error || result.stderr || "Branch switch failed.");
+        return;
+      }
+
+      const nextStatus = await pui.git.status(workspace);
+      onStatus(nextStatus);
+      await Promise.all([loadBranches(), loadCommits()]);
+      setSelectedFile(undefined);
+      setDiff(null);
+      setSelectedPaths([]);
+      setOperationMessage(result.stderr || `Switched to ${branch}.`);
+    } finally {
+      setSwitchingBranch(false);
     }
   };
 
@@ -200,7 +246,24 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
       <div className="git-panel-header">
         <div>
           <strong>Git</strong>
-          <span>{status?.branch ?? "Repository"}</span>
+          <label className="branch-select-label">
+            <GitBranchIcon size={13} />
+            <select
+              value={status?.branch ?? ""}
+              disabled={!status?.isRepo || branchesLoading || switchingBranch}
+              aria-label="Switch Git branch"
+              onChange={(event) => void switchBranch(event.target.value)}
+            >
+              {status?.branch ? <option value={status.branch}>{status.branch}</option> : null}
+              {branches
+                .filter((branch) => branch.name !== status?.branch)
+                .map((branch) => (
+                  <option key={branch.name} value={branch.name}>
+                    {branch.remote ? `${branch.name} (remote)` : branch.name}
+                  </option>
+                ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -317,7 +380,6 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
                   Commit & Push
                 </button>
               </div>
-              {operationMessage ? <p className="git-operation-message">{operationMessage}</p> : null}
             </div>
           </section>
         </div>
@@ -346,6 +408,7 @@ export function GitPanel({ workspace, status, onStatus }: GitPanelProps) {
           </div>
         </section>
       )}
+      {operationMessage ? <p className="git-operation-message">{operationMessage}</p> : null}
       {commitDetails || commitDetailsLoading ? (
         <CommitDetailsModal
           workspace={workspace}

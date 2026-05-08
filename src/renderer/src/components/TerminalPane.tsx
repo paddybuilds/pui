@@ -246,7 +246,7 @@ export function TerminalPane({
       if (!text) {
         return;
       }
-      event.preventDefault();
+      consumeTerminalClipboardEvent(event);
       pasteTextIntoTerminal(record, text);
     };
     mount.addEventListener("paste", handlePaste, { capture: true });
@@ -255,7 +255,7 @@ export function TerminalPane({
       if (!text) {
         return;
       }
-      event.preventDefault();
+      consumeTerminalClipboardEvent(event);
       event.clipboardData?.setData("text/plain", text);
       void pui.clipboard.writeText(text);
     };
@@ -389,6 +389,12 @@ function isTerminalCopyShortcut(event: KeyboardEvent): boolean {
     !event.shiftKey &&
     event.key.toLowerCase() === "c"
   );
+}
+
+function consumeTerminalClipboardEvent(event: ClipboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }
 
 function getOrCreateTerminalRecord(

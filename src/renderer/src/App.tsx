@@ -643,7 +643,7 @@ export function App() {
         isTerminalShortcutTarget(event.target) &&
         isTerminalCopyShortcut(event)
       ) {
-        event.preventDefault();
+        consumeTerminalClipboardEvent(event);
         copyTerminalPaneSelection(activeWorkspace.id, activePaneId);
         return;
       }
@@ -653,7 +653,7 @@ export function App() {
         isTerminalShortcutTarget(event.target) &&
         (matchesShortcut(event, "CmdOrCtrl+V") || matchesShortcut(event, "CmdOrCtrl+Shift+V"))
       ) {
-        event.preventDefault();
+        consumeTerminalClipboardEvent(event);
         pasteIntoTerminalPane(activeWorkspace.id, activePaneId);
         return;
       }
@@ -1787,4 +1787,10 @@ function isTerminalCopyShortcut(event: KeyboardEvent): boolean {
     !event.shiftKey &&
     event.key.toLowerCase() === "c"
   );
+}
+
+function consumeTerminalClipboardEvent(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }

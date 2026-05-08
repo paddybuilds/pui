@@ -1,6 +1,6 @@
 {
   "name": "pui",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A macOS terminal folder workspace for project-focused development.",
   "repository": {
     "type": "git",

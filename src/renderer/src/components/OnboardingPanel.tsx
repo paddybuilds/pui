@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, FolderOpen, Play, TerminalSquare, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FolderOpen, Play, X } from "lucide-react";
 import type { ShellCandidate } from "../../../preload";
 import type {
   AppDensity,
@@ -9,6 +9,7 @@ import type {
   ThemePreset
 } from "../../../shared/types";
 import { getPuiApi } from "../lib/browserApi";
+import { PuiIcon } from "./PuiIcon";
 import {
   basename,
   createInitialWorkspaceSettings,
@@ -177,7 +178,7 @@ export function OnboardingPanel({ settings, platform, onOpenFolder, onComplete, 
         ) : null}
         <aside className="onboarding-summary">
           <div className="brand onboarding-brand">
-            <TerminalSquare size={18} />
+            <PuiIcon size={24} />
             <span>Pui</span>
           </div>
           <nav className="onboarding-steps" aria-label="Onboarding steps">

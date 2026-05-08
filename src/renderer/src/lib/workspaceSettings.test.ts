@@ -326,6 +326,95 @@ describe("workspace settings helpers", () => {
     });
   });
 
+  it("preserves existing workspaces when replaying initial workspace preferences", () => {
+    const settings: AppSettings = {
+      workspace: "/repo/old",
+      profiles: [],
+      recentWorkspaces: ["/repo/old"],
+      appPreferences: DEFAULT_APP_PREFERENCES,
+      activeWorkspaceId: "workspace-a",
+      workspaces: [
+        {
+          id: "workspace-a",
+          name: "Old",
+          kind: "folder",
+          path: "/repo/old",
+          defaultCwd: "/repo/old",
+          terminalFontSize: 12,
+          profiles: [
+            {
+              id: "profile-old",
+              name: "Old Shell",
+              cwd: "/repo/old",
+              command: "old-shell",
+              args: [],
+              env: {},
+              shortcut: "CmdOrCtrl+1",
+              appearance: { color: "#9ca3af", icon: "terminal" }
+            }
+          ],
+          layout: {
+            activePaneId: "pane-old",
+            root: { type: "pane", id: "pane-old", profileId: "profile-old" }
+          },
+          layoutPresets: [],
+          quickCommands: []
+        },
+        {
+          id: "workspace-b",
+          name: "Keep",
+          kind: "folder",
+          path: "/repo/keep",
+          defaultCwd: "/repo/keep",
+          terminalFontSize: 14,
+          profiles: [
+            {
+              id: "profile-keep",
+              name: "Keep Shell",
+              cwd: "/repo/keep",
+              command: "keep-shell",
+              args: [],
+              env: {},
+              shortcut: "CmdOrCtrl+1",
+              appearance: { color: "#22c55e", icon: "terminal" }
+            }
+          ],
+          layout: {
+            activePaneId: "pane-keep",
+            root: { type: "pane", id: "pane-keep", profileId: "profile-keep" }
+          },
+          layoutPresets: [],
+          quickCommands: []
+        }
+      ]
+    };
+
+    const nextSettings = createInitialWorkspaceSettings(
+      settings,
+      {
+        name: "New",
+        path: "/repo/new",
+        defaultCwd: "/repo/new/app",
+        terminalFontSize: 17,
+        includeCodexProfile: false
+      },
+      "darwin",
+      idFactory(["profile-new", "pane-new"])
+    );
+
+    expect(nextSettings.activeWorkspaceId).toBe("workspace-a");
+    expect(nextSettings.workspaces).toHaveLength(2);
+    expect(nextSettings.workspaces?.[0]).toMatchObject({
+      id: "workspace-a",
+      name: "New",
+      path: "/repo/new",
+      defaultCwd: "/repo/new/app",
+      terminalFontSize: 17,
+      profiles: [{ id: "profile-new", command: "/bin/zsh" }]
+    });
+    expect(nextSettings.workspaces?.[1]).toEqual(settings.workspaces?.[1]);
+  });
+
   it("preserves workspace overrides when app preferences change", () => {
     const settings: AppSettings = {
       workspace: "/repo/a",

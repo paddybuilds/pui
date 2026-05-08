@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
+  Bot,
   Code2,
   GitBranch,
   Info,
@@ -31,6 +32,7 @@ import { getPuiApi } from "../lib/browserApi";
 import { shortcutLabel } from "../lib/shortcuts";
 import { compactThemeTokens, isPlainColorValue, resolveThemeTokens, THEME_TOKEN_FIELDS } from "../lib/theme";
 import {
+  createCodexProfile,
   createTerminalProfileTemplateFromProfile,
   normalizeAppPreferences,
   normalizeTerminalFontSize,
@@ -39,7 +41,16 @@ import {
 
 const pui = getPuiApi();
 
-type SettingsSection = "about" | "appearance" | "profiles" | "defaults" | "git" | "updates" | "workflow" | "shortcuts";
+type SettingsSection =
+  | "about"
+  | "appearance"
+  | "profiles"
+  | "defaults"
+  | "codex"
+  | "git"
+  | "updates"
+  | "workflow"
+  | "shortcuts";
 
 type SettingsModalProps = {
   settings: AppSettings;
@@ -56,6 +67,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: JSX.Element }>
   { id: "appearance", label: "Appearance", icon: <Paintbrush size={15} /> },
   { id: "profiles", label: "Terminal profiles", icon: <TerminalSquare size={15} /> },
   { id: "defaults", label: "Workspace defaults", icon: <Monitor size={15} /> },
+  { id: "codex", label: "Codex", icon: <Bot size={15} /> },
   { id: "git", label: "Git", icon: <GitBranch size={15} /> },
   { id: "updates", label: "Updates", icon: <RefreshCw size={15} /> },
   { id: "workflow", label: "Workflow", icon: <Play size={15} /> },
@@ -124,12 +136,20 @@ export function SettingsModal({
               activeWorkspace={activeWorkspace}
               preferences={preferences}
               onSettingsChange={onSettingsChange}
-              onWorkspaceChange={onWorkspaceChange}
               platform={platform}
             />
           ) : null}
           {section === "defaults" ? (
             <WorkspaceDefaultsSettings activeWorkspace={activeWorkspace} onWorkspaceChange={onWorkspaceChange} />
+          ) : null}
+          {section === "codex" ? (
+            <CodexSettings
+              settings={settings}
+              activeWorkspace={activeWorkspace}
+              preferences={preferences}
+              onSettingsChange={onSettingsChange}
+              platform={platform}
+            />
           ) : null}
           {section === "git" ? <GitSettings preferences={preferences} onSave={savePreferences} /> : null}
           {section === "updates" ? <UpdateSettings preferences={preferences} onSave={savePreferences} /> : null}
@@ -371,14 +391,12 @@ function TerminalProfilesSettings({
   activeWorkspace,
   preferences,
   onSettingsChange,
-  onWorkspaceChange,
   platform
 }: {
   settings: AppSettings;
   activeWorkspace: TerminalWorkspace;
   preferences: AppPreferences;
   onSettingsChange: (settings: AppSettings) => Promise<void>;
-  onWorkspaceChange: (workspace: TerminalWorkspace) => Promise<void>;
   platform: string;
 }) {
   const [shells, setShells] = useState<ShellCandidate[]>([]);
@@ -393,6 +411,11 @@ function TerminalProfilesSettings({
       .listShells()
       .then((items) => setShells(items.filter((item) => item.available || item.source === "custom")));
   }, []);
+
+  useEffect(() => {
+    setEditing(profileDraft(activeWorkspace.profiles[0], activeWorkspace.defaultCwd || activeWorkspace.path));
+    setStatus("idle");
+  }, [activeWorkspace.defaultCwd, activeWorkspace.id, activeWorkspace.path, activeWorkspace.profiles]);
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -416,12 +439,7 @@ function TerminalProfilesSettings({
     };
     await onSettingsChange(
       updateAppPreferences(
-        {
-          ...settings,
-          workspaces: (settings.workspaces ?? []).map((workspace) =>
-            workspace.id === nextWorkspace.id ? nextWorkspace : workspace
-          )
-        },
+        replaceWorkspaceInSettings(settings, nextWorkspace),
         {
           defaultTerminalProfileId: preferences.defaultTerminalProfileId || profile.id,
           defaultTerminalProfileTemplate: createTerminalProfileTemplateFromProfile(profile)
@@ -439,7 +457,22 @@ function TerminalProfilesSettings({
       return;
     }
     const nextProfiles = activeWorkspace.profiles.filter((profile) => profile.id !== id);
-    await onWorkspaceChange({ ...activeWorkspace, profiles: nextProfiles });
+    const nextWorkspace = { ...activeWorkspace, profiles: nextProfiles };
+    const nextDefaultProfile = nextProfiles[0];
+    const nextSettings = replaceWorkspaceInSettings(settings, nextWorkspace);
+
+    await onSettingsChange(
+      id === defaultProfileId && nextDefaultProfile
+        ? updateAppPreferences(
+            nextSettings,
+            {
+              defaultTerminalProfileId: nextDefaultProfile.id,
+              defaultTerminalProfileTemplate: createTerminalProfileTemplateFromProfile(nextDefaultProfile)
+            },
+            platform
+          )
+        : nextSettings
+    );
   };
 
   return (
@@ -588,6 +621,51 @@ function WorkspaceDefaultsSettings({
         />
         <SaveButton status={status} />
       </form>
+    </div>
+  );
+}
+
+function CodexSettings({
+  settings,
+  activeWorkspace,
+  preferences,
+  onSettingsChange,
+  platform
+}: {
+  settings: AppSettings;
+  activeWorkspace: TerminalWorkspace;
+  preferences: AppPreferences;
+  onSettingsChange: (settings: AppSettings) => Promise<void>;
+  platform: string;
+}) {
+  const hasCodexProfile = activeWorkspace.profiles.some((profile) => profile.command === "codex");
+  const toggleCodex = async (enabled: boolean) => {
+    const nextSettings =
+      enabled && !hasCodexProfile
+        ? replaceWorkspaceInSettings(settings, {
+            ...activeWorkspace,
+            profiles: [
+              ...activeWorkspace.profiles,
+              createCodexProfile(activeWorkspace.defaultCwd || activeWorkspace.path, "CmdOrCtrl+2")
+            ]
+          })
+        : settings;
+
+    await onSettingsChange(updateAppPreferences(nextSettings, { codexProfileEnabled: enabled }, platform));
+  };
+  return (
+    <div className="settings-page">
+      <SettingGroup title="Codex profile">
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={preferences.codexProfileEnabled}
+            onChange={(event) => void toggleCodex(event.target.checked)}
+          />
+          <span>Add Codex profile to new workspaces</span>
+        </label>
+        <SettingRow label="Current workspace" value={hasCodexProfile ? "Codex profile present" : "No Codex profile"} />
+      </SettingGroup>
     </div>
   );
 }
@@ -780,6 +858,15 @@ function SettingGroup({ title, children }: { title: string; children: ReactNode 
       <div className="settings-list">{children}</div>
     </section>
   );
+}
+
+function replaceWorkspaceInSettings(settings: AppSettings, workspace: TerminalWorkspace): AppSettings {
+  return {
+    ...settings,
+    workspace: workspace.path,
+    recentWorkspaces: Array.from(new Set([workspace.path, ...settings.recentWorkspaces])).slice(0, 12),
+    workspaces: (settings.workspaces ?? []).map((item) => (item.id === workspace.id ? workspace : item))
+  };
 }
 
 function SaveButton({ status, label = "Save" }: { status: string; label?: string }) {

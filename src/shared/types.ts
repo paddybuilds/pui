@@ -216,6 +216,7 @@ export type AppPreferences = {
   customTheme?: AppThemeTokens;
   defaultTerminalProfileId?: string;
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
+  codexProfileEnabled: boolean;
   gitPanelDefault: GitPanelDefault;
   updateChecksEnabled: boolean;
   codeAutocompleteEnabled: boolean;
@@ -227,6 +228,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   themePreset: "system",
   density: "comfortable",
   terminalFontSize: 13,
+  codexProfileEnabled: true,
   gitPanelDefault: "open",
   updateChecksEnabled: true,
   codeAutocompleteEnabled: true,

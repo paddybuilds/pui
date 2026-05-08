@@ -24,6 +24,7 @@ export type InitialWorkspaceOptions = {
   terminalFontSize?: number;
   defaultTerminalProfileId?: string;
   defaultTerminalProfileTemplate?: TerminalProfileTemplate;
+  includeCodexProfile?: boolean;
   onboardingCompletedVersion?: string;
 };
 
@@ -114,6 +115,12 @@ export function normalizeAppPreferences(
     ...normalizeCustomTheme(preferences?.customTheme ?? defaults.customTheme),
     ...(defaultTerminalProfileId ? { defaultTerminalProfileId } : {}),
     ...(defaultTerminalProfileTemplate ? { defaultTerminalProfileTemplate } : {}),
+    codexProfileEnabled:
+      typeof preferences?.codexProfileEnabled === "boolean"
+        ? preferences.codexProfileEnabled
+        : typeof defaults.codexProfileEnabled === "boolean"
+          ? defaults.codexProfileEnabled
+          : DEFAULT_APP_PREFERENCES.codexProfileEnabled,
     gitPanelDefault: normalizeGitPanelDefault(preferences?.gitPanelDefault ?? defaults.gitPanelDefault),
     updateChecksEnabled:
       typeof preferences?.updateChecksEnabled === "boolean"
@@ -159,6 +166,26 @@ export function createShellProfile(
   idFactory: IdFactory = createWorkspaceSettingsId
 ): ConsoleProfile {
   return createTerminalProfileFromTemplate(defaultShellProfileTemplate(platform), path, shortcut, idFactory);
+}
+
+export function createCodexProfile(
+  path: string,
+  shortcut: string,
+  idFactory: IdFactory = createWorkspaceSettingsId
+): ConsoleProfile {
+  return {
+    id: idFactory(),
+    name: "Codex",
+    cwd: path,
+    command: "codex",
+    args: [],
+    env: {},
+    shortcut,
+    appearance: {
+      color: "#9ca3af",
+      icon: "sparkles"
+    }
+  };
 }
 
 export function defaultShellProfileTemplate(platform: string): TerminalProfileTemplate {
@@ -239,6 +266,7 @@ export function createInitialWorkspaceSettings(
       defaultTerminalProfileId: options.defaultTerminalProfileId ?? settings.appPreferences?.defaultTerminalProfileId,
       defaultTerminalProfileTemplate:
         options.defaultTerminalProfileTemplate ?? settings.appPreferences?.defaultTerminalProfileTemplate,
+      codexProfileEnabled: options.includeCodexProfile ?? settings.appPreferences?.codexProfileEnabled,
       onboardingCompletedVersion:
         options.onboardingCompletedVersion ?? settings.appPreferences?.onboardingCompletedVersion
     },
@@ -250,10 +278,16 @@ export function createInitialWorkspaceSettings(
     "CmdOrCtrl+1",
     idFactory
   );
-  const profiles = [shellProfile];
+  const profiles = appPreferences.codexProfileEnabled
+    ? [shellProfile, createCodexProfile(defaultCwd, "CmdOrCtrl+2", idFactory)]
+    : [shellProfile];
   const paneId = idFactory();
+  const existingWorkspaces = settings.workspaces ?? [];
+  const targetWorkspace = existingWorkspaces.find(
+    (workspace) => workspace.id === settings.activeWorkspaceId && workspace.kind !== "quick"
+  );
   const workspace: TerminalWorkspace = normalizeWorkspaceWorkflow({
-    id: idFactory(),
+    id: targetWorkspace?.id ?? idFactory(),
     name,
     kind: "folder",
     path,
@@ -267,6 +301,9 @@ export function createInitialWorkspaceSettings(
     layoutPresets: [],
     quickCommands: []
   });
+  const workspaces = targetWorkspace
+    ? existingWorkspaces.map((item) => (item.id === targetWorkspace.id ? workspace : item))
+    : [...existingWorkspaces, workspace];
 
   return {
     ...settings,
@@ -275,7 +312,7 @@ export function createInitialWorkspaceSettings(
     recentWorkspaces: Array.from(new Set([path, ...settings.recentWorkspaces].filter(Boolean))).slice(0, 12),
     appPreferences,
     activeWorkspaceId: workspace.id,
-    workspaces: [workspace],
+    workspaces,
     layout: undefined
   };
 }

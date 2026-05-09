@@ -53,6 +53,28 @@ npm run dev
 The dev command starts the Electron renderer at `http://localhost:5173/` and
 launches the native Electron window.
 
+For a full one-time startup that refreshes dependencies, rebuilds native modules,
+builds the app, starts Docker Compose services when a compose file is present,
+and then runs the dev app:
+
+```sh
+npm run startup
+```
+
+If the Docker Compose file is outside the repo root, point the startup script at
+it:
+
+```sh
+PUI_DOCKER_COMPOSE_FILE=../docker-compose.yml npm run startup
+```
+
+By default the startup script finishes by running `npm run dev`. To run a
+different package script, set `PUI_WEB_COMMAND`:
+
+```sh
+PUI_WEB_COMMAND=preview npm run startup
+```
+
 ## Development
 
 Use small, reviewable changes and keep platform-specific behavior explicit. Pui
